@@ -378,8 +378,10 @@ export const EQS = {
     solve: {
       ac: { steps: [], sub: '{w}²{r}', f: v => v.w * v.w * v.r },
       r: { steps: [{ eq: `${V('r')} = ${V('ac')} / ${V('w')}²`, why: 'divide both sides by ω²' }], sub: '{ac} / {w}²', f: v => v.w === 0 ? div0('w') : v.ac / (v.w * v.w) },
-      w: { steps: [{ eq: `${V('w')}² = ${V('ac')} / ${V('r')}`, why: 'divide both sides by r' }, { eq: `${V('w')} = √(${V('ac')} / ${V('r')})`, why: 'take the square root (positive)' }],
-           sub: '√({ac} / {r})', f: v => v.r === 0 ? div0('r') : (v.ac / v.r < 0 ? err('Can’t take the square root of a negative number.') : Math.sqrt(v.ac / v.r)) },
+      w: { steps: [{ eq: `${V('w')}² = ${V('ac')} / ${V('r')}`, why: 'divide both sides by r' }, { eq: `${V('w')} = ±√(${V('ac')} / ${V('r')})`, why: 'take the square root; a꜀ only tells you how fast it spins, not which way' }],
+           sub: '√({ac} / {r})', f: v => { if (v.r === 0) return div0('r'); if (v.ac / v.r < 0) return err('Can’t take the square root of a negative number.');
+             const mag = Math.sqrt(v.ac / v.r);
+             return { value: mag, note: `The root gives ±${fmt(mag)}. Centripetal acceleration points to the centre whichever way the wheel turns, so it can’t tell you the direction. The positive root (counterclockwise) is kept. If it spins clockwise, ω is the negative of this.` }; } },
     },
   },
 };

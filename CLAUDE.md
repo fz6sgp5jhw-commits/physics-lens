@@ -41,7 +41,7 @@ Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it th
 - Unit-specific wording uses `nm(id)` and `dr(id)` in app.js (names and direction words can be overridden per chapter). Don't read `VARS[id].name` directly in the UI.
 - Text style in the UI: plain, short, second person; error dialogs are playful but always explain the physics.
 - Art: original pixel art only; no copyrighted characters, no real people.
-- When you change any cached file, **bump the cache name in `sw.js`** (currently `rotation-lab-v4`) or installed copies won't update.
+- When you change any cached file, **bump the cache name in `sw.js`** (currently `rotation-lab-v5`) or installed copies won't update.
 
 ## Tests (set these up first, run after every change)
 1. **Solver round-trips:** for consistent states (several per unit, including negative directions and friction), remove each variable and check every solver recovers it (relative error < 1e-6). Current status: incline 164/164, pulley 176/176, rotation all pass. The only known "mismatches" are genuinely ambiguous cases (a height passed twice), which must be flagged in `note`.
