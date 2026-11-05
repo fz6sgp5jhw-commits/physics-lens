@@ -22,6 +22,7 @@ export const VARS = {
   f:     { sym: 'f', plain: 'f', name: 'kinetic friction force (size)', unit: 'N', units: { N: 1 } },
   mu:    { sym: 'μ<sub>k</sub>', plain: 'μk', name: 'coefficient of kinetic friction', unit: '', units: { 'no unit': 1 } },
   F:     { sym: 'F<sub>net</sub>', plain: 'Fnet', name: 'net force along the ramp', unit: 'N', units: { N: 1 }, dir: ['down the slope', 'up the slope'] },
+  Fp:    { sym: 'F', plain: 'F', name: 'applied force (push or pull, size)', unit: 'N', units: { N: 1 } },
   // tension + pulleys (+ = the way the system moves when m2 falls)
   m1:    { sym: 'm<sub>1</sub>', plain: 'm₁', name: 'mass of the block on the table', unit: 'kg', units: { kg: 1, g: 0.001 } },
   m2:    { sym: 'm<sub>2</sub>', plain: 'm₂', name: 'hanging mass', unit: 'kg', units: { kg: 1, g: 0.001 } },
@@ -246,7 +247,7 @@ export const EQS = {
   },
   I5d: {
     label: 'F6', vars: ['F', 'Wpar', 'f'], form: `${V('F')} = ${V('Wpar')} − ${V('f')}`,
-    meaning: 'Sliding down: gravity’s pull along the slope minus friction holding it back.', condition: 'friction, moving down the slope', applies: c => c.friction && !c.up, needs: 'friction + moving down',
+    meaning: 'Sliding down: gravity’s pull along the slope minus friction holding it back.', condition: 'friction, moving down the slope', applies: c => !c.upAxis && (c.friction && !c.up), needs: 'friction + moving down, with + down the slope',
     calc: 'Add the along-ramp forces with + down the slope: W∥ points down (+), friction opposes the motion so it points up (−).',
     solve: {
       F: { steps: [], sub: '{Wpar} − {f}' },
@@ -256,7 +257,7 @@ export const EQS = {
   },
   I5u: {
     label: 'F6', vars: ['F', 'Wpar', 'f'], form: `${V('F')} = ${V('Wpar')} + ${V('f')}`,
-    meaning: 'Sliding up: gravity and friction both point down the slope, so they add.', condition: 'friction, moving up the slope', applies: c => c.friction && c.up, needs: 'friction + moving up',
+    meaning: 'Sliding up: gravity and friction both point down the slope, so they add.', condition: 'friction, moving up the slope', applies: c => !c.upAxis && (c.friction && c.up), needs: 'friction + moving up, with + down the slope',
     calc: 'Moving up the slope, friction opposes the motion, so it points down the slope (+), the same way as W∥.',
     solve: {
       F: { steps: [], sub: '{Wpar} + {f}' },
@@ -266,7 +267,7 @@ export const EQS = {
   },
   I6: {
     label: 'F6', vars: ['F', 'Wpar'], form: `${V('F')} = ${V('Wpar')}`,
-    meaning: 'No friction: the only force along the slope is gravity’s pull.', condition: 'frictionless', applies: c => !c.friction, needs: 'frictionless',
+    meaning: 'No friction: the only force along the slope is gravity’s pull.', condition: 'frictionless', applies: c => !c.upAxis && (!c.friction), needs: 'frictionless, with + down the slope',
     calc: 'Along the ramp, N and W⊥ have no component, so the net force is just W∥.',
     solve: {
       F: { steps: [], sub: '{Wpar}' },
@@ -285,7 +286,7 @@ export const EQS = {
   },
   S1: {
     label: 'S1', vars: ['a', 'g', 'inc'], form: `${V('a')} = ${V('g')} sin ${V('inc')}`,
-    meaning: 'Frictionless ramp: the mass cancels, so every object slides with the same acceleration.', condition: 'frictionless', applies: c => !c.friction, needs: 'frictionless',
+    meaning: 'Frictionless ramp: the mass cancels, so every object slides with the same acceleration.', condition: 'frictionless', applies: c => !c.upAxis && (!c.friction), needs: 'frictionless, with + down the slope',
     calc: 'Chain F7 → F6 → F2 → F1: ma = W∥ = mg sin θ, and m cancels.',
     solve: {
       a: { steps: [], sub: '{g} sin {inc}' },
@@ -296,7 +297,7 @@ export const EQS = {
   },
   S2: {
     label: 'S2', vars: ['a', 'g', 'inc', 'mu'], form: `${V('a')} = ${V('g')}(sin ${V('inc')} − ${V('mu')} cos ${V('inc')})`,
-    meaning: 'Sliding down with friction: the mass cancels here too.', condition: 'friction, moving down', applies: c => c.friction && !c.up, needs: 'friction + moving down',
+    meaning: 'Sliding down with friction: the mass cancels here too.', condition: 'friction, moving down', applies: c => !c.upAxis && (c.friction && !c.up), needs: 'friction + moving down, with + down the slope',
     calc: 'ma = W∥ − f = mg sin θ − μk mg cos θ; divide by m.',
     solve: {
       a: { steps: [], sub: '{g}(sin {inc} − {mu} cos {inc})' },
@@ -307,7 +308,7 @@ export const EQS = {
   },
   S3: {
     label: 'S2', vars: ['a', 'g', 'inc', 'mu'], form: `${V('a')} = ${V('g')}(sin ${V('inc')} + ${V('mu')} cos ${V('inc')})`,
-    meaning: 'Sliding up with friction: gravity and friction both slow it, so the mass cancels and they add.', condition: 'friction, moving up', applies: c => c.friction && c.up, needs: 'friction + moving up',
+    meaning: 'Sliding up with friction: gravity and friction both slow it, so the mass cancels and they add.', condition: 'friction, moving up', applies: c => !c.upAxis && (c.friction && c.up), needs: 'friction + moving up, with + down the slope',
     calc: 'ma = W∥ + f = mg sin θ + μk mg cos θ; divide by m.',
     solve: {
       a: { steps: [], sub: '{g}(sin {inc} + {mu} cos {inc})' },
@@ -408,7 +409,7 @@ export const CHAPTERS = {
     title: 'Inclines & Newton’s laws', short: 'Inclines',
     kin: { p: 'dx', u0: 'v0', u: 'vf', a: 'a', t: 't' }, diagram: 'incline',
     ladder: { rungs: ['dx', 'vf', 'a'], start: { dx: null, vf: 'v0' }, zeroNote: { dx: 'Δx is measured from where it starts, so Δx(0) = 0.' } },
-    vars: ['dx', 'v0', 'vf', 'a', 't', 'inc', 'm', 'g', 'W', 'Wpar', 'Wperp', 'N', 'f', 'mu', 'F'],
+    vars: ['dx', 'v0', 'vf', 'a', 't', 'inc', 'm', 'g', 'W', 'Wpar', 'Wperp', 'N', 'f', 'mu', 'F', 'Fp'],
     axis: '+ is <b>down the slope</b>. Pick the direction for each vector; the lab sets the sign.',
     intro: `<p>On a ramp, tilt your axes so one runs <b>along the slope</b> and one runs <b>into it</b>. Gravity then splits into two parts: W∥ pulls the object down the slope, and W⊥ presses it into the ramp, where the normal force N cancels it.</p>
       <p>Only the forces along the slope change the motion. Once you know the acceleration, the constant-acceleration equations describe the slide.</p>`,
@@ -420,7 +421,8 @@ export const CHAPTERS = {
     conditions: [
       { key: 'friction', type: 'choice', label: 'Surface', options: [[false, 'Frictionless'], [true, 'Kinetic friction (it slides)']] },
       { key: 'up', type: 'choice', label: 'Moving', options: [[false, 'Down the slope'], [true, 'Up the slope']] },
-      { key: 'constA', type: 'locked', label: 'Constant acceleration', note: 'True on a uniform ramp: the forces don’t change as it slides.' },
+      { key: 'upAxis', type: 'choice', label: 'Positive direction (your axis)', options: [[false, 'Down the slope'], [true, 'Up the slope']] },
+      { key: 'varA', type: 'choice', label: 'Acceleration', options: [[false, 'Constant'], [true, 'Varies with time']] },
       { key: 'rest', type: 'hidden', label: 'Starts from rest', sets: { v0: 0 } },
       { key: 'stop', type: 'hidden', label: 'Comes to a stop', sets: { vf: 0 } },
       { key: 'earth', type: 'hidden', label: 'On Earth (g = 9.81 m/s²)', sets: { g: 9.81 }, default: true },
@@ -452,10 +454,6 @@ export const CHAPTERS = {
       { key: 'earth', type: 'hidden', label: 'On Earth (g = 9.81 m/s²)', sets: { g: 9.81 }, default: true },
     ],
     defaults: { m1: 2, m2: 1, mu: 0.2, v0: 0 },
-    systems: [
-      { eqs: ['P5', 'P6'], pair: ['Tn', 'a'], gives: 'P7', text: 'T5 and T6 share the same two unknowns, T and a: that’s a <b>system of two equations</b>. Add them together: T appears as +T in one and −T in the other, so it cancels, leaving m₂g = (m₁ + m₂)a. That combined equation is shortcut S1.' },
-      { eqs: ['P5f', 'P6'], pair: ['Tn', 'a'], gives: 'P7f', text: 'T5 and T6 share the same two unknowns, T and a: that’s a <b>system of two equations</b>. Add them together: T cancels, leaving m₂g − f = (m₁ + m₂)a. With f = μk m₁g, that’s shortcut S1.' },
-    ],
   },
   rotation: {
     title: 'Rotation kinematics', short: 'Rotation',
@@ -525,11 +523,11 @@ export const DIMS = Object.fromEntries(Object.entries(VARS).map(([id, d]) => [id
 // (and to draw the diagram); the answer itself stays symbolic.
 export const SAMPLE = {
   dx: 4, v0: 3, vf: 5, a: 2, t: 2, m: 3, g: 9.81, inc: 30, W: 29.4, Wpar: 14.7, Wperp: 25.5, N: 25.5, f: 5, mu: 0.15, F: 10,
-  m1: 4, m2: 2, W1: 39.2, W2: 19.6, N1: 39.2, Tn: 12,
+  Fp: 10, m1: 4, m2: 2, W1: 39.2, W2: 19.6, N1: 39.2, Tn: 12,
   theta: 8, w0: 2, w: 6, alpha: 1.5, r: 0.5, s: 4, v: 3, at: 0.75, ac: 18,
 };
 // Order symbols are written in a product: coefficient-like first (μk m g), then the rest.
-export const PRINT_ORDER = ['mu', 'r', 'm', 'm1', 'm2', 'g', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'f', 'F', 'Tn', 'inc',
+export const PRINT_ORDER = ['mu', 'r', 'm', 'm1', 'm2', 'g', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'f', 'F', 'Fp', 'Tn', 'inc',
   'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'v', 'a', 'alpha', 'at', 'ac', 't'];
 
 // ---------- every solver's numbers come from its `sub` template ----------

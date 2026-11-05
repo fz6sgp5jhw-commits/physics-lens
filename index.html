@@ -304,6 +304,43 @@
   .bitem{background:#fff;box-shadow:var(--sunken);padding:8px 10px;margin-bottom:8px;display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center}
   .bitem b{display:block;color:#3a0ca3}
   .bitem .btxt{font:19px/1.15 var(--crt)}
+
+  /* diagram tabs, build canvas, free-body builder, sliders */
+  .dtabs{display:flex;gap:4px;margin-bottom:6px}
+  .dtabs button{min-height:26px;padding:3px 12px;font-size:13px}
+  .dtabs button[aria-pressed="true"]{background:var(--hot);color:#fff}
+  .bpal{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;align-items:center}
+  .bpal button{min-height:24px;padding:2px 8px;font-size:12px}
+  .bsvg{display:block;width:100%;height:auto;touch-action:none;user-select:none}
+  .bsvg .bbg{fill:#0a0018}
+  .bsvg .bsurf,.bsvg .bleg{stroke:#19f0ff;stroke-width:4}
+  .bsvg .bramp{fill:#2a1250;stroke:#19f0ff;stroke-width:3}
+  .bsvg .bramp.rough{stroke-dasharray:8 4}
+  .bsvg .barc{fill:none;stroke:#ffe600;stroke-width:2}
+  .bsvg .bbody{fill:#ff2bd6;stroke:#fff;stroke-width:2;cursor:grab}
+  .bsvg .bspoke{stroke:#fff;stroke-width:3}
+  .bsvg .bpulley{fill:#555;stroke:#fff;stroke-width:3}
+  .bsvg .bstring{fill:none;stroke:#fff;stroke-width:2}
+  .bsvg .bhandle{fill:#ffe600;stroke:#000;cursor:ns-resize}
+  .bsvg .bcontact{fill:#2bff6a}
+  .bsvg .sel .bbody,.bsvg .sel .bramp{stroke:#ffe600;stroke-width:4}
+  .bsvg .blabel{font:28px VT323,monospace;fill:#fff;pointer-events:none}
+  .bprops{margin-top:6px;font-size:13px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .bprops select,.bprops input{font:14px var(--ui)}
+  #fbd .ftable{width:100%;border-collapse:collapse;font:18px var(--crt);background:#fff;box-shadow:var(--sunken);margin:6px 0}
+  #fbd .ftable td,#fbd .ftable th{padding:3px 6px;border-bottom:1px solid #ddd;text-align:left}
+  #fbd .ftable th{font:12px var(--ui);color:#404040}
+  #fbd .frow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:3px 0}
+  #fbd .frow select{font:13px var(--ui)}
+  #fbd .fadd{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0}
+  #fbd .fadd button{min-height:24px;padding:2px 8px;font-size:12px}
+  #fbd .fmsg{padding:6px 8px;margin-top:6px;font-size:13px}
+  #fbd .fmsg.ok{background:#e8ffe8;border:1px solid #0a6b2a}
+  #fbd .fmsg.bad{background:#fff0f0;border:1px solid #a00}
+  #fbd svg{display:block;width:100%;max-width:420px;height:auto;background:#0a0018;margin:4px auto}
+  #sliders{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:13px}
+  #sliders label{display:flex;align-items:center;gap:6px}
+  #sliders input{width:120px}
   /* calm mode */
   body.calm .gag, body.calm #galaxy, body.calm .deco{display:none !important}
   body.calm *{animation-duration:0s !important;animation-iteration-count:1 !important;transition:none !important}
@@ -375,9 +412,21 @@
     <section class="win">
       <div class="titlebar"><h2>Diagram</h2><span class="wbtns" aria-hidden="true"><i>_</i><i>□</i><i>×</i></span></div>
       <div class="body">
-        <div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div>
-        <div class="dg-controls"><button class="go" id="replayBtn">▶ Replay motion</button><span class="small muted" id="dgNote"></span></div>
-        <div id="inspector"></div>
+        <div class="dtabs" role="tablist"><button data-dtab="motion" aria-pressed="true">Motion</button><button data-dtab="build" aria-pressed="false">Build</button><button data-dtab="forces" aria-pressed="false">Forces</button></div>
+        <div class="dpane" id="paneMotion">
+          <div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div>
+          <div class="dg-controls"><button class="go" id="replayBtn">▶ Replay motion</button><span class="small muted" id="dgNote"></span></div>
+          <div id="sliders"></div>
+          <div id="inspector"></div>
+        </div>
+        <div class="dpane" id="paneBuild" hidden>
+          <div class="bpal" id="bpal"></div>
+          <div class="canvas-wrap"><svg id="bd" class="bsvg"></svg></div>
+          <div class="bprops" id="bprops"></div>
+        </div>
+        <div class="dpane" id="paneForces" hidden>
+          <div id="fbd"></div>
+        </div>
       </div>
     </section>
     <section class="win" id="sheetWin">

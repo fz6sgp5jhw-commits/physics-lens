@@ -124,3 +124,17 @@ export async function checkSetup(page){
   await page.click('#dlgOk');
   return out;
 }
+
+// Enter a function of time through the editor: coefficients of t⁰, t¹, t², t³ (signed numbers, or a new symbol's name like 'k').
+export async function addFunction(page, id, coefs){
+  await page.evaluate(async ({ id }) => {
+    const { VARS, CHAPTERS } = await import('./js/data.js');
+    const ch = CHAPTERS[window.__rl.ch], name = (ch.names && ch.names[id]) || VARS[id].name;
+    const b = [...document.querySelectorAll('#palette button')].find(x => x.title === `Add ${name}`);
+    if (!b) throw new Error(`no palette button for ${id}`);
+    b.click();
+  }, { id });
+  await page.click('#editorSlot [data-kind="fn"]');
+  for (const [k, c] of coefs.entries()) await page.fill(`#editorSlot [data-coef="${k}"]`, String(c));
+  await page.click('#edSave');
+}

@@ -4,7 +4,7 @@
 // Also: "acceleration varies with time" greys out the constant-α equations; ∫dt needs a start value.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { launch, openApp, setCondition, confirmConditions, addTarget } from './helpers.js';
+import { launch, openApp, setCondition, confirmConditions, addTarget, addFunction } from './helpers.js';
 
 let env;
 before(async () => { env = await launch(); });
@@ -13,19 +13,6 @@ after(async () => { await env?.close(); });
 const ROTATION = 'Rotation kinematics';
 async function rotation(page){ await page.click(`#chPick button:has-text("${ROTATION}")`); }
 
-// Enter a function of time through the editor: coefficients of t⁰, t¹, t², t³ (signed, SI).
-export async function addFunction(page, id, coefs){
-  await page.evaluate(async ({ id }) => {
-    const { VARS, CHAPTERS } = await import('./js/data.js');
-    const ch = CHAPTERS[window.__rl.ch], name = (ch.names && ch.names[id]) || VARS[id].name;
-    const b = [...document.querySelectorAll('#palette button')].find(x => x.title === `Add ${name}`);
-    if (!b) throw new Error(`no palette button for ${id}`);
-    b.click();
-  }, { id });
-  await page.click('#editorSlot [data-kind="fn"]');
-  for (const [k, c] of coefs.entries()) await page.fill(`#editorSlot [data-coef="${k}"]`, String(c));
-  await page.click('#edSave');
-}
 // "⏱ time when X = value": the editor opens for X at the moment the question asks about
 async function addTimeWhen(page, id, value){
   await page.selectOption('#addTarget', `when:${id}`);
