@@ -21,3 +21,8 @@ Plain HTML and JavaScript, no build step. Serve the folder (for example `python3
 - `js/sprites.js`: original pixel-art gags
 - `sw.js`, `manifest.webmanifest`, `icons/`: installable offline app
 - `fonts/`: Pixelify Sans, VT323 and Press Start 2P (SIL Open Font License)
+
+## Tests (dev only)
+The app itself has no dependencies. The tests use Node (built-in test runner) and `playwright-core` driving your installed Google Chrome.
+- `npm install` once, then `npm test` (all), `npm run test:solvers` (solver round-trips, no browser) or `npm run test:browser` (practice bank, setup checker, smoke test).
+- Set `RL_CHROME_CHANNEL` to use a different Chrome channel (for example `chrome-beta`).
