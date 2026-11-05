@@ -247,6 +247,24 @@
   #fbd .fmsg.bad{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.4)}
   #fbd svg{display:block;width:100%;max-width:420px;height:auto;background:#070b14;border:1px solid var(--line);border-radius:8px;margin:6px auto}
 
+  /* scenarios + what matters */
+  table.scen{width:100%;border-collapse:collapse;font:13px var(--mono);margin:4px 0 8px}
+  table.scen th{font:600 11px var(--mono);color:var(--muted);text-align:left;padding:4px 5px;border-bottom:1px solid var(--line)}
+  table.scen th small{display:block;font:10px var(--ui);color:var(--dim)}
+  table.scen td{padding:3px 5px;border-bottom:1px solid var(--line);white-space:nowrap}
+  table.scen.out td.flag{white-space:normal}
+  table.scen td.n{color:var(--muted)}
+  table.scen input{width:100%;min-width:44px;font:13px var(--mono);padding:3px 5px}
+  table.scen td button{min-height:0;padding:1px 6px;font-size:11px}
+  table.scen.out td.flag{font:12px var(--ui)}
+  table.scen.out td.flag.ok{color:var(--good)} table.scen.out td.flag.barely{color:var(--amber)} table.scen.out td.flag.fail{color:var(--bad)}
+  #matters .mt{margin-bottom:10px}
+  #matters .mhead{font:600 16px/1.4 var(--mono);color:var(--found);margin-bottom:4px}
+  #matters p{margin:3px 0;font-size:13px}
+  #matters .nomatter b{color:var(--cy)}
+  #matters ul.lims{margin:4px 0 0;padding-left:20px;font:13px/1.6 var(--mono)}
+  #matters .rank{font:14px var(--mono);color:var(--found)}
+
   /* practice bank */
   .modalwrap{position:fixed;inset:0;z-index:18;display:none;align-items:center;justify-content:center;background:rgba(2,4,9,.6);backdrop-filter:blur(3px)}
   .modalwrap.show{display:flex}
@@ -316,6 +334,7 @@
         <div class="axisnote" id="axisNote"></div>
         <div class="knowns" id="knowns"></div>
         <div id="editorSlot"></div>
+        <div id="scenBox"></div>
         <div class="subhead">Add a known: what does the problem tell you?</div>
         <div class="palette" id="palette"></div>
         <div class="row" style="margin-top:8px"><button id="clearBtn" title="Remove every known, target and equation">Clear all</button></div>
@@ -370,6 +389,10 @@
     <section class="win" id="workWin">
       <div class="titlebar"><h2 id="workTitle">6. Work</h2></div>
       <div class="body"><div class="sunk" id="work"></div></div>
+    </section>
+    <section class="win" id="mattersWin">
+      <div class="titlebar"><h2>7. What matters</h2></div>
+      <div class="body"><div class="sunk" id="matters"></div></div>
     </section>
     <section class="win" id="path">
       <div class="titlebar"><h2>Path so far</h2></div>

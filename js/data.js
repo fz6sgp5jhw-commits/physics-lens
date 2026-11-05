@@ -30,6 +30,14 @@ export const VARS = {
   W2:    { sym: 'W<sub>2</sub>', plain: 'W₂', name: 'weight of the hanging mass', unit: 'N', units: { N: 1 } },
   N1:    { sym: 'N<sub>1</sub>', plain: 'N₁', name: 'normal force from the table on m₁', unit: 'N', units: { N: 1 } },
   Tn:    { sym: 'T', plain: 'T', name: 'tension in the string', unit: 'N', units: { N: 1 } },
+  // pushed blocks (+ is forward: the way F pushes)
+  mA:    { sym: 'm<sub>A</sub>', plain: 'm_A', name: 'mass of block A (the one F pushes)', unit: 'kg', units: { kg: 1, g: 0.001 } },
+  mB:    { sym: 'm<sub>B</sub>', plain: 'm_B', name: 'mass of block B (in front)', unit: 'kg', units: { kg: 1, g: 0.001 } },
+  P:     { sym: 'P', plain: 'P', name: 'contact force between the blocks (size)', unit: 'N', units: { N: 1 } },
+  NA:    { sym: 'N<sub>A</sub>', plain: 'N_A', name: 'normal force from the floor on A', unit: 'N', units: { N: 1 } },
+  NB:    { sym: 'N<sub>B</sub>', plain: 'N_B', name: 'normal force from the floor on B', unit: 'N', units: { N: 1 } },
+  fA:    { sym: 'f<sub>A</sub>', plain: 'f_A', name: 'kinetic friction on A (size)', unit: 'N', units: { N: 1 } },
+  fB:    { sym: 'f<sub>B</sub>', plain: 'f_B', name: 'kinetic friction on B (size)', unit: 'N', units: { N: 1 } },
   // rotation (+ is counterclockwise)
   theta: { sym: 'θ', plain: 'θ', name: 'angle turned', unit: 'rad', units: { rad: 1, rev: TAU, '°': Math.PI / 180 }, dir: ['counterclockwise', 'clockwise'] },
   w0:    { sym: 'ω<sub>0</sub>', plain: 'ω₀', name: 'initial angular velocity', unit: 'rad/s', units: { 'rad/s': 1, rpm: TAU / 60, 'rev/s': TAU }, dir: ['counterclockwise', 'clockwise'] },
@@ -359,6 +367,12 @@ export const EQS = {
     solve: { Tn: { steps: [], sub: '{m1}{m2}{g}(1 + {mu}) / ({m1} + {m2})' },
       mu: { steps: [{ eq: `1 + ${V('mu')} = ${V('Tn')}(${V('m1')} + ${V('m2')}) / (${V('m1')}${V('m2')}${V('g')})`, why: 'multiply by (m₁ + m₂), divide by m₁m₂g' }, { eq: `${V('mu')} = ${V('Tn')}(${V('m1')} + ${V('m2')}) / (${V('m1')}${V('m2')}${V('g')}) − 1`, why: 'subtract 1' }], sub: '{Tn}({m1} + {m2}) / ({m1}{m2}{g}) − 1' } } },
 
+  // ---- pushed blocks: friction on each block ----
+  Q1: { label: 'B1', vars: ['fA', 'mu', 'NA'], form: `${V('fA')} = ${V('mu')}${V('NA')}`, meaning: 'Sliding friction on block A, proportional to how hard the floor pushes up on it.', condition: 'sliding (kinetic friction)', applies: c => c.friction, needs: 'kinetic friction', calc: 'Coulomb’s law of friction for block A.',
+    solve: { fA: { steps: [], sub: '{mu}{NA}' }, mu: { steps: [{ eq: `${V('mu')} = ${V('fA')} / ${V('NA')}`, why: 'divide both sides by N_A' }], sub: '{fA} / {NA}' }, NA: { steps: [{ eq: `${V('NA')} = ${V('fA')} / ${V('mu')}`, why: 'divide both sides by μk' }], sub: '{fA} / {mu}' } } },
+  Q2: { label: 'B2', vars: ['fB', 'mu', 'NB'], form: `${V('fB')} = ${V('mu')}${V('NB')}`, meaning: 'Sliding friction on block B.', condition: 'sliding (kinetic friction)', applies: c => c.friction, needs: 'kinetic friction', calc: 'Coulomb’s law of friction for block B.',
+    solve: { fB: { steps: [], sub: '{mu}{NB}' }, mu: { steps: [{ eq: `${V('mu')} = ${V('fB')} / ${V('NB')}`, why: 'divide both sides by N_B' }], sub: '{fB} / {NB}' }, NB: { steps: [{ eq: `${V('NB')} = ${V('fB')} / ${V('mu')}`, why: 'divide both sides by μk' }], sub: '{fB} / {mu}' } } },
+
   // ---- rotation: a point at radius r ----
   E6: {
     label: 'R6', vars: ['s', 'r', 'theta'], form: `${V('s')} = ${V('r')}${V('theta')}`,
@@ -455,6 +469,32 @@ export const CHAPTERS = {
     ],
     defaults: { m1: 2, m2: 1, mu: 0.2, v0: 0 },
   },
+  blocks: {
+    title: 'Pushed blocks', short: 'Blocks',
+    kin: { p: 'dx', u0: 'v0', u: 'vf', a: 'a', t: 't' }, diagram: 'blocks',
+    ladder: { rungs: ['dx', 'vf', 'a'], start: { dx: null, vf: 'v0' }, zeroNote: { dx: 'Δx is measured from where it starts, so Δx(0) = 0.' } },
+    vars: ['mA', 'mB', 'Fp', 'P', 'g', 'mu', 'NA', 'NB', 'fA', 'fB', 'a', 'dx', 'v0', 'vf', 't'],
+    dirs: { dx: ['forward', 'backward'], v0: ['forward', 'backward'], vf: ['forward', 'backward'], a: ['forward', 'backward'] },
+    names: { dx: 'distance the blocks move', v0: 'initial speed of the blocks', vf: 'final speed of the blocks', a: 'acceleration of both blocks', Fp: 'push on block A (size)' },
+    axis: '+ is <b>forward</b>: the way F pushes.',
+    stuck: 'Draw a free-body diagram for each block (Forces tab): it writes Newton’s second law for both. Is “On Earth” ticked so g is known?',
+    intro: `<p>Two blocks touch on a floor and F pushes block A, which pushes block B. They move together, so they share the same acceleration.</p>
+      <p>The forces between them are a <b>Newton’s third-law pair</b>: A pushes B forward with P, and B pushes A back with the same P. Draw a free-body diagram for <b>each block</b>, then treat the two ΣF equations as a system.</p>`,
+    sections: [
+      { title: 'Friction on each block', note: 'Kinetic friction on each block, from its own normal force.', eqs: ['Q1', 'Q2'] },
+      { title: 'Kinematics (both blocks move together)', note: 'Five quantities: Δx, v₀, v, a, t. Newton’s second law for each block comes from your free-body diagrams.', eqs: ['X1', 'X2', 'X3', 'X4', 'X5'] },
+    ],
+    conditions: [
+      { key: 'friction', type: 'choice', label: 'Floor', options: [[false, 'Frictionless'], [true, 'Kinetic friction (both slide)']] },
+      { key: 'together', type: 'locked', label: 'They move together', note: 'Block A pushes block B, so both have the same acceleration a.' },
+      { key: 'rest', type: 'hidden', label: 'Starts from rest', sets: { v0: 0 } },
+      { key: 'earth', type: 'hidden', label: 'On Earth (g = 9.81 m/s²)', sets: { g: 9.81 }, default: true },
+    ],
+    // per-scenario assumption checks: kinetic friction only holds while the blocks actually slide
+    checks: [{ when: c => c.friction, sub: '{Fp} − {mu}({mA} + {mB}){g}', what: 'the push minus the friction on both blocks',
+      judge: (x, v) => x <= 0 ? ['fail', 'doesn’t slide: friction can hold it, so kinetic friction can’t be assumed'] : x < 0.1 * v.Fp ? ['barely', 'barely sliding: the push only just beats friction, so small changes in μk decide whether it moves at all'] : ['ok', 'slides'] }],
+    defaults: { mA: 2, mB: 1, Fp: 12, mu: 0.1, v0: 0 },
+  },
   rotation: {
     title: 'Rotation kinematics', short: 'Rotation',
     kin: { p: 'theta', u0: 'w0', u: 'w', a: 'alpha', t: 't' }, diagram: 'wheel',
@@ -523,11 +563,11 @@ export const DIMS = Object.fromEntries(Object.entries(VARS).map(([id, d]) => [id
 // (and to draw the diagram); the answer itself stays symbolic.
 export const SAMPLE = {
   dx: 4, v0: 3, vf: 5, a: 2, t: 2, m: 3, g: 9.81, inc: 30, W: 29.4, Wpar: 14.7, Wperp: 25.5, N: 25.5, f: 5, mu: 0.15, F: 10,
-  Fp: 10, m1: 4, m2: 2, W1: 39.2, W2: 19.6, N1: 39.2, Tn: 12,
+  Fp: 10, mA: 2, mB: 1, P: 4, NA: 19.6, NB: 9.8, fA: 2, fB: 1, m1: 4, m2: 2, W1: 39.2, W2: 19.6, N1: 39.2, Tn: 12,
   theta: 8, w0: 2, w: 6, alpha: 1.5, r: 0.5, s: 4, v: 3, at: 0.75, ac: 18,
 };
 // Order symbols are written in a product: coefficient-like first (μk m g), then the rest.
-export const PRINT_ORDER = ['mu', 'r', 'm', 'm1', 'm2', 'g', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'f', 'F', 'Fp', 'Tn', 'inc',
+export const PRINT_ORDER = ['mu', 'r', 'm', 'm1', 'm2', 'mA', 'mB', 'g', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'NA', 'NB', 'f', 'fA', 'fB', 'F', 'Fp', 'P', 'Tn', 'inc',
   'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'v', 'a', 'alpha', 'at', 'ac', 't'];
 
 // ---------- every solver's numbers come from its `sub` template ----------

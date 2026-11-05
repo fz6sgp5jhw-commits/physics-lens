@@ -10,7 +10,7 @@ const S = window.__rl = {
   bank: null, editing: null, focus: [], hot: [], hover: null, busy: false, sound: false, anim: false, inspectName: null, lastStep: 0,
   // how symbolic answers are printed (also used by the tests)
   field,
-  printOpts: { plain: (id) => VARS[id].plain, html: (id) => V(id), order: PRINT_ORDER, spaced: (id) => /[A-Za-zα-ω]{2,}/.test(VARS[id].plain), fmt },
+  printOpts: { plain: (id) => VARS[id].plain, html: (id) => V(id), order: PRINT_ORDER, spaced: (id) => /[A-Za-zα-ω_]{2,}/.test(VARS[id].plain), fmt },
 };
 X.setSamples(SAMPLE);
 S.isKnown = (id) => known(id);
@@ -60,7 +60,9 @@ const naReason = (e) => { const sec = chapter().sections.find(s => s.eqs.include
 const appEqs = () => [...chEqs().map(x => x.e).filter(applies), ...Object.keys(S.gen)];
 // targets and knowns can be scalars ('w') or functions of time ('fn:w')
 const isFn = (id) => typeof id === 'string' && id.startsWith('fn:');
-const known = (id) => isFn(id) ? id.slice(3) in S.funcs : id in S.givens || id in S.found;
+const isRank = (id) => typeof id === 'string' && id.startsWith('rank:');
+const baseOf = (id) => isRank(id) ? id.slice(5) : id;
+const known = (id) => isRank(id) ? (id.slice(5) in S.found && S.scen.rows.length > 1 && scenReady()) : isFn(id) ? id.slice(3) in S.funcs : id in S.givens || id in S.found;
 // typical values for symbols; the sliders under the diagram change them (for the replay only)
 const sampleOf = (id) => id in S.samples ? S.samples[id] : SAMPLE[id];
 const samplesNow = () => ({ ...SAMPLE, ...S.samples });
@@ -83,8 +85,8 @@ const dr = (id) => { const d = (chapter().dirs && chapter().dirs[id]) || VARS[id
 const unitOf = (id) => VARS[id].unit;
 const calm = () => document.body.classList.contains('calm');
 const userGivens = () => Object.values(S.givens).filter(g => g.from === 'you').length + Object.values(S.funcs).filter(f => f.from === 'given').length;
-const symOf = (id) => isFn(id) ? `${VARS[id.slice(3)].sym}(t)` : VARS[id].sym;
-const plainOf = (id) => isFn(id) ? `${VARS[id.slice(3)].plain}(t)` : VARS[id].plain;
+const symOf = (id) => isRank(id) ? `ranking by ${VARS[id.slice(5)].sym}` : isFn(id) ? `${VARS[id.slice(3)].sym}(t)` : VARS[id].sym;
+const plainOf = (id) => isRank(id) ? `ranking by ${VARS[id.slice(5)].plain}` : isFn(id) ? `${VARS[id.slice(3)].plain}(t)` : VARS[id].plain;
 // the motion ladder: active when acceleration varies with time, or once any function of t is known
 const ladder = () => (chapter().ladder && (S.cond.varA || Object.keys(S.funcs).length)) ? chapter().ladder : null;
 const polyHTML = (p) => X.polyHTML(p, S.printOpts);
@@ -104,9 +106,10 @@ const exprOf = (id) => {
   if (g) return g.kind === 'symbol' ? X.scale(X.symbol(id), g.dir ? -1 : 1) : X.number(g.val);
   const f = S.found[id]; return f.expr || X.number(f.val);
 };
-const isSymbolic = (id) => isFn(id) || isSymGiven(id) || !!(S.found[id] && S.found[id].expr && !X.isNumeric(S.found[id].expr));
+const isSymbolic = (id) => isRank(id) || isFn(id) || isSymGiven(id) || !!(S.found[id] && S.found[id].expr && !X.isNumeric(S.found[id].expr));
 // a known's value for display: a number with its unit, or its symbolic form
 const showVal = (id) => {
+  if (isRank(id)) return rankText(id.slice(5)).order;
   if (isFn(id)) return polyHTML(S.funcs[id.slice(3)].poly);
   if (isSymGiven(id)) return (S.givens[id].dir ? '−' : '') + VARS[id].sym;
   if (isSymbolic(id)) return X.toHTML(S.found[id].expr, S.printOpts);
@@ -145,6 +148,15 @@ function moves(eqList, ks){
   for (const e of eqList){
     const u = solvable(e, ks); if (u) out.push({ kind: 'eq', eq: e, v: u, moment: EQS[e].vars.some(x => ks.has('m:' + x)) });
     const fu = fnSolvable(e, ks); if (fu) out.push({ kind: 'eq', eq: e, v: 'fn:' + fu, fn: true });
+  }
+  for (let i = 0; i < eqList.length; i++){
+    const ua = unknownsOf(eqList[i], ks); if (ua.length !== 2) continue;
+    for (let j = i + 1; j < eqList.length; j++){
+      const ub = unknownsOf(eqList[j], ks);
+      if (ub.length !== 2 || !ua.every(x => ub.includes(x)) || !EQS[eqList[i]].vars.concat(EQS[eqList[j]].vars).every(x => ks.has(x) || ua.includes(x))) continue;
+      if (!zeroForm(eqList[i]) || !zeroForm(eqList[j])) continue;
+      for (const x of ua) out.push({ kind: 'sys', a: eqList[i], b: eqList[j], pair: ua, v: x });
+    }
   }
   const L = ladder(); if (!L) return out;
   const f = (x) => ks.has('fn:' + x), R = L.rungs;
@@ -205,10 +217,10 @@ $('dlgOk').onclick = () => $('dlg').classList.remove('show');
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ $('dlg').classList.remove('show'); $('bank').classList.remove('show'); } });
 
 // ---------- chapter / reset ----------
-function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false, earth: true } : ch === 'pulley' ? { friction: false, earth: true } : { rim: false, varA: false }; }
+function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false, earth: true } : ch === 'pulley' || ch === 'blocks' ? { friction: ch === 'blocks', earth: true } : { rim: false, varA: false }; }
 function switchChapter(ch){ S.ch = ch; S.cond = defaultsFor(ch); resetAll(false); }
 function resetAll(keepText = true){
-  dropGenerated(() => true); S.custom = []; S.samples = {};
+  dropGenerated(() => true); S.custom = []; S.samples = {}; if (S.scen) S.scen = { cols: [], rows: [] };
   S.givens = {}; S.found = {}; S.funcs = {}; S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null;
   if (!keepText){ $('problem').value = ''; S.bank = null; }
   S.cond = { ...defaultsFor(S.ch), ...Object.fromEntries(Object.entries(S.cond).filter(([k]) => k in defaultsFor(S.ch))) };
@@ -245,7 +257,7 @@ function renderUnit(){
 function describe(id, g){
   const d = VARS[id];
   const dirTxt = dr(id) ? ` ${dr(id)[g.dir]} <span class="small muted">(${g.dir ? '−' : '+'})</span>` : '';
-  if (g.kind === 'symbol') return `<span class="small muted">symbol, no number</span>${dirTxt}`;
+  if (g.kind === 'symbol') return `<span class="small muted">${g.scenario ? 'a column of the scenario table' : 'symbol, no number'}</span>${dirTxt}`;
   return `${fmt(g.mag)} ${g.unit === 'no unit' ? '' : g.unit}${dirTxt}`;
 }
 function renderKnowns(){
@@ -270,7 +282,7 @@ function renderKnowns(){
   }
   box.querySelectorAll('[data-delfn]').forEach(b => b.onclick = () => { delete S.funcs[b.dataset.delfn]; clearDerived(); renderAll(false); });
   box.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openEditor(b.dataset.edit));
-  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete S.givens[b.dataset.del]; clearDerived(); renderAll(false); });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const id = b.dataset.del, c = S.scen.cols.indexOf(id); if (c >= 0){ S.scen.cols.splice(c, 1); S.scen.rows.forEach(r => r.splice(c, 1)); } delete S.givens[id]; clearDerived(); renderAll(false); });
   const pal = $('palette'); pal.innerHTML = '';
   for (const id of chVars()){
     if (known(id)) continue;
@@ -288,10 +300,12 @@ function renderEditor(){
   const { id, mag, unit, dir, kind } = S.editing, d = VARS[id];
   slot.innerHTML = `<div class="editor"><div><b>${d.sym}</b>: ${nm(id)}</div>
     ${S.editing.moment ? `<div class="erow small">Its value <b>at the moment the question asks about</b>. The lab finds the time t when it has this value.</div>` : ''}
-    <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button>${canFn(id) ? `<button data-kind="fn" aria-pressed="${kind === 'fn'}">Function of t</button>` : ''}</div>
+    <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button><button data-kind="scenario" aria-pressed="${kind === 'scenario'}" title="Different values in different cases">Scenario table</button>${canFn(id) ? `<button data-kind="fn" aria-pressed="${kind === 'fn'}">Function of t</button>` : ''}</div>
     ${kind === 'fn'
       ? `<div class="erow fnrow"><b>${d.sym}(t) =</b> ${[0, 1, 2, 3].map(k => `${k ? '+' : ''} <span class="coef"><input data-coef="${k}" type="text" inputmode="decimal" value="${S.editing.coefs[k]}" placeholder="0"><small>${unitPer(id, k)}</small></span>${k ? ` t${SUPN[k]}` : ''}`).join(' ')}</div>
          <div class="erow small">Type each coefficient with its sign (+ is ${dr(id) ? dr(id)[0] : 'positive'}), or a letter for a constant you don’t know (like <b>k</b>). Leave a box empty for 0. Each one has its own unit, shown under it.</div>`
+      : kind === 'scenario'
+      ? `<div class="erow small">Its value changes from case to case: it becomes a column of the scenario table (step 1), and the problem is solved with <b>${d.sym}</b> as a symbol.</div>`
       : kind === 'symbol'
       ? `<div class="erow small">No number: you’ll get the answer in symbols, with <b>${d.sym}</b> in it. Its unit is ${d.unit || 'none'}.</div>`
       : `<div class="erow"><input id="edVal" type="text" inputmode="decimal" value="${mag}" placeholder="size"><select id="edUnit">${Object.keys(d.units).map(u => `<option ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`}
@@ -314,9 +328,10 @@ function renderEditor(){
       S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
       return;
     }
-    if (S.editing.kind === 'symbol'){
+    if (S.editing.kind === 'symbol' || S.editing.kind === 'scenario'){
       const dirI = dr(id) ? S.editing.dir : 0;
-      S.givens[id] = { from: 'you', kind: 'symbol', mag: null, unit: d.unit, dir: dirI, val: (dirI ? -1 : 1) * SAMPLE[id] };
+      S.givens[id] = { from: 'you', kind: 'symbol', scenario: S.editing.kind === 'scenario', mag: null, unit: d.unit, dir: dirI, val: (dirI ? -1 : 1) * SAMPLE[id] };
+      if (S.editing.kind === 'scenario' && !S.scen.cols.includes(id)){ S.scen.cols.push(id); S.scen.rows.forEach(r => r.push('')); }
       S.targets = S.targets.filter(t => t !== id);
       S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
       return;
@@ -422,7 +437,7 @@ function renderTargets(){
   const box = $('targets');
   const opts = chVars().filter(id => !known(id) && !S.targets.includes(id));
   box.innerHTML = `<span class="small"><b>🎯 The question asks for:</b></span>` + S.targets.map((t, i) => `<span class="tchip ${known(t) ? 'done' : t === curTarget() ? 'current' : ''}">${letter(i)} ${symOf(t)}${known(t) ? ` = ${showVal(t)}` : ''}<button data-rmt="${t}" title="Remove target">×</button></span>`).join('')
-    + `<select id="addTarget"><option value="">+ add a target…</option>${opts.map(id => `<option value="${id}">${VARS[id].plain}: ${nm(id)}</option>`).join('')}${ladderTargets()}</select>`;
+    + `<select id="addTarget"><option value="">+ add a target…</option>${opts.map(id => `<option value="${id}">${VARS[id].plain}: ${nm(id)}</option>`).join('')}${ladderTargets()}${rankTargets()}</select>`;
   box.querySelectorAll('[data-rmt]').forEach(b => b.onclick = () => { S.targets = S.targets.filter(t => t !== b.dataset.rmt); renderAll(false); });
   $('addTarget').onchange = (e) => {
     const id = e.target.value; if (!id) return;
@@ -434,6 +449,11 @@ function renderTargets(){
     addTarget(id);
   };
 }
+function rankTargets(){
+  if (S.scen.rows.length < 2) return '';
+  const opts = chVars().filter(id => !S.givens[id] && !S.targets.includes('rank:' + id) && VARS[id].unit);
+  return `<optgroup label="Compare the scenarios">${opts.map(id => `<option value="rank:${id}">Rank the cases by ${VARS[id].plain}: ${nm(id)}</option>`).join('')}</optgroup>`;
+}
 function ladderTargets(){
   const L = ladder(); if (!L || !S.cond.varA) return '';
   return `<optgroup label="Functions of time">${[...L.rungs, ...FORCE_IDS.filter(id => chVars().includes(id))].filter(x => !known('fn:' + x) && !S.targets.includes('fn:' + x)).map(x => `<option value="fn:${x}">${VARS[x].plain}(t): ${nm(x)} as a function of time</option>`).join('')}</optgroup>`
@@ -442,7 +462,7 @@ function ladderTargets(){
 function addTarget(id){
   if (S.targets.includes(id) || known(id)) return;
   S.targets.push(id); renderAll(false);
-  say(`🎯 Target ${letter(S.targets.length - 1)}: <b>${symOf(id)}</b>, the ${nm(isFn(id) ? id.slice(3) : id)}${isFn(id) ? ' as a function of time' : ''}. ${S.sheet.length ? 'Look for a glowing equation on your sheet.' : 'Now gather equations that contain it.'}`);
+  say(`🎯 Target ${letter(S.targets.length - 1)}: <b>${symOf(id)}</b>, ${isRank(id) ? 'across your scenarios' : `the ${nm(isFn(id) ? id.slice(3) : id)}${isFn(id) ? ' as a function of time' : ''}`}. ${S.sheet.length ? 'Look for a glowing equation on your sheet.' : 'Now gather equations that contain it.'}`);
 }
 const MOVE_TXT = {
   deriv: (m) => `d/dt ↓ ${symOf(m.v)}`, integ: (m) => `∫dt ↑ ${symOf(m.v)}`, eval: (m) => `Put in t → ${symOf(m.v)}`,
@@ -499,7 +519,7 @@ function renderSheet(){
   if (!S.targets.length) st.innerHTML = 'Pick what the question asks for with <b>🎯 add a target</b>.';
   else if (!cur) st.innerHTML = 'Every target is found. Press <b>Replay motion</b> to watch it.';
   else {
-    const sp = shortest(S.sheet.filter(applies), ks, cur), lp = shortest(appEqs(), ks, cur);
+    const sp = shortest(S.sheet.filter(applies), ks, baseOf(cur)), lp = shortest(appEqs(), ks, baseOf(cur));
     const tl = `${letter(S.targets.indexOf(cur))} ${symOf(cur)}`;
     if (sp) st.innerHTML = `Your sheet can reach ${tl} in <b>${sp.length}</b> step${sp.length > 1 ? 's' : ''}.`;
     else if (lp) st.innerHTML = `Your sheet can’t reach ${tl} yet. Gather more from the library, or press <b>Hint</b>.`;
@@ -600,7 +620,7 @@ function routeStep(p, v, fns){
     v.t = pos[0];
   }
 }
-const MOVE_LABEL = { deriv: 'd/dt', integ: '∫dt', eval: 'put in t', solveT: 'solve for t', start: 't = 0' };
+const MOVE_LABEL = { sys: 'system', deriv: 'd/dt', integ: '∫dt', eval: 'put in t', solveT: 'solve for t', start: 't = 0' };
 // a ladder move: differentiate, integrate, evaluate, solve for t, or read the start value. All exact (symbols allowed).
 async function ladderOp(m){
   const L = chapter().ladder, step = S.path.length + 1, cur = curTarget();
@@ -825,9 +845,10 @@ $('hintBtn').onclick = () => {
   if (!S.condOk){ say('Set the conditions in step 2 first. They decide which equations even apply.'); return; }
   if (!S.targets.length){ say('Add a 🎯 target on your sheet: what does the question ask for?'); return; }
   if (!cur){ say('All targets found! Press <b>Replay motion</b>.'); return; }
-  const ks = knownSet(), lp = shortest(appEqs(), ks, cur);
+  const ks = knownSet(), lp = shortest(appEqs(), ks, baseOf(cur));
   if (!lp){ say(chapter().stuck ? 'No route yet. ' + chapter().stuck : S.ch === 'incline' ? 'No route yet. Hidden givens? “Starts from rest” means v₀ = 0, “stops” means v = 0. Is “On Earth” ticked so g is known?' : 'No route yet. “Starts from rest” means ω₀ = 0 and “stops” means ω = 0. For a point on the rim, tick “Track a point”.'); return; }
-  const sp = shortest(S.sheet.filter(applies), ks, cur);
+  const sp = shortest(S.sheet.filter(applies), ks, baseOf(cur));
+  if (sp && sp[0].kind === 'sys'){ say(`Psst… <b>${EQS[sp[0].a].label}</b> and <b>${EQS[sp[0].b].label}</b> share the same two unknowns: a system. Combine them.`); return; }
   if (sp && sp[0].kind !== 'eq'){ const n = sp[0]; say(`Psst… on your <b>motion ladder</b>, you can ${MOVE_TXT[n.kind](n)}. ${n.v === cur ? 'That’s your target!' : 'That gets you closer.'}`); return; }
   if (sp){ const n = sp[0]; say(`Psst… on your sheet, <b>${EQS[n.eq].label}</b> has just one unknown, <b>${symOf(n.v)}</b>. ${n.v === cur ? 'And it’s your target!' : 'Finding it gets you closer.'}`); return; }
   const miss = lp.find(s => s.kind === 'eq' && !S.sheet.includes(s.eq));
@@ -839,11 +860,13 @@ $('showBtn').onclick = async () => {
   if (S.busy) return;
   if (!S.condOk || !S.targets.length){ say('Set the conditions and add a 🎯 target first, then I’ll walk the shortest path.'); return; }
   while (curTarget()){
-    const lp = shortest(appEqs(), knownSet(), curTarget());
+    const goal = baseOf(curTarget());
+    if (known(goal)){ say(isRank(curTarget()) ? 'To rank the cases, add at least two complete rows to the scenario table.' : ''); return; }
+    const lp = shortest(appEqs(), knownSet(), goal);
     if (!lp){ dialog('No route', '<b>TARGET UNREACHABLE</b>No chain of equations gets from your knowns to the target. Look for a hidden given or a condition you haven’t set.'); return; }
     for (const s of lp) if (s.kind === 'eq' && !S.sheet.includes(s.eq)){ S.sheet.push(s.eq); renderAll(false); await sleep(350); }
-    say(`Path to ${symOf(curTarget())}: ${lp.map(s => `${s.kind === 'eq' ? EQS[s.eq].label : MOVE_LABEL[s.kind]}→${symOf(s.v)}`).join(', then ')}.`);
-    for (const s of lp){ if (s.kind === 'eq') await solve(s.eq, s.v); else await ladderOp(s); await sleep(450); }
+    say(`Path to ${symOf(goal)}: ${lp.map(s => `${s.kind === 'eq' ? EQS[s.eq].label : s.kind === 'sys' ? `${EQS[s.a].label}+${EQS[s.b].label}` : MOVE_LABEL[s.kind]}→${symOf(s.v)}`).join(', then ')}.`);
+    for (const s of lp){ if (s.kind === 'eq') await solve(s.eq, s.v); else if (s.kind === 'sys') await sysOp(s); else await ladderOp(s); await sleep(450); }
     if (lp.length && !known(lp[lp.length - 1].v)) return; // a step was refused (its dialog explains why)
   }
 };
@@ -995,7 +1018,7 @@ function draw(tau = null){
   const cv = $('dg'), ctx = cv.getContext('2d'); S.hot = [];
   const { v, illus } = simValues(), k = K(), T = v[k.t], now = tau === null ? T : tau;
   grid(ctx, cv.width, cv.height);
-  ({ incline: drawIncline, pulley: drawPulley, rotation: drawWheel })[S.ch](ctx, v, k, T, now, tau, cv.width, cv.height);
+  ({ incline: drawIncline, pulley: drawPulley, blocks: drawBlocks, rotation: drawWheel })[S.ch](ctx, v, k, T, now, tau, cv.width, cv.height);
   $('dgNote').textContent = illus ? 'Some values are made up for the picture until you give or find them.' : 'Drawn to scale with your numbers.';
   drawGraphs(v, k, tau);
 }
@@ -1136,6 +1159,27 @@ function drawPulley(ctx, v, k, T, now, tau, Wd, Hd){
   ctx.font = `16px ${MONO}`; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.textAlign = 'left'; ctx.fillText('+ = forward: m₁ toward the pulley, m₂ down.', 200, 36);
 }
 
+// two touching blocks pushed along a floor: ghosts, F on A, the contact pair P, friction if any
+function drawBlocks(ctx, v, k, T, now, tau, Wd, Hd){
+  const FY = Hd - 170, ss = Array.from({ length: 41 }, (_, i) => posAt(v, k, i * T / 40));
+  let lo = Math.min(0, ...ss), hi = Math.max(0, ...ss); if (hi - lo < 0.2){ hi += 0.1; lo -= 0.1; }
+  const X = (s) => 170 + (s - lo) / (hi - lo) * (Wd - 460);
+  ctx.strokeStyle = '#7fb8e6'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(30, FY); ctx.lineTo(Wd - 30, FY); ctx.stroke();
+  if (S.cond.friction){ ctx.strokeStyle = 'rgba(127,184,230,.35)'; ctx.lineWidth = 1; for (let x = 40; x < Wd - 30; x += 16){ ctx.beginPath(); ctx.moveTo(x, FY); ctx.lineTo(x - 8, FY + 10); ctx.stroke(); } }
+  const wA = 110, hA = 84, wB = 90, hB = 66;
+  for (let i = 0; i < 6; i++){ const t = i * T / 5; if (t > now + 1e-9) break; const x = X(posAt(v, k, t)); body(ctx, x, FY - hA / 2, wA, hA, 0, 0.12 + 0.3 * i / 5); body(ctx, x + wA / 2 + wB / 2, FY - hB / 2, wB, hB, 0, 0.12 + 0.3 * i / 5); }
+  const x = X(posAt(v, k, now)), xb = x + wA / 2 + wB / 2;
+  body(ctx, x, FY - hA / 2, wA, hA); body(ctx, xb, FY - hB / 2, wB, hB);
+  label(ctx, 'A', x, FY - hA / 2, '#fff', 'mA', 34); label(ctx, 'B', xb, FY - hB / 2, '#fff', 'mB', 34);
+  arrow(ctx, x - wA / 2 - 120, FY - hA / 2, x - wA / 2 - 4, FY - hA / 2, colOf('Fp'), hl('Fp', 4), 'Fp'); label(ctx, 'F', x - wA / 2 - 70, FY - hA / 2 - 26, colOf('Fp'), 'Fp', 38);
+  arrow(ctx, x + wA / 2, FY - 20, x + wA / 2 + 60, FY - 20, colOf('P'), hl('P', 3), 'P'); arrow(ctx, x + wA / 2, FY - 34, x + wA / 2 - 60, FY - 34, colOf('P'), hl('P', 3)); label(ctx, 'P', x + wA / 2, FY - hA - 20, colOf('P'), 'P', 34);
+  if (S.cond.friction){ arrow(ctx, x, FY + 14, x - 70, FY + 14, colOf('fA'), hl('fA', 3), 'fA'); arrow(ctx, xb, FY + 14, xb - 60, FY + 14, colOf('fB'), hl('fB', 3), 'fB'); }
+  const vNow = velAt(v, k, now), vs = Math.min(30, 160 / Math.max(0.5, Math.abs(velAt(v, k, T))));
+  arrow(ctx, xb + wB / 2 + 20, FY - hB - 30, xb + wB / 2 + 20 + vNow * vs, FY - hB - 30, colOf('vf'), hl('vf', 4), 'vf'); label(ctx, tau === null ? 'v' : `v=${fmt(vNow)}`, xb + wB / 2 + 40 + vNow * vs / 2, FY - hB - 56, colOf('vf'), 'vf', 34);
+  pointMark(ctx, X(0), FY + 40, 'start', '#4fd1ff'); pointMark(ctx, X(posAt(v, k, T)), FY + 40, 'end', '#ffd166');
+  label(ctx, `t = ${fmt(now)} s`, Wd - 150, 40, colOf('t'), 't', 38);
+  caption(ctx, '+ is forward: the way F pushes. Click arrows or labels.', Hd);
+}
 function drawWheel(ctx, v, k, T, now, tau, Wd, Hd){
   const cx = 360, cy = Hd / 2 + 10, R = Math.min(200, Hd / 2 - 70), thetaAt = (x) => posAt(v, k, x), N = 7;
   for (let i = 0; i < N; i++){
@@ -1287,9 +1331,11 @@ function findSystem(ks){
   }
   return null;
 }
-function combine(sys){
+function combine(sys, keep = null){
   const { a, b, pair } = sys, Za = zeroForm(a), Zb = zeroForm(b);
-  for (const x of pair){
+  const existing = Object.keys(S.gen).find(id => S.gen[id].key === `${a}+${b}` && (!keep || S.gen[id].vars.includes(keep)));
+  if (existing) return existing;
+  for (const x of [...pair.filter(p => p !== keep), ...pair.filter(p => p === keep)]){
     try {
       const iso = X.solveLinear(Za, x, plain(x));
       const Z = X.substRat(Zb, { [x]: iso });
@@ -1301,6 +1347,13 @@ function combine(sys){
     } catch (e){ if (!(e instanceof X.MathError)) throw e; }
   }
   dialog('Math says no', '<b>CAN’T COMBINE</b>Neither unknown can be isolated in a single linear step here.');
+}
+
+// Show me: a system move combines the two equations (eliminating the other unknown), then solves for this one
+async function sysOp(m){
+  const id = combine(m, m.v); if (!id) return;
+  renderAll(false); await sleep(350);
+  await solve(id, m.v);
 }
 
 // ---------- diagram tabs ----------
@@ -1317,12 +1370,12 @@ document.querySelectorAll('[data-dtab]').forEach(b => b.onclick = () => showTab(
 S.build = createBuild($('bd'), { onChange: () => { renderBuildUI(); if (S.dtab === 'forces') renderFBD(); }, nameOf: (id) => VARS[id] ? VARS[id].plain : id });
 function renderBuildUI(){
   $('bpal').innerHTML = `<span class="small"><b>Add:</b></span>${PALETTE.map(k => `<button data-bshape="${k}">${S.build.KINDS[k].label}</button>`).join('')}
-    <span class="small" style="margin-left:8px"><b>Templates:</b></span><button data-template="incline">Incline</button><button data-template="pulley">Pulley</button><button data-template="wheel">Wheel</button>`;
+    <span class="small" style="margin-left:8px"><b>Templates:</b></span><button data-template="incline">Incline</button><button data-template="pulley">Pulley</button><button data-template="blocks">Two blocks</button><button data-template="wheel">Wheel</button>`;
   $('bpal').querySelectorAll('[data-bshape]').forEach(b => b.onclick = () => S.build.add(b.dataset.bshape));
   $('bpal').querySelectorAll('[data-template]').forEach(b => b.onclick = () => S.build.template(b.dataset.template));
   const s = S.build.selected(), box = $('bprops');
   if (!s){ box.innerHTML = '<span class="small muted">Drag shapes; blocks and balls snap onto ramps, tables and the floor. Drag the yellow handle to change the ramp angle. Click a shape to name its properties.</span>'; return; }
-  const massOpts = ['m', 'm1', 'm2'].map(id => `<option value="${id}" ${s.props.mass === id ? 'selected' : ''}>${VARS[id].plain}</option>`).join('');
+  const massOpts = ['m', 'm1', 'm2', 'mA', 'mB'].map(id => `<option value="${id}" ${s.props.mass === id ? 'selected' : ''}>${VARS[id].plain}</option>`).join('');
   let html = `<b>${S.build.KINDS[s.kind].label}</b>`;
   if ('mass' in s.props) html += `<label>mass <select data-bprop="mass">${massOpts}</select></label>`;
   if ('angle' in s.props) html += `<span>angle: ${VARS.inc.plain} (${Math.round(S.build.theta)}° in the picture)</span>`;
@@ -1344,14 +1397,15 @@ const DIRS = {
     'up-slope': ['1', '0', 'along the slope, up'], 'down-slope': ['−1', '0', 'along the slope, down'],
     'horiz-in': ['cos {inc}', '−sin {inc}', 'horizontal, toward the slope'], 'horiz-out': ['−cos {inc}', 'sin {inc}', 'horizontal, away from the slope'] },
   flat: { down: ['0', '−1', 'straight down'], up: ['0', '1', 'straight up'], 'perp-out': ['0', '1', 'perpendicular, out of the surface'], 'perp-in': ['0', '−1', 'perpendicular, into the surface'],
-    forward: ['1', '0', 'horizontal, toward the pulley'], backward: ['−1', '0', 'horizontal, away from the pulley'] },
+    forward: ['1', '0', 'horizontal, forward (+)'], backward: ['−1', '0', 'horizontal, backward'] },
   hanging: { down: ['1', '0', 'straight down'], up: ['−1', '0', 'straight up'] },
   free: { down: ['0', '−1', 'straight down'], up: ['0', '1', 'straight up'] },
 };
 const FKINDS = {
   gravity: { label: 'Gravity', dir: () => 'down' },
-  normal: { label: 'Normal', vars: ['N', 'N1'], dir: () => 'perp-out' },
-  friction: { label: 'Friction', vars: ['f'], dir: (fr) => fr === 'slope' ? ((S.cond.up ? 'down-slope' : 'up-slope')) : 'backward' },
+  normal: { label: 'Normal', vars: ['N', 'N1', 'NA', 'NB'], dir: () => 'perp-out' },
+  contact: { label: 'Contact (other block)', vars: ['P'], dir: (fr, b) => S.build.touching().some(t => t.left === b.id) ? 'backward' : 'forward' },
+  friction: { label: 'Friction', vars: ['f', 'fA', 'fB'], dir: (fr) => fr === 'slope' ? ((S.cond.up ? 'down-slope' : 'up-slope')) : 'backward' },
   push: { label: 'Push / pull', vars: ['Fp'], dir: (fr) => fr === 'slope' ? 'horiz-in' : fr === 'flat' ? 'forward' : 'up' },
   tension: { label: 'Tension', vars: ['Tn'], dir: (fr) => fr === 'slope' ? 'up-slope' : fr === 'flat' ? 'forward' : 'up' },
 };
@@ -1360,6 +1414,9 @@ const fbdBodies = () => S.build.bodies();
 const fbdBody = () => { const bs = fbdBodies(); return bs.find(b => b.id === S.fbd.body) || bs[0] || null; };
 const forcesOf = (b) => (S.fbd.forces[b.id] = S.fbd.forces[b.id] || []);
 const massOf = (b) => b.mass || 'm';
+const bodyName = (b) => b.mass === 'mA' ? 'block A' : b.mass === 'mB' ? 'block B' : b.kind;
+// the symbol a new force gets: the one named for this body (N_A on block A), else the unit's first
+const defaultVar = (d, b) => { if (!d.vars) return null; const sfx = (massOf(b).match(/[AB12]$/) || [''])[0]; const own = d.vars.find(id => sfx && id.endsWith(sfx) && chVars().includes(id)); return own || d.vars.find(id => chVars().includes(id)) || d.vars[0]; };
 function fMag(b, f){ return f.kind === 'gravity' ? `{${massOf(b)}}{g}` : `{${f.var}}`; }
 // a force's components (s, n) as rationals in symbols, in the body's frame and with the student's axis choice
 function components(b, f){
@@ -1372,9 +1429,12 @@ function components(b, f){
   return { s, n, sR: rat(s), nR: rat(n), name: d[2] };
 }
 const ratTxt = (r) => X.toText(r, S.printOpts), ratHTML = (r) => X.toHTML(r, S.printOpts);
-const fLabel = (b, f) => f.kind === 'gravity' ? `W = ${VARS[massOf(b)].plain}g` : VARS[f.var].plain;
+// labels: HTML (with subscripts) for the page, and SVG tspans for the drawing
+const fLabelHTML = (b, f) => f.kind === 'gravity' ? `W = ${ratHTML(X.toRat(X.parse(`{${massOf(b)}}{g}`), symEnv([massOf(b), 'g'])))}` : VARS[f.var].sym;
+const svgSub = (t) => t.replace(/_(\w)/g, '<tspan baseline-shift="sub" font-size="70%">$1</tspan>');
+const fLabel = (b, f) => f.kind === 'gravity' ? `W = ${ratTxt(X.toRat(X.parse(`{${massOf(b)}}{g}`), symEnv([massOf(b), 'g'])))}` : VARS[f.var].plain;
 function fbdCheck(b){
-  const fs = forcesOf(b), bad = [], what = b.kind;
+  const fs = forcesOf(b), bad = [], what = bodyName(b);
   const grav = fs.filter(f => f.kind === 'gravity');
   if (!grav.length) bad.push(`Every body needs gravity: W = ${VARS[massOf(b)].plain}g, straight down.`);
   else if (grav.some(f => f.dir !== 'down')) bad.push('Gravity always points straight down.');
@@ -1387,6 +1447,16 @@ function fbdCheck(b){
   if (fr.length && !S.cond.friction) bad.push('There’s friction on the diagram, but your conditions say the surface is frictionless.');
   if (!fr.length && S.cond.friction && touches.length) bad.push(`The surface has friction and the ${what} slides: add kinetic friction along the surface, against the motion.`);
   if (fr.some(f => !/slope|forward|backward/.test(f.dir))) bad.push('Kinetic friction acts along the surface, against the motion.');
+  // touching blocks push on each other: a contact force on each, a Newton's third-law pair
+  for (const t of S.build.touching().filter(t => t.left === b.id || t.right === b.id)){
+    const other = fbdBodies().find(o => o.id === (t.left === b.id ? t.right : t.left)), mine = fs.filter(f => f.kind === 'contact');
+    if (!mine.length){ bad.push(`${what[0].toUpperCase() + what.slice(1)} touches ${bodyName(other)}, so they push on each other: add the contact force from ${bodyName(other)}.`); continue; }
+    const want = t.left === b.id ? 'backward' : 'forward';
+    if (mine[0].dir !== want) bad.push(`${bodyName(other)} is ${t.left === b.id ? 'in front of' : 'behind'} ${what}, so its push on ${what} points ${want}.`);
+    const theirs = forcesOf(other).filter(f => f.kind === 'contact');
+    if (theirs.length && (theirs[0].var !== mine[0].var || theirs[0].dir === mine[0].dir)) bad.push(`Newton’s third law: the contact forces on ${bodyName(b)} and ${bodyName(other)} are one pair, so they need the same symbol and opposite directions.`);
+  }
+  if (fs.some(f => f.kind === 'contact') && !S.build.touching().some(t => t.left === b.id || t.right === b.id)) bad.push(`Nothing presses against ${what}, so there’s no contact force on it.`);
   // third-law pairs along a string: the same string pulls both ends with the same T
   for (const st of S.build.strings()){
     if (!st.ends.includes(b.id)) continue;
@@ -1408,12 +1478,13 @@ function fbdEquations(b){
     const txt = (fmtr) => ordered.map((r, i) => { const neg = sgn(r), m = neg ? X.scale(r, -1) : r; return (i ? (neg ? ' − ' : ' + ') : (neg ? '−' : '')) + fmtr(m); }).join('') || '0';
     return { text: txt(ratTxt), html: txt(ratHTML), terms: fs.filter(x => x.c[key]).map(x => x.c[key]) };
   };
-  const out = [], mass = massOf(b), multi = fbdBodies().length > 1, tag = multi ? ` (${VARS[mass].plain})` : '';
+  const out = [], mass = massOf(b), multi = fbdBodies().length > 1, tag = multi ? ` (${bodyName(b) === b.kind ? VARS[mass].plain.replace('_', '') : bodyName(b)})` : '';
   const along = side('s', 'sR');
-  const axis = b.frame === 'slope' ? (S.cond.upAxis ? 'along the slope, + up' : 'along the slope, + down') : b.frame === 'flat' ? 'horizontal, + toward the pulley' : b.frame === 'hanging' ? 'vertical, + down' : 'vertical, + up';
+  const axis = b.frame === 'slope' ? (S.cond.upAxis ? 'along the slope, + up' : 'along the slope, + down') : b.frame === 'flat' ? `horizontal, + ${S.ch === 'pulley' ? 'toward the pulley' : 'forward'}` : b.frame === 'hanging' ? 'vertical, + down' : 'vertical, + up';
   if (b.frame !== 'free'){
     const z = `${along.terms.map(t => `(${t})`).join(' + ') || '0'} − {${mass}}{a}`;
-    out.push({ label: `ΣF∥${tag}`, zsub: z, lhs: along, rhs: { text: `${VARS[mass].plain}a`, html: `${V(mass)}${V('a')}` }, condition: `Newton’s second law ${axis}` });
+    const ma = X.toRat(X.parse(`{${mass}}{a}`), symEnv([mass, 'a']));
+    out.push({ label: `ΣF∥${tag}`, zsub: z, lhs: along, rhs: { text: ratTxt(ma), html: ratHTML(ma) }, condition: `Newton’s second law ${axis}` });
   }
   if (b.frame === 'slope' || b.frame === 'flat'){
     const perp = side('n', 'nR');
@@ -1429,13 +1500,13 @@ function drawFBD(b){
   const num = (u) => u === '0' ? 0 : X.evalNum(X.parse(u), { inc: S.build.theta });
   let svg = `<svg viewBox="0 0 420 300"><g transform="rotate(${-S.build.theta * (b.frame === 'slope')} ${cx} ${cy})"><rect x="${cx - 30}" y="${cy - 20}" width="60" height="40" fill="#ff6bd6" stroke="#fff" stroke-width="2"/></g>`;
   svg += `<line x1="${cx}" y1="${cy}" x2="${cx + sAx[0] * 150}" y2="${cy + sAx[1] * 150}" stroke="#555" stroke-dasharray="4 4"/><line x1="${cx}" y1="${cy}" x2="${cx + nAx[0] * 120}" y2="${cy + nAx[1] * 120}" stroke="#555" stroke-dasharray="4 4"/>`;
-  const cols = { gravity: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push: '#3ddc97', tension: '#ffffff' };
+  const cols = { gravity: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push: '#3ddc97', tension: '#ffffff', contact: '#c39bff' };
   for (const f of fs){
     const d = (DIRS[b.frame] || DIRS.free)[f.dir]; if (!d) continue;
     const us = num(d[0]), un = num(d[1]), dx = us * sAx[0] + un * nAx[0], dy = us * sAx[1] + un * nAx[1];
     const x2 = cx + dx * L, y2 = cy + dy * L, a = Math.atan2(dy, dx);
     svg += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="${cols[f.kind]}" stroke-width="4"/><polygon points="${x2},${y2} ${x2 - 12 * Math.cos(a - 0.4)},${y2 - 12 * Math.sin(a - 0.4)} ${x2 - 12 * Math.cos(a + 0.4)},${y2 - 12 * Math.sin(a + 0.4)}" fill="${cols[f.kind]}"/>`;
-    svg += `<text x="${x2 + dx * 18}" y="${y2 + dy * 18 + 6}" fill="${cols[f.kind]}" font-family="SF Mono,Menlo,monospace" font-size="17" font-weight="600" text-anchor="middle">${fLabel(b, f)}</text>`;
+    svg += `<text x="${x2 + dx * 18}" y="${y2 + dy * 18 + 6}" fill="${cols[f.kind]}" font-family="SF Mono,Menlo,monospace" font-size="17" font-weight="600" text-anchor="middle">${svgSub(fLabel(b, f))}</text>`;
   }
   return svg + '</svg>';
 }
@@ -1445,15 +1516,15 @@ function renderFBD(){
   const bs = fbdBodies(), fs = forcesOf(b), fr = DIRS[b.frame] || DIRS.free;
   const varOpts = (f) => FKINDS[f.kind].vars ? FKINDS[f.kind].vars.filter(id => chVars().includes(id) || id === f.var).map(id => `<option value="${id}" ${f.var === id ? 'selected' : ''}>${VARS[id].plain}: ${nm(id)}</option>`).join('') : '';
   const rows = fs.map((f, i) => `<div class="frow"><b>${FKINDS[f.kind].label}</b>
-      ${f.kind === 'gravity' ? `<span>W = ${VARS[massOf(b)].plain}g</span>` : `<select data-fvar="${i}">${varOpts(f)}</select>`}
+      ${f.kind === 'gravity' ? `<span>${fLabelHTML(b, f)}</span>` : `<select data-fvar="${i}">${varOpts(f)}</select>`}
       <select data-fdir="${i}">${Object.entries(fr).map(([k, d]) => `<option value="${k}" ${f.dir === k ? 'selected' : ''}>${d[2]}</option>`).join('')}</select>
       <button data-fdel="${i}" title="Remove">×</button></div>`).join('');
   let table = '';
   const comps = fs.map(f => ({ f, c: components(b, f) })).filter(x => x.c);
   if (comps.length) table = `<table class="ftable" id="fbdTable"><tr><th>force</th><th>size</th><th>∥ component</th><th>⊥ component</th></tr>${comps.map(({ f, c }) =>
-    `<tr><td>${fLabel(b, f)}</td><td>${ratHTML(X.toRat(X.parse(fMag(b, f)), symEnv([...fMag(b, f).matchAll(/\{(\w+)\}/g)].map(m => m[1]))))}</td><td>${c.s ? ratHTML(c.sR) : '0'}</td><td>${b.frame === 'hanging' ? '–' : c.n ? ratHTML(c.nR) : '0'}</td></tr>`).join('')}</table>`;
-  const axis = b.frame === 'slope' ? `Axes: ∥ along the slope, + ${S.cond.upAxis ? 'up' : 'down'} the slope (step 2); ⊥ perpendicular, + out of the surface.` : b.frame === 'flat' ? 'Axes: ∥ horizontal, + toward the pulley; ⊥ vertical, + up.' : b.frame === 'hanging' ? 'Axis: vertical, + down (the way it moves when m₂ falls).' : 'Axis: vertical, + up.';
-  box.innerHTML = `${bs.length > 1 ? `<div class="frow"><b>Body:</b> <select id="fbdBody">${bs.map(x => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${S.build.KINDS[x.kind].label} (${VARS[massOf(x)].plain})${x.hanging ? ', hanging' : ''}</option>`).join('')}</select></div>` : ''}
+    `<tr><td>${fLabelHTML(b, f)}</td><td>${ratHTML(X.toRat(X.parse(fMag(b, f)), symEnv([...fMag(b, f).matchAll(/\{(\w+)\}/g)].map(m => m[1]))))}</td><td>${c.s ? ratHTML(c.sR) : '0'}</td><td>${b.frame === 'hanging' ? '–' : c.n ? ratHTML(c.nR) : '0'}</td></tr>`).join('')}</table>`;
+  const axis = b.frame === 'slope' ? `Axes: ∥ along the slope, + ${S.cond.upAxis ? 'up' : 'down'} the slope (step 2); ⊥ perpendicular, + out of the surface.` : b.frame === 'flat' ? `Axes: ∥ horizontal, + ${S.ch === 'pulley' ? 'toward the pulley' : 'forward'}; ⊥ vertical, + up.` : b.frame === 'hanging' ? 'Axis: vertical, + down (the way it moves when m₂ falls).' : 'Axis: vertical, + up.';
+  box.innerHTML = `${bs.length > 1 ? `<div class="frow"><b>Body:</b> <select id="fbdBody">${bs.map(x => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${bodyName(x) === x.kind ? S.build.KINDS[x.kind].label : bodyName(x)} (${VARS[massOf(x)].plain})${x.hanging ? ', hanging' : ''}</option>`).join('')}</select></div>` : ''}
     <div class="small">${axis}</div>
     ${drawFBD(b)}
     <div class="fadd"><span class="small"><b>Add a force:</b></span>${Object.entries(FKINDS).map(([k, d]) => `<button data-addforce="${k}">${d.label}</button>`).join('')}</div>
@@ -1464,8 +1535,8 @@ function renderFBD(){
   $('fbdBody')?.addEventListener('change', (e) => { S.fbd.body = e.target.value; renderFBD(); });
   box.querySelectorAll('[data-addforce]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.addforce, d = FKINDS[k];
-    const v = d.vars ? (d.vars.find(id => chVars().includes(id)) || d.vars[0]) : null;
-    forcesOf(b).push({ kind: k, var: v, dir: d.dir(b.frame) in fr ? d.dir(b.frame) : Object.keys(fr)[0] }); renderFBD();
+    const v = defaultVar(d, b), dir = d.dir(b.frame, b);
+    forcesOf(b).push({ kind: k, var: v, dir: dir in fr ? dir : Object.keys(fr)[0] }); renderFBD();
   });
   box.querySelectorAll('[data-fvar]').forEach(sel => sel.onchange = () => { fs[+sel.dataset.fvar].var = sel.value; renderFBD(); });
   box.querySelectorAll('[data-fdir]').forEach(sel => sel.onchange = () => { fs[+sel.dataset.fdir].dir = sel.value; renderFBD(); });
@@ -1500,10 +1571,96 @@ function renderSliders(){
   }));
 }
 
+// ---------- scenario table: givens that change from case to case ----------
+// Each column is a given entered as a symbol; each row is one case. The problem is solved once with symbols,
+// then the answer is evaluated row by row, so every case comes from the same derivation.
+S.scen = { cols: [], rows: [] };
+function scenValues(r){ // id → SI value for one row (symbols are sizes, so positive)
+  const o = {};
+  S.scen.cols.forEach((id, c) => { const x = Number(String(S.scen.rows[r][c]).replace(',', '.').replace('−', '-')); if (isFinite(x) && String(S.scen.rows[r][c]).trim() !== '') o[id] = Math.abs(x); });
+  return o;
+}
+const scenReady = () => S.scen.cols.length && S.scen.rows.length && S.scen.rows.every((_, r) => Object.keys(scenValues(r)).length === S.scen.cols.length);
+function renderScen(){
+  const box = $('scenBox'); if (!box) return;
+  if (!S.scen.cols.length){ box.innerHTML = ''; return; }
+  const head = S.scen.cols.map(id => `<th>${VARS[id].sym}<small>${VARS[id].unit || 'no unit'}</small></th>`).join('');
+  const rows = S.scen.rows.map((row, r) => `<tr><td class="n">${r + 1}</td>${S.scen.cols.map((id, c) => `<td><input data-cell="${r},${c}" inputmode="decimal" value="${row[c] ?? ''}"></td>`).join('')}<td><button data-scendel="${r}" title="Remove this case">×</button></td></tr>`).join('');
+  box.innerHTML = `<div class="subhead">Scenario table</div><table id="scen" class="scen"><tr><th>#</th>${head}<th></th></tr>${rows}</table>
+    <div class="row"><button id="scenAdd">+ Add a case</button><span class="small muted">The problem is solved once with symbols, then every row is filled in from that one answer.</span></div>`;
+  box.querySelectorAll('[data-cell]').forEach(i => i.addEventListener('change', () => {
+    const [r, c] = i.dataset.cell.split(',').map(Number); S.scen.rows[r][c] = i.value.trim();
+    if (r === 0){ const v = scenValues(0)[S.scen.cols[c]]; if (v !== undefined) S.samples[S.scen.cols[c]] = v; } // the first case sets the typical values
+    renderMatters(); renderTargets();
+  }));
+  box.querySelectorAll('[data-scendel]').forEach(b => b.onclick = () => { S.scen.rows.splice(+b.dataset.scendel, 1); renderAll(false); });
+  $('scenAdd').onclick = () => { S.scen.rows.push(S.scen.cols.map(() => '')); renderScen(); renderTargets(); };
+}
+
+// ---------- what matters: which givens the answer depends on, limits, and the scenario results ----------
+// Replay the whole path with every nonzero given as a symbol (numbers too), so the answer shows exactly what it depends on.
+function replayAll(){
+  const env = {};
+  for (const [id, g] of Object.entries(S.givens)) env[id] = g.kind === 'symbol' ? X.scale(X.symbol(id), g.dir ? -1 : 1) : g.val === 0 ? X.number(0) : X.scale(X.symbol(id), g.val < 0 ? -1 : 1);
+  for (const p of S.path){
+    if (p.kind !== 'eq' || p.fn || isFn(p.v)) return null; // functions of time aren't analysed here yet
+    const eq = EQS[p.eq], x = p.v, e2 = {};
+    for (const w of eq.vars) if (w !== x && w in env) e2[w] = env[w];
+    env[x] = eq.generated ? X.solveLinear(X.substRat(eq.Z, e2), x) : X.toRat(p.tree, e2, p.branch);
+  }
+  return env;
+}
+const givenIds = () => Object.entries(S.givens).filter(([, g]) => g.kind === 'symbol' || g.val !== 0).map(([id]) => id);
+function rankText(id){
+  const vals = S.scen.rows.map((_, r) => ({ r: r + 1, x: X.evalRat(S.found[id].expr || X.number(S.found[id].val), scenValues(r)) })).sort((a, b) => b.x - a.x);
+  const order = vals.map((v, i) => (i ? (Math.abs(v.x - vals[i - 1].x) < 1e-9 * Math.max(1, Math.abs(v.x)) ? ' = ' : ' > ') : '') + v.r).join('');
+  return { order, values: vals.map(v => `${fmt(v.x)} ${unitOf(id)}`).join(', ') };
+}
+function renderMatters(){
+  const box = $('matters'); if (!box) return;
+  const done = S.targets.map(t => t.startsWith('rank:') ? t.slice(5) : t).filter((t, i, a) => a.indexOf(t) === i && !isFn(t) && known(t) && S.found[t]);
+  if (!done.length){ box.innerHTML = '<div class="empty">Once a target is found, this shows which givens it depends on, what happens in the limits, and every scenario.</div>'; return; }
+  let env = null; try { env = replayAll(); } catch (e){ if (!(e instanceof X.MathError)) throw e; }
+  let html = '';
+  for (const id of done){
+    html += `<div class="mt"><div class="mhead">${VARS[id].sym} = ${S.found[id].expr && !X.isNumeric(S.found[id].expr) ? X.toHTML(S.found[id].expr, S.printOpts) : `${fmt(val(id))} ${unitOf(id)}`}</div>`;
+    const R = env && env[id];
+    if (R){
+      const uses = X.symbolsOf(R), all = givenIds(), yes = all.filter(g => uses.has(g)), no = all.filter(g => !uses.has(g));
+      html += `<p><b>${VARS[id].plain} depends on:</b> ${yes.map(g => VARS[g].sym).join(', ') || 'none of the givens'}</p>`;
+      if (no.length) html += `<p class="nomatter"><b>${VARS[id].plain} doesn’t depend on:</b> ${no.map(g => VARS[g].sym).join(', ')} <span class="small muted">(they cancel along the way, or never enter)</span></p>`;
+      const lims = [];
+      for (const g of yes) for (const to of [0, Infinity]){
+        const l = X.limit(R, g, to); if (!l) continue;
+        const out = l.value ? X.toHTML(l.value, S.printOpts) : (l.inf > 0 ? '∞' : '−∞');
+        lims.push(`<li>${VARS[g].sym} → ${to === 0 ? '0' : '∞'}: ${VARS[id].sym} → ${out}</li>`);
+      }
+      if (lims.length) html += `<div class="small"><b>Limiting cases</b> (check them against your intuition):</div><ul class="lims">${lims.join('')}</ul>`;
+    } else html += '<p class="small muted">The dependence check covers equation steps; this path uses the motion ladder.</p>';
+    html += '</div>';
+  }
+  // scenarios: every row from the one symbolic answer, plus the assumption checks
+  if (scenReady()){
+    const checks = (chapter().checks || []).filter(c => c.when(S.cond));
+    const head = S.scen.cols.map(c => `<th>${VARS[c].sym}</th>`).join('') + done.map(id => `<th>${VARS[id].sym}</th>`).join('') + (checks.length ? '<th>check</th>' : '');
+    const rows = S.scen.rows.map((row, r) => {
+      const sv = scenValues(r), vAll = { ...Object.fromEntries(Object.keys(S.givens).filter(g => !isSymGiven(g)).map(g => [g, Math.abs(S.givens[g].val)])), ...sv };
+      const outs = done.map(id => `<td>${fmt(X.evalRat(S.found[id].expr || X.number(S.found[id].val), sv))} ${unitOf(id)}</td>`).join('');
+      let flag = '';
+      for (const c of checks){ try { const x = X.evalNum(X.parse(c.sub), vAll); const [k, why] = c.judge(x, vAll); flag = `<td data-flag="${k}" class="flag ${k}" title="${c.what} = ${fmt(x)} N">${k === 'ok' ? '✓ ' + why : '⚠ ' + why}</td>`; } catch (e){ if (!(e instanceof X.MathError)) throw e; } }
+      return `<tr><td class="n">${r + 1}</td>${row.map(x => `<td>${x}</td>`).join('')}${outs}${flag}</tr>`;
+    }).join('');
+    html += `<div class="subhead">Scenarios</div><table class="scen out"><tr><th>#</th>${head}</tr>${rows}</table>`;
+    for (const t of S.targets.filter(t => t.startsWith('rank:') && known(t))){ const rk = rankText(t.slice(5)); html += `<p class="rank"><b>Ranking by ${VARS[t.slice(5)].sym}:</b> ${rk.order} (${rk.values})</p>`; }
+  }
+  box.innerHTML = html;
+  paintSyms();
+}
+
 // ---------- assemble ----------
 function renderAll(full = true){
   if (full) renderUnit(); else { $('checkRow').style.display = S.bank ? 'flex' : 'none'; }
-  renderKnowns(); renderConds(); renderLibrary(); renderTargets(); renderSheet(); renderPath(); steps(); paintSyms(); renderSliders();
+  renderKnowns(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSheet(); renderPath(); renderMatters(); steps(); paintSyms(); renderSliders();
   $('axisNote').innerHTML = S.ch === 'incline' && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice in step 2). Pick the direction for each vector; the lab sets the sign.' : chapter().axis;
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();
   draw();

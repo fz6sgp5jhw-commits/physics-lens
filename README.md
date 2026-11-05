@@ -17,7 +17,9 @@ When the angular acceleration **varies with time**, give θ(t), ω(t) or α(t) a
 
 In the Diagram window, **Build** lets you assemble the setup from shapes (or load a template), and **Forces** is a free-body diagram builder: add each force, pick its direction from named options, and the lab writes the component table and ΣF = ma onto your sheet after checking the diagram (gravity, normal forces at contacts, friction only if the surface has it, the same tension on both ends of a string).
 
-Units so far: Inclines & Newton’s laws, Tension & pulleys (block on a table + hanging mass, with or without friction), Rotation kinematics. The 📚 practice bank loads problem text only; “Check my setup” grades your givens, conditions and targets.
+Units so far: Inclines & Newton’s laws, Tension & pulleys (block on a table + hanging mass, with or without friction), Pushed blocks (two touching blocks, contact forces), Rotation kinematics.
+
+**Scenarios and what matters:** give the quantities that change from case to case as a *scenario table*, solve once with symbols, and every case is filled in (with a check that each case's assumptions hold, e.g. “barely sliding”). Add a *ranking* target to order the cases. The *What matters* window shows which givens the answer depends on, which cancel, and its limiting cases. The 📚 practice bank loads problem text only; “Check my setup” grades your givens, conditions and targets.
 
 ## Run it
 Plain HTML and JavaScript, no build step. Serve the folder (for example `python3 -m http.server`) and open it, or host it on GitHub Pages (Settings → Pages → branch `main`, folder `/`). Once hosted, it can be installed as an app and works offline.

@@ -43,7 +43,7 @@ test('numbers and symbols mix', () => {
 test('units: every template is consistent and has the unit of what it solves for', () => {
   let n = 0;
   for (const [id, eq] of Object.entries(EQS)) for (const [x, sol] of Object.entries(eq.solve)){ assert.ok(X.dimEq(X.dimOf(sol.tree, DIMS), DIMS[x]), `${id} → ${x}`); n++; }
-  assert.equal(n, 122); // every solver in the library
+  assert.equal(n, 128); // every solver in the library (122 + 6 for the pushed-blocks friction laws)
   assert.throws(() => X.dimOf(X.parse('{v0} + {a}'), DIMS), /units don’t match: m\/s \+ m\/s²/);
   assert.throws(() => X.dimOf(X.parse('sin {t}'), DIMS), /sin needs an angle/);
 });

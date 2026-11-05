@@ -60,7 +60,23 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id } = 
     for (const r of byKind('ramp')){ const t = rampTop(r), d = Math.hypot(p.x - t.x - 14, p.y - t.y + 14); if (d < bd){ bd = d; best = { cx: t.x + 14, cy: t.y - 14 }; } }
     if (best){ p.x = best.cx; p.y = best.cy; }
   }
-  function snapAll(){ st.shapes.forEach(s => s.kind === 'pulley' ? snapPulley(s) : snap(s)); }
+  function snapAll(){ st.shapes.forEach(s => s.kind === 'pulley' ? snapPulley(s) : snap(s)); snapTouching(); }
+  // blocks dropped close together on the same flat surface slide up against each other
+  function snapTouching(){
+    const flat = st.shapes.filter(b => b.kind === 'block' && b.on && !(b.tilt));
+    const bySurf = {};
+    for (const b of flat) (bySurf[b.on] = bySurf[b.on] || []).push(b);
+    for (const list of Object.values(bySurf)){
+      list.sort((a, b) => a.x - b.x);
+      for (let i = 1; i < list.length; i++){ const a = list[i - 1], b = list[i], gap = (b.x - b.w / 2) - (a.x + a.w / 2); if (gap > -a.w / 2 && gap < 16) b.x = a.x + a.w / 2 + b.w / 2; }
+    }
+  }
+  // pairs of blocks pressed against each other: [left, right]
+  function touching(){
+    const out = [], flat = st.shapes.filter(b => b.kind === 'block' && b.on && !(b.tilt));
+    for (const a of flat) for (const b of flat) if (a !== b && a.on === b.on && Math.abs((b.x - b.w / 2) - (a.x + a.w / 2)) < 2) out.push({ left: a.id, right: b.id });
+    return out;
+  }
 
   // ---- contacts: which body touches which surface (+ string links)
   function contacts(){
@@ -71,7 +87,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id } = 
   function strings(){
     return byKind('string').map(s => ({ id: s.id, ends: s.ends || [] }));
   }
-  const bodies = () => st.shapes.filter(s => KINDS[s.kind].body).map(b => ({ id: b.id, kind: b.kind, mass: b.props.mass, on: b.on, hanging: !!b.hanging, frame: b.hanging ? 'hanging' : b.on ? (st.shapes.find(x => x.id === b.on).kind === 'ramp' ? 'slope' : 'flat') : 'free' }));
+  const bodies = () => st.shapes.filter(s => KINDS[s.kind].body).map(b => ({ id: b.id, kind: b.kind, mass: b.props.mass, on: b.on, hanging: !!b.hanging, x: b.x, frame: b.hanging ? 'hanging' : b.on ? (st.shapes.find(x => x.id === b.on).kind === 'ramp' ? 'slope' : 'flat') : 'free' }));
 
   // ---- templates: the three existing diagrams
   function template(name){
@@ -85,6 +101,10 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id } = 
       const p = add('pulley', { x: 600, y: 250, r: 18 });
       const b2 = add('block', { x: 614, y: 380, hanging: true, props: { mass: 'm2' } });
       add('string', { ends: [b1.id, p.id, b2.id] });
+    } else if (name === 'blocks'){
+      add('floor');
+      const a = add('block', { x: 330, y: 440, w: 90, h: 62, props: { mass: 'mA' } });
+      add('block', { x: 330 + 45 + 35, y: 445, w: 70, h: 50, props: { mass: 'mB' } });
     } else if (name === 'wheel'){
       add('wheel', { x: 440, y: 260, r: 120 });
     }
@@ -148,7 +168,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id } = 
 
   const api = {
     add: (kind) => { const s = add(kind, { x: 120 + 60 * (st.seq % 8), y: 120 }); st.sel = s.id; if (kind === 'string'){ const bs = st.shapes.filter(x => KINDS[x.kind].body || x.kind === 'pulley'); s.ends = bs.slice(-3).map(x => x.id); } render(); onChange(); return s; },
-    template, contacts, strings, bodies, render,
+    template, contacts, strings, bodies, touching, render,
     selected: () => st.shapes.find(s => s.id === st.sel) || null,
     remove: () => { st.shapes = st.shapes.filter(s => s.id !== st.sel); st.sel = null; snapAll(); render(); onChange(); },
     setProp: (key, v) => { const s = api.selected(); if (s){ s.props[key] = v; render(); onChange(); } },

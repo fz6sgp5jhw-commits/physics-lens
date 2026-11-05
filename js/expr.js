@@ -605,3 +605,24 @@ export function solveLinear(Z, id, name = id){
   return tidyRoots(mulR(negR(p[0]), invR(p[1])));
 }
 export const zeroOf = (lhs, rhs) => addR(lhs, negR(rhs));
+
+// ---------------------------------------------------------------- limiting cases
+// The limit of r as the symbol id → 0 or → ∞, exactly, for rational expressions (no roots or trig of id).
+// Returns { value: Rat } or { inf: +1 | −1 } (sign at the sample point), or null if it can't be read off.
+export function limit(r, id, to){
+  const key = 'v:' + id;
+  const N = r.n, D = denPoly(r.d);
+  // clear negative powers of id so both sides are polynomials in it
+  const minE = Math.min(0, ...N.map(m => m.e[key] || 0), ...D.map(m => m.e[key] || 0));
+  const shift = minE < 0 ? { [key]: -minE } : {};
+  const pn = ratToPolyIn({ n: pScale(N, 1, shift), d: [] }, id), pd = ratToPolyIn({ n: pScale(D, 1, shift), d: [] }, id);
+  if (!pn || !pd || !pd.length) return null;
+  if (!pn.length) return { value: num(0) };
+  const nz = (p) => p.map((c, k) => c.n.length ? k : -1).filter(k => k >= 0);
+  const [kn, kd] = to === 0 ? [Math.min(...nz(pn)), Math.min(...nz(pd))] : [Math.max(...nz(pn)), Math.max(...nz(pd))];
+  const ratio = mulR(pn[kn], invR(pd[kd]));
+  const vanishes = to === 0 ? kn > kd : kn < kd;
+  if (vanishes) return { value: num(0) };
+  if (kn === kd) return { value: tidyRoots(ratio) };
+  return { inf: evalRat(ratio, SAMPLE) < 0 ? -1 : 1 };
+}
