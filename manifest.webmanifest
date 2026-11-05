@@ -1,0 +1,15 @@
+{
+  "name": "Rotation Lab",
+  "short_name": "Rotation Lab",
+  "description": "Build the path from givens to the unknown in rotational motion problems.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#12002b",
+  "theme_color": "#2a0a5e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
