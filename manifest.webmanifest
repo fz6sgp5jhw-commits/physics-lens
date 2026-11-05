@@ -1,12 +1,12 @@
 {
-  "name": "Rotation Lab",
-  "short_name": "Rotation Lab",
-  "description": "Build the path from givens to the unknown in rotational motion problems.",
+  "name": "Physics Lens",
+  "short_name": "Physics Lens",
+  "description": "A mechanics workbench: set up the problem yourself, and the lens keeps the books: equations, symbols, units and checks.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#12002b",
-  "theme_color": "#2a0a5e",
+  "background_color": "#05070d",
+  "theme_color": "#05070d",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },

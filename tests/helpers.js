@@ -37,7 +37,7 @@ export async function openApp(browser, url, { calm = true } = {}){
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   if (calm) await page.addInitScript(() => { try { localStorage.setItem('rl-calm', '1'); } catch {} });
   await page.goto(url);
-  await page.waitForFunction(() => window.__rl && !document.getElementById('boot'));
+  await page.waitForFunction(() => window.__rl && document.getElementById('steps').children.length > 0);
   return { page, errors };
 }
 

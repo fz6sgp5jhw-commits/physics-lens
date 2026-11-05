@@ -1,4 +1,6 @@
-# Rotation Lab: project notes for Claude Code
+# Physics Lens: project notes for Claude Code
+
+(Formerly "Rotation Lab". Renamed with the redesign; the design doc still uses the old name.)
 
 ## What this is
 A physics homework companion for a calculus-based mechanics student. The student sets up their own problem (givens, conditions), gathers equations from a library, picks targets and builds a solution path. Equations **glow** when they have exactly one unknown left. Every algebra step is shown, with symbols first and numbers last. Diagrams are clickable and animate the motion.
@@ -7,7 +9,8 @@ The goal is reasoning skill, not answer generation: the student makes the physic
 
 - Design document (source of truth for intent and the plan): https://claude.ai/artifact/2zgFj7tQRXbpbTT442NFcQ
   Sections to read first: "The unified solving process", "Test problems", "Exact changes to the current app", "Build order".
-- Sister project: Molecule Lab (chemistry naming tool, same retro style).
+- Sister project: Molecule Lab (chemistry naming tool).
+- Hosted at https://fz6sgp5jhw-commits.github.io/physics-lens/ (repo `fz6sgp5jhw-commits/physics-lens`, GitHub Pages from `main`, root).
 
 ## Run it
 Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it that way.
@@ -15,14 +18,14 @@ Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it th
 - Hosted: GitHub Pages from `main`, root folder. Installable as an app (manifest + service worker) and works offline.
 
 ## Files
-- `index.html`: layout and all CSS (retro 90s desktop theme)
+- `index.html`: layout and all CSS (dark "lab instrument" theme: glassy panels over a live field)
 - `js/data.js`: physics content: `VARS`, `EQS`, `CHAPTERS`, `PRACTICE`, `fmt`, `posRoots`, the `kinematics()` builder, and `DIMS`, `SAMPLE`, `PRINT_ORDER`
 - `js/expr.js`: expression engine: parses `sub` templates, evaluates them with numbers, simplifies them with symbols (canonical rational form), prints them, checks units
 - `js/app.js`: state, rendering, path finding, solving, diagrams, graphs, practice bank, setup checker, effects
 - `js/build.js`: the build canvas (SVG): shape palette, snapping, named properties, contacts, templates
-- `js/sprites.js`: original pixel-art gags drawn procedurally as SVG
+- `js/field.js`: the background: a live electric field (drifting ± charges, field arrows, particles along field lines; the cursor is a test charge; `pulse()` on each solved step). Calm mode freezes it.
 - `sw.js`, `manifest.webmanifest`, `icons/`: installable offline app
-- `fonts/`: Pixelify Sans, VT323, Press Start 2P (SIL Open Font License), served locally
+- No web fonts: system UI font for text, system monospace for equations and numbers.
 
 ## Current behaviour (keep working)
 - Step tracker: Unit → Givens → Conditions → Gather → Target → Path.
@@ -34,7 +37,8 @@ Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it th
 - System detection (general): any two sheet equations with the same two unknowns → "Combine them" solves one for an unknown and substitutes it into the other (symbolically), adding the combined equation to the sheet.
 - Diagram: clickable points (start, end, stop), force arrows in free-body diagrams, labels; library outlines the related equations. Replay with ghost frames and graphs.
 - Practice bank: loads problem text only; "Check my setup" grades givens (missing, wrong value, backwards direction, extra), conditions and targets against an answer key.
-- Effects: spherical-cow mascot, gags, SOLVED burst, 90s error dialogs. **Calm mode** must hide all of them.
+- Look: dark lab instrument (chosen 2026-11-05, replacing the 90s desktop and its gags). One colour per variable state everywhere: given cyan `#4fd1ff`, found amber `#ffd166`, target pink `#ff6bd6`, unknown grey. Hints and feedback appear in the assistant line under the app bar. Error dialogs keep their playful wording ("ILLEGAL OPERATION") with a plain icon. A solved problem pulses the field and shows a brief SOLVED.
+- **Calm mode** freezes the field into one still frame and turns off every animation (also honours "reduce motion"). It is remembered across visits.
 
 ## Conventions
 - **Math is computed by code, never guessed.** Every solver is written by hand per equation and variable: `EQS[id].solve[var] = { steps, sub, guard?, pick?, alt?, note? }`. `steps` are the isolation steps with a plain-English `why`. `sub` is the plug-in template with `{var}` slots and is the **single source** of the answer: `expr.js` evaluates it for numbers and simplifies it for symbols. Don't write arithmetic anywhere else.
@@ -49,8 +53,8 @@ Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it th
 - Square roots and quadratics pick a root deliberately and explain it in `note` (first positive time; velocity sign from the direction of motion; conditions can supply the initial-velocity sign via `__u0sign`).
 - Unit-specific wording uses `nm(id)` and `dr(id)` in app.js (names and direction words can be overridden per chapter). Don't read `VARS[id].name` directly in the UI.
 - Text style in the UI: plain, short, second person; error dialogs are playful but always explain the physics.
-- Art: original pixel art only; no copyrighted characters, no real people.
-- When you change any cached file, **bump the cache name in `sw.js`** (currently `rotation-lab-v8`) or installed copies won't update.
+- Art: original only; no copyrighted characters, no real people. Decoration is physics itself (fields, charges, particles), never cartoons.
+- When you change any cached file, **bump the cache name in `sw.js`** (currently `physics-lens-v1`) or installed copies won't update.
 
 ## Tests (set these up first, run after every change)
 1. **Solver round-trips:** for consistent states (several per unit, including negative directions and friction), remove each variable and check every solver recovers it (relative error < 1e-6). Current status: incline 164/164, pulley 176/176, rotation all pass. The only known "mismatches" are genuinely ambiguous cases (a height passed twice), which must be flagged in `note`.
@@ -59,7 +63,7 @@ Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it th
    - Pulley: a = 3.27 m/s² and T = 13.08 N; a = 2.146 m/s²; μk = 0.25; Δx = 1.766 m; μk = 0.2706 and T = 8.31 N
    - Rotation: t = 5 s; θ = 10 rad; v = 6 m/s
 3. **Setup checker negative test:** a wrong direction, a missing hidden given, a wrong condition and a missing target must each be reported.
-4. **Browser smoke test:** page loads with no console errors; calm mode hides gags; diagram hotspots respond.
+4. **Browser smoke test:** page loads with no console errors; the field runs and calm mode freezes it (remembered after reload); no cartoon gags left; diagram hotspots respond; calm mode hides the SOLVED banner.
 5. **Expression engine** (`tests/expr.test.js`): simplifier cases, units of every template, and every template simplified with symbols = evaluated with numbers at random values.
 6. **Phase A gate** (`tests/symbolic.test.js`): all 13 practice problems set up with symbols (g too), solved with Show me, evaluated at the problem's numbers; classic forms checked (a = g(sin θ − μk cos θ), T = m₂(g − a), t = √(2Δx / (g(sin θ − μk cos θ))), …).
 7. **Phase B gate** (`tests/ladder.test.js`): motor shaft θ(t) = 250t − 20.3t² − 1.44t³ → ω(t) = 250 − 40.6t − 4.32t², ω = 0 at t = 4.24 s with −13.6 s rejected; constant-α equations greyed out; ∫dt needs the start value and keeps symbolic coefficients; evaluating a function at a known t.
@@ -80,12 +84,12 @@ Build in phases. A phase is done only when its gate test passes and all earlier 
 | E. Snapshots, energy, momentum | 9 snapshots and stages with per-stage conservation choices; energy bar chart and momentum before/after diagram that write equations; checker for energy across inelastic collisions and momentum with outside forces | Block m from rest at height h on a frictionless ramp sticks to M, slides on a floor with μk: d = (h/μk)(m/(m + M))², independent of g; fraction of K lost = M/(m + M) |
 | F. Freehand + polish | 7 freehand recognition (stroke → ramp, loop → ball/wheel, box → block; ask when ambiguous), 14 practice bank additions, energy clouds | All four test problems can be set up from a freehand sketch |
 
-Later, not now: energy shown as soft "electron cloud" glows around objects (like Molecule Lab's space-filling view), sized by amount and coloured by form; torque diagrams (Στ = Iα); pasting a homework problem for Claude to set up.
+Later, not now: energy shown as soft "electron cloud" glows around objects (like Molecule Lab's space-filling view; it fits the new field look), sized by amount and coloured by form; torque diagrams (Στ = Iα); pasting a homework problem for Claude to set up.
 
 ## Working rules
 - Read the design doc sections above before starting a phase.
 - Write the gate test first, then build until it passes.
 - Never let a model generate physics results; everything shown as an answer must come from code.
 - Keep the student in control: hints describe what's missing, they don't solve.
-- Keep the retro style and calm mode intact; check layout at 1440×900 (laptop is the main device).
+- Keep the lab-instrument style and calm mode intact; check layout at 1440×900 (laptop is the main device). The design doc's "Visual style: retro, with more wham" section is superseded by this redesign.
 - Commit in small steps with clear messages; bump `sw.js` cache name when shipping.

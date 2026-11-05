@@ -1,6 +1,8 @@
-# Rotation Lab
+# Physics Lens
 
-A retro, slightly unhinged homework companion for rotational motion. Pick a problem, mark the target, and follow the equations that light up when they have one unknown left. Every step of algebra is shown, numbers go in last, and the wheel replays the motion with your values.
+A mechanics workbench for calculus-based physics. You set up the problem; the lens keeps the books. Equations light up when they have one unknown left, every step of algebra is shown (symbols first, numbers last), and the diagram replays the motion. The background is a live electric field: your cursor is a small test charge, and each solved step sends a pulse through it.
+
+Live: https://fz6sgp5jhw-commits.github.io/physics-lens/
 
 How it works: you set up your own problem.
 1. Pick the unit and add each given from the quantity palette (size + direction; the lab sets the sign).
@@ -26,9 +28,8 @@ Plain HTML and JavaScript, no build step. Serve the folder (for example `python3
 - `js/expr.js`: expression engine (symbolic answers, numeric checks, units, polynomials in t)
 - `js/build.js`: build canvas (shapes that snap together)
 - `js/app.js`: path finding, solving, diagram, graphs, effects
-- `js/sprites.js`: original pixel-art gags
+- `js/field.js`: the live field in the background (calm mode freezes it)
 - `sw.js`, `manifest.webmanifest`, `icons/`: installable offline app
-- `fonts/`: Pixelify Sans, VT323 and Press Start 2P (SIL Open Font License)
 
 ## Tests (dev only)
 The app itself has no dependencies. The tests use Node (built-in test runner) and `playwright-core` driving your installed Google Chrome.

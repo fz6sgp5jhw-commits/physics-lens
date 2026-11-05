@@ -8,9 +8,6 @@ let env;
 before(async () => { env = await launch(); });
 after(async () => { await env?.close(); });
 
-const visibleGags = (page) => page.evaluate(() =>
-  [...document.querySelectorAll('.gag, .deco, #galaxy')].filter(el => getComputedStyle(el).display !== 'none' && el.getClientRects().length).length);
-
 test('loads with no console errors, in each unit', async () => {
   const { page, errors } = await openApp(env.browser, env.url, { calm: false });
   try {
@@ -23,16 +20,25 @@ test('loads with no console errors, in each unit', async () => {
   } finally { await page.close(); }
 });
 
-test('calm mode hides the gags (and remembers it)', async () => {
+test('the background field runs, and calm mode freezes it (and remembers)', async () => {
   const { page, errors } = await openApp(env.browser, env.url, { calm: false });
   try {
-    assert.ok(await visibleGags(page) > 0, 'gags should be visible before calm mode');
+    assert.equal(await page.evaluate(() => window.__rl.field.running), true, 'field should animate by default');
     await page.click('#calmBtn');
     assert.equal(await page.getAttribute('#calmBtn', 'aria-pressed'), 'true');
-    assert.equal(await visibleGags(page), 0, 'gags still visible in calm mode');
+    assert.equal(await page.evaluate(() => window.__rl.field.running), false, 'calm mode should stop the field');
     await page.reload();
-    await page.waitForFunction(() => window.__rl && !document.getElementById('boot'));
-    assert.equal(await visibleGags(page), 0, 'calm mode not remembered after reload');
+    await page.waitForFunction(() => window.__rl);
+    assert.equal(await page.evaluate(() => window.__rl.field.running), false, 'calm mode not remembered after reload');
+    assert.equal(await page.evaluate(() => document.body.classList.contains('calm')), true);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('no cartoon gags are left on the page', async () => {
+  const { page, errors } = await openApp(env.browser, env.url, { calm: false });
+  try {
+    assert.equal(await page.locator('.gag, #mascot, #galaxy, .deco, #boot').count(), 0);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

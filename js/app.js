@@ -1,13 +1,15 @@
 import { VARS, EQS, CHAPTERS, PRACTICE, V, fmt, SAMPLE, PRINT_ORDER, DIMS } from './data.js';
 import { createBuild, PALETTE } from './build.js';
 import * as X from './expr.js';
-import * as SP from './sprites.js';
+import { createField } from './field.js';
 
 const $ = (id) => document.getElementById(id);
+const field = createField(document.getElementById('fieldArrows'), document.getElementById('fieldTrails'));
 const S = window.__rl = {
   ch: 'incline', cond: {}, condOk: false, givens: {}, found: {}, funcs: {}, gen: {}, custom: [], samples: {}, targets: [], sheet: [], path: [],
   bank: null, editing: null, focus: [], hot: [], hover: null, busy: false, sound: false, anim: false, inspectName: null, lastStep: 0,
   // how symbolic answers are printed (also used by the tests)
+  field,
   printOpts: { plain: (id) => VARS[id].plain, html: (id) => V(id), order: PRINT_ORDER, spaced: (id) => /[A-Za-zα-ω]{2,}/.test(VARS[id].plain), fmt },
 };
 X.setSamples(SAMPLE);
@@ -183,26 +185,19 @@ function beep(freq = 660, dur = 0.08, type = 'square', when = 0){
 }
 const fanfare = () => [523, 659, 784, 1047].forEach((f, i) => beep(f, 0.12, 'square', i * 0.11));
 
-// ---------- mascot ----------
+// ---------- assistant line (hints and feedback) ----------
 let sayTimer = 0;
 function say(html){
-  clearTimeout(sayTimer); sayTimer = setTimeout(() => $('bubble').classList.add('hide'), 15000);
-  const b = $('bubble'); b.classList.remove('hide'); b.innerHTML = html + '<span class="x" title="Hide">×</span>';
-  b.querySelector('.x').onclick = () => b.classList.add('hide');
-}
-function setSpin(rate){
-  const w = Math.abs(rate || 0), cow = $('cowSlot');
-  if (w < 0.05) cow.style.animationPlayState = 'paused';
-  else { cow.style.animationPlayState = 'running'; cow.style.setProperty('--cow-period', Math.min(20, Math.max(0.25, 2 * Math.PI / w)) + 's'); cow.style.animationDirection = rate < 0 ? 'reverse' : 'normal'; }
-  document.querySelector('.wheel-gag svg.wheel').style.setProperty('--wheel-period', w < 0.05 ? '9999s' : Math.min(12, Math.max(0.2, 2 * Math.PI / w)) + 's');
+  clearTimeout(sayTimer); sayTimer = setTimeout(() => $('bubble').classList.add('hide'), 20000);
+  const b = $('bubble'); b.classList.remove('hide'); b.innerHTML = html;
 }
 
 // ---------- dialog ----------
 function dialog(title, msg, good = false){
   $('dlgTitle').textContent = title;
   $('dlgMsg').innerHTML = msg;
-  $('dlg').querySelector('.titlebar').style.background = good ? 'linear-gradient(90deg,#0a6b2a,#2bd14a)' : '';
-  $('bonk').innerHTML = good ? `<span class="head">${SP.cow(2)}</span>` : `<span class="apple">${SP.apple(3)}</span><span class="head">${SP.bonkHead(3)}</span><span class="stars">✶✶</span>`;
+  $('dlg').classList.toggle('good', good);
+  $('dicon').textContent = good ? '✓' : '!';
   $('dlg').classList.add('show'); $('dlgOk').focus();
   good ? fanfare() : beep(180, 0.25, 'sawtooth');
 }
@@ -502,12 +497,12 @@ function renderSheet(){
   // status line
   const st = $('sheetStatus'), cur = curTarget();
   if (!S.targets.length) st.innerHTML = 'Pick what the question asks for with <b>🎯 add a target</b>.';
-  else if (!cur) st.innerHTML = '🎉 Every target is found. Press <b>Replay motion</b> to watch it.';
+  else if (!cur) st.innerHTML = 'Every target is found. Press <b>Replay motion</b> to watch it.';
   else {
     const sp = shortest(S.sheet.filter(applies), ks, cur), lp = shortest(appEqs(), ks, cur);
     const tl = `${letter(S.targets.indexOf(cur))} ${symOf(cur)}`;
     if (sp) st.innerHTML = `Your sheet can reach ${tl} in <b>${sp.length}</b> step${sp.length > 1 ? 's' : ''}.`;
-    else if (lp) st.innerHTML = `Your sheet can’t reach ${tl} yet. Gather more from the library (or ask the 🐄 for a hint).`;
+    else if (lp) st.innerHTML = `Your sheet can’t reach ${tl} yet. Gather more from the library, or press <b>Hint</b>.`;
     else st.innerHTML = `Even the whole library can’t reach ${tl} yet. Is there a hidden given or a condition to set?`;
     const sys = findSystem(ks);
     if (sys){
@@ -524,7 +519,7 @@ function steps(){
     ['Unit', true], ['Givens', userGivens() > 0], ['Conditions', S.condOk], ['Gather', S.sheet.length > 0], ['Target', S.targets.length > 0], ['Path', S.targets.length > 0 && !curTarget()],
   ];
   const now = s.findIndex(x => !x[1]);
-  $('steps').innerHTML = s.map(([n, d], i) => `<span class="${d ? 'done' : i === now ? 'now' : ''}"><b>${i + 1}</b>${n}${d ? ' ✓' : ''}</span>`).join('<span style="background:none;box-shadow:none">→</span>');
+  $('steps').innerHTML = s.map(([n, d], i) => `<span class="${d ? 'done' : i === now ? 'now' : ''}"><b>${i + 1}</b>${n}${d ? ' ✓' : ''}</span>`).join('<i class="sep">›</i>');
   if (now !== S.lastStep){
     const tips = { 1: 'Read your problem and add each quantity it gives you with the <b>+</b> buttons. Pick a direction for vectors.', 2: 'Now the <b>conditions</b>: friction or not, which way it moves, and any hidden givens like “starts from rest”.', 3: 'Look through the <b>library</b>. Equations that glow have one unknown left. <b>Gather</b> the ones you think you need.', 4: 'What does the question ask for? Add it as a <b>🎯 target</b> on your sheet.', 5: 'Build the path: solve a glowing equation on your sheet. Each answer can light up the next.' };
     if (tips[now] && S.lastStep !== -1) say(tips[now]);
@@ -673,7 +668,7 @@ async function ladderOp(m){
   f.innerHTML = m.v === cur ? `🎯 That’s target ${letter(S.targets.indexOf(m.v))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}` : `Found ${symOf(m.v)}.`;
   work.appendChild(f);
   S.path.push({ kind: m.kind, from, start: m.start, v: m.v, val, expr, poly, html: work.innerHTML, title: $('workTitle').textContent });
-  beep(1200, 0.06); S.busy = false; renderAll(false);
+  beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
   if (m.v === cur && !curTarget()) celebrate();
 }
 // Solve any equation with symbols, functions of time and numbers:
@@ -744,7 +739,7 @@ async function solveSym(eqId, target){
   f.innerHTML = tgt === cur ? `🎯 That’s target ${letter(S.targets.indexOf(tgt))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}` : `Found ${symOf(tgt)}.`;
   work.appendChild(f);
   S.path.push({ kind: 'eq', eq: eqId, v: tgt, fn: asFn, gen: !!eq.generated, useFn, poly, expr: asFn ? null : R, val: value, html: work.innerHTML, title: $('workTitle').textContent });
-  beep(1200, 0.06); S.busy = false; renderAll(false);
+  beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
   if (tgt === cur && !curTarget()) celebrate();
 }
 async function solve(eqId, target){
@@ -806,7 +801,7 @@ async function solve(eqId, target){
   else fb = `Found ${symOf(target)}. The target still isn’t reachable: look for a hidden given or a condition.`;
   const f = document.createElement('div'); f.className = 'feedback'; f.innerHTML = fb; work.appendChild(f);
   S.path.push({ kind: 'eq', eq: eqId, v: target, val: res.value, expr: R, tree, branch: res.branch, html: work.innerHTML, title: $('workTitle').textContent });
-  beep(1200, 0.06); S.busy = false; renderAll(false);
+  beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
   if (target === cur && !curTarget()) celebrate();
 }
 function check(eqId){
@@ -840,7 +835,6 @@ $('hintBtn').onclick = () => {
   const sec = chapter().sections.find(x => x.eqs.includes(miss.eq));
   say(`Your sheet is missing a link. Look for an equation that connects <b>${EQS[miss.eq].vars.map(x => VARS[x].sym).join(', ')}</b>, in the library section “${sec.title}”.`);
 };
-$('cowWrap').onclick = () => $('hintBtn').click();
 $('showBtn').onclick = async () => {
   if (S.busy) return;
   if (!S.condOk || !S.targets.length){ say('Set the conditions and add a 🎯 target first, then I’ll walk the shortest path.'); return; }
@@ -942,7 +936,9 @@ const velAt = (v, k, tau) => v.__P ? v.__P.reduce((s, c, n) => n ? s + n * c * t
 const posAccel = (v, k, tau) => v.__P ? v.__P.reduce((s, c, n) => n > 1 ? s + n * (n - 1) * c * tau ** (n - 2) : s, 0) : v[k.a];
 
 // ---------- drawing helpers ----------
-const COL = { given: '#19f0ff', found: '#ffe600', target: '#ff2bd6', unknown: '#9a9aaa' };
+const COL = { given: '#4fd1ff', found: '#ffd166', target: '#ff6bd6', unknown: '#8b9bb2' };
+const MONO = "'SF Mono', ui-monospace, Menlo, Consolas, monospace";
+const px = (n) => Math.round(n * 0.68); // canvas text sizes were set for a narrow pixel font
 const colOf = (id) => COL[stateOf(id)];
 const hl = (id, w) => S.hover === id ? w + 3 : w;
 function hot(spot){ S.hot.push(spot); }
@@ -963,30 +959,36 @@ function arcArrow(ctx, cx, cy, r, a0, a1, color, w = 3){
 }
 function label(ctx, txt, x, y, color, id, size = 44){
   const h = S.hover === id;
-  ctx.font = `${h ? size + 8 : size}px VT323, monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  if (h){ ctx.shadowColor = '#ffe600'; ctx.shadowBlur = 16; }
-  ctx.fillStyle = '#000'; ctx.fillText(txt, x + 2, y + 2); ctx.fillStyle = color; ctx.fillText(txt, x, y); ctx.shadowBlur = 0;
+  ctx.font = `600 ${px(h ? size + 8 : size)}px ${MONO}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = h ? '#ffd166' : 'rgba(0,0,0,.9)'; ctx.shadowBlur = h ? 16 : 6;
+  ctx.fillStyle = color; ctx.fillText(txt, x, y); ctx.shadowBlur = 0;
   if (id) hot({ kind: 'var', id, x, y, r: Math.max(24, ctx.measureText(txt).width / 2 + 6) });
 }
 function pointMark(ctx, x, y, name, color = '#fff'){
   const sel = S.inspectName === name;
-  ctx.fillStyle = sel ? '#ffe600' : color; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, sel ? 14 : 11, 0, 7); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = sel ? '#ffe600' : 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 20, 0, 7); ctx.stroke();
+  ctx.fillStyle = sel ? '#ffd166' : color; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, sel ? 14 : 11, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle = sel ? '#ffd166' : 'rgba(255,255,255,.55)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 20, 0, 7); ctx.stroke();
   hot({ kind: 'point', name, x, y, r: 26 });
 }
 function grid(ctx, Wd, Hd){
-  ctx.fillStyle = '#0a0018'; ctx.fillRect(0, 0, Wd, Hd);
-  ctx.strokeStyle = 'rgba(25,240,255,.08)'; ctx.lineWidth = 1;
+  ctx.fillStyle = '#070b14'; ctx.fillRect(0, 0, Wd, Hd);
+  ctx.strokeStyle = 'rgba(122,190,255,.07)'; ctx.lineWidth = 1;
   for (let x = 0; x < Wd; x += 40){ ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, Hd); ctx.stroke(); }
   for (let y = 0; y < Hd; y += 40){ ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(Wd, y); ctx.stroke(); }
 }
-const IMG = {};
-function loadImg(name, svgStr){ const i = new Image(); i.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ')); IMG[name] = i; }
-function fbdBox(ctx, x, y, w, h, title){
-  ctx.fillStyle = 'rgba(20,10,40,.92)'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#ffe600'; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
-  ctx.font = '28px VT323, monospace'; ctx.fillStyle = '#ffe600'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(title, x + 10, y + 6); ctx.textBaseline = 'middle';
+// the moving body: a glowing block (ghost copies are drawn fainter)
+function body(ctx, x, y, w, h, rot = 0, alpha = 1){
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha *= alpha;
+  ctx.shadowColor = 'rgba(255,107,214,.8)'; ctx.shadowBlur = 18 * alpha;
+  ctx.fillStyle = 'rgba(255,107,214,.22)'; ctx.strokeStyle = '#ff6bd6'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w / 2, -h / 2, w, h, 6) : ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.stroke();
+  ctx.restore();
 }
-function caption(ctx, txt, Hd){ ctx.font = '28px VT323, monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillText(txt, 20, Hd - 20); }
+function fbdBox(ctx, x, y, w, h, title){
+  ctx.fillStyle = 'rgba(8,12,22,.92)'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = 'rgba(255,209,102,.7)'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h);
+  ctx.font = `19px ${MONO}`; ctx.fillStyle = '#ffd166'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(title, x + 10, y + 8); ctx.textBaseline = 'middle';
+}
+function caption(ctx, txt, Hd){ ctx.font = `19px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillText(txt, 20, Hd - 20); }
 
 // ---------- diagrams ----------
 function draw(tau = null){
@@ -996,7 +998,6 @@ function draw(tau = null){
   ({ incline: drawIncline, pulley: drawPulley, rotation: drawWheel })[S.ch](ctx, v, k, T, now, tau, cv.width, cv.height);
   $('dgNote').textContent = illus ? 'Some values are made up for the picture until you give or find them.' : 'Drawn to scale with your numbers.';
   drawGraphs(v, k, tau);
-  if (tau === null) setSpin(velAt(v, k, T) * (S.ch === 'rotation' ? 1 : 0.6));
 }
 
 function drawIncline(ctx, v, k, T, now, tau, Wd, Hd){
@@ -1018,16 +1019,16 @@ function drawIncline(ctx, v, k, T, now, tau, Wd, Hd){
   let lo = Math.min(0, ...ss), hi = Math.max(0, ...ss); if (hi - lo < 0.2){ hi += 0.1; lo -= 0.1; }
   const P = (s) => { const u = 70 + (s - lo) / (hi - lo) * (L - 140); return { x: top.x + d.x * u, y: top.y + d.y * u }; };
   const at = (s, off) => { const p = P(s); return { x: p.x + n.x * off, y: p.y + n.y * off }; };
-  const cow = IMG.cow, N = 7; let last = null;
+  const N = 7; let last = null;
   for (let i = 0; i < N; i++){
     const t = i * T / (N - 1); if (t > now + 1e-9) break;
     const c = at(posAt(v, k, t), 26);
-    ctx.save(); ctx.globalAlpha = 0.15 + 0.4 * i / (N - 1); ctx.translate(c.x, c.y); ctx.rotate(th); if (cow?.complete) ctx.drawImage(cow, -24, -24, 48, 48); ctx.restore();
+    body(ctx, c.x, c.y, 46, 34, th, 0.15 + 0.35 * i / (N - 1));
     const lp = at(posAt(v, k, t), 64);
-    if (!last || Math.hypot(lp.x - last.x, lp.y - last.y) > 56){ ctx.font = '22px VT323, monospace'; ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.textAlign = 'center'; ctx.fillText(`${fmt(t)}s`, lp.x, lp.y); last = lp; }
+    if (!last || Math.hypot(lp.x - last.x, lp.y - last.y) > 56){ ctx.font = `15px ${MONO}`; ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.textAlign = 'center'; ctx.fillText(`${fmt(t)}s`, lp.x, lp.y); last = lp; }
   }
   const c = at(posAt(v, k, now), 30);
-  ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(th); if (cow?.complete) ctx.drawImage(cow, -32, -32, 64, 64); ctx.restore();
+  body(ctx, c.x, c.y, 60, 44, th);
   const vNow = velAt(v, k, now), vs = Math.min(14, 180 / Math.max(0.5, Math.abs(v.v0), Math.abs(velAt(v, k, T))));
   const va = at(posAt(v, k, now), 96);
   arrow(ctx, va.x, va.y, va.x + d.x * vNow * vs, va.y + d.y * vNow * vs, colOf('vf'), hl('vf', 5), 'vf');
@@ -1045,10 +1046,10 @@ function drawIncline(ctx, v, k, T, now, tau, Wd, Hd){
   label(ctx, 'Δx', (e0.x + e1.x) / 2 + n.x * 28, (e0.y + e1.y) / 2 + n.y * 28, colOf('dx'), 'dx', 40);
   label(ctx, `t = ${fmt(now)} s`, Wd - 420, 40, colOf('t'), 't', 38);
   // points
-  const p0 = P(0); pointMark(ctx, p0.x, p0.y, 'start', '#19f0ff');
+  const p0 = P(0); pointMark(ctx, p0.x, p0.y, 'start', '#4fd1ff');
   const tStop = v.v0 * v.a < 0 ? -v.v0 / v.a : null;
-  if (tStop !== null && tStop < T - 1e-6){ const ps = P(posAt(v, k, tStop)); pointMark(ctx, ps.x, ps.y, 'stop', '#ff2bd6'); }
-  const pe = P(posAt(v, k, T)); pointMark(ctx, pe.x, pe.y, 'end', '#ffe600');
+  if (tStop !== null && tStop < T - 1e-6){ const ps = P(posAt(v, k, tStop)); pointMark(ctx, ps.x, ps.y, 'stop', '#ff6bd6'); }
+  const pe = P(posAt(v, k, T)); pointMark(ctx, pe.x, pe.y, 'end', '#ffd166');
   // free-body diagram
   const bx = Wd - 300, by = 14, bw = 286, bh = 300, ox = bx + 140, oy = by + 160, Lf = 100;
   fbdBox(ctx, bx, by, bw, bh, 'Free-body diagram');
@@ -1073,31 +1074,31 @@ function drawPulley(ctx, v, k, T, now, tau, Wd, Hd){
   if (S.cond.friction){ ctx.strokeStyle = 'rgba(255,230,0,.55)'; ctx.lineWidth = 1; for (let x = 28; x < TX; x += 14){ ctx.beginPath(); ctx.moveTo(x, TY + 2); ctx.lineTo(x + 7, TY + 9); ctx.stroke(); } }
   ctx.strokeStyle = '#9a9aaa'; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(TX - 10, TY + 10); ctx.lineTo(PX, PY); ctx.stroke();
   ctx.fillStyle = '#6b6b80'; ctx.beginPath(); ctx.arc(PX, PY, R, 0, 7); ctx.fill(); ctx.strokeStyle = '#f7f4ff'; ctx.lineWidth = 3; ctx.stroke();
-  ctx.fillStyle = '#ff2bd6'; ctx.beginPath(); ctx.arc(PX, PY, 6, 0, 7); ctx.fill();
+  ctx.fillStyle = '#ff6bd6'; ctx.beginPath(); ctx.arc(PX, PY, 6, 0, 7); ctx.fill();
   // positions: both blocks move the same distance
   const ss = Array.from({ length: 61 }, (_, i) => posAt(v, k, i * T / 60));
   let lo = Math.min(0, ...ss), hi = Math.max(0, ...ss); if (hi - lo < 0.05){ hi += 0.05; }
   const sc = Math.min(340, 210) / (hi - lo);
   const X1 = (s) => 100 + (s - lo) * sc, Y2 = (s) => PY + 50 + (s - lo) * sc;
-  const cow = IMG.cow, N = 6;
+  const N = 6;
   for (let i = 0; i < N; i++){
     const t = i * T / (N - 1); if (t > now + 1e-9) break; const s = posAt(v, k, t);
     ctx.globalAlpha = 0.12 + 0.35 * i / (N - 1);
-    ctx.fillStyle = '#ff2bd6'; ctx.fillRect(X1(s) - 40, TY - 56, 80, 56);
-    if (cow?.complete) ctx.drawImage(cow, sx - 34, Y2(s), 68, 68);
+    ctx.fillStyle = '#ff6bd6'; ctx.fillRect(X1(s) - 40, TY - 56, 80, 56);
+    body(ctx, sx, Y2(s) + 34, 60, 60, 0, 1);
     ctx.globalAlpha = 1;
   }
   const s = posAt(v, k, now), x1 = X1(s), y2 = Y2(s);
   // string
-  ctx.strokeStyle = '#ffe600'; ctx.lineWidth = hl('Tn', 3);
+  ctx.strokeStyle = '#ffd166'; ctx.lineWidth = hl('Tn', 3);
   ctx.beginPath(); ctx.moveTo(x1 + 40, ys); ctx.lineTo(PX, ys); ctx.arc(PX, PY, R, -Math.PI / 2, 0); ctx.lineTo(sx, y2 + 6); ctx.stroke();
   label(ctx, 'T', (x1 + 40 + PX) / 2, ys - 22, colOf('Tn'), 'Tn', 36);
   label(ctx, 'T', sx + 28, (PY + y2) / 2, colOf('Tn'), 'Tn', 36);
   // block 1 + hanging mass
-  ctx.fillStyle = '#ff2bd6'; ctx.fillRect(x1 - 40, TY - 56, 80, 56); ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.strokeRect(x1 - 40, TY - 56, 80, 56);
+  ctx.fillStyle = '#ff6bd6'; ctx.fillRect(x1 - 40, TY - 56, 80, 56); ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.strokeRect(x1 - 40, TY - 56, 80, 56);
   ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.moveTo(x1 - 40, TY - 56); ctx.lineTo(x1 + 40, TY); ctx.moveTo(x1 + 40, TY - 56); ctx.lineTo(x1 - 40, TY); ctx.stroke();
   label(ctx, 'm₁', x1, TY - 28, '#000', null, 34); hot({ kind: 'var', id: 'm1', x: x1, y: TY - 28, r: 34 });
-  if (cow?.complete) ctx.drawImage(cow, sx - 40, y2, 80, 80);
+  body(ctx, sx, y2 + 40, 70, 70);
   label(ctx, 'm₂', sx - 70, y2 + 40, colOf('m2'), 'm2', 34);
   // motion arrows (same v and a for both)
   const vNow = velAt(v, k, now), vs = Math.min(18, 130 / Math.max(0.3, Math.abs(v.v0), Math.abs(velAt(v, k, T))));
@@ -1111,28 +1112,28 @@ function drawPulley(ctx, v, k, T, now, tau, Wd, Hd){
   const dy0 = TY - 140, xa = X1(0), xb = X1(posAt(v, k, T));
   ctx.strokeStyle = colOf('dx'); ctx.lineWidth = hl('dx', 3); ctx.beginPath(); ctx.moveTo(xa, dy0); ctx.lineTo(xb, dy0); ctx.moveTo(xa, dy0 - 10); ctx.lineTo(xa, dy0 + 10); ctx.moveTo(xb, dy0 - 10); ctx.lineTo(xb, dy0 + 10); ctx.stroke();
   label(ctx, 'Δx', (xa + xb) / 2, dy0 - 26, colOf('dx'), 'dx', 38);
-  pointMark(ctx, xa, dy0, 'start', '#19f0ff');
+  pointMark(ctx, xa, dy0, 'start', '#4fd1ff');
   const tStop = v.v0 * v.a < 0 ? -v.v0 / v.a : null;
-  if (tStop !== null && tStop < T - 1e-6) pointMark(ctx, X1(posAt(v, k, tStop)), dy0, 'stop', '#ff2bd6');
-  pointMark(ctx, xb, dy0, 'end', '#ffe600');
+  if (tStop !== null && tStop < T - 1e-6) pointMark(ctx, X1(posAt(v, k, tStop)), dy0, 'stop', '#ff6bd6');
+  pointMark(ctx, xb, dy0, 'end', '#ffd166');
   label(ctx, `t = ${fmt(now)} s`, 110, 34, colOf('t'), 't', 36);
   // free-body diagrams, one per block
   const f1 = { x: 20, y: 316, w: 290, h: 270 }, f2 = { x: 326, y: 316, w: 200, h: 270 };
   fbdBox(ctx, f1.x, f1.y, f1.w, f1.h, 'FBD: block m₁');
   let ox = f1.x + 145, oy = f1.y + 150;
-  ctx.fillStyle = '#ff2bd6'; ctx.fillRect(ox - 16, oy - 16, 32, 32);
+  ctx.fillStyle = '#ff6bd6'; ctx.fillRect(ox - 16, oy - 16, 32, 32);
   arrow(ctx, ox, oy - 16, ox, oy - 92, colOf('N1'), hl('N1', 4), 'N1'); label(ctx, 'N₁', ox + 26, oy - 82, colOf('N1'), 'N1', 30);
   arrow(ctx, ox, oy + 16, ox, oy + 92, colOf('W1'), hl('W1', 4), 'W1'); label(ctx, 'W₁', ox + 28, oy + 82, colOf('W1'), 'W1', 30);
   arrow(ctx, ox + 16, oy, ox + 110, oy, colOf('Tn'), hl('Tn', 4), 'Tn'); label(ctx, 'T', ox + 100, oy - 20, colOf('Tn'), 'Tn', 30);
   if (S.cond.friction){ arrow(ctx, ox - 16, oy, ox - 100, oy, colOf('f'), hl('f', 4), 'f'); label(ctx, 'f', ox - 92, oy - 20, colOf('f'), 'f', 30); label(ctx, 'μk', f1.x + f1.w - 34, f1.y + f1.h - 22, colOf('mu'), 'mu', 26); }
-  else { ctx.font = '22px VT323, monospace'; ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.textAlign = 'left'; ctx.fillText('no friction', f1.x + 12, f1.y + f1.h - 20); }
+  else { ctx.font = `15px ${MONO}`; ctx.fillStyle = 'rgba(255,255,255,.6)'; ctx.textAlign = 'left'; ctx.fillText('no friction', f1.x + 12, f1.y + f1.h - 20); }
   fbdBox(ctx, f2.x, f2.y, f2.w, f2.h, 'FBD: m₂');
   ox = f2.x + 100; oy = f2.y + 150;
   ctx.fillStyle = '#f7f4ff'; ctx.beginPath(); ctx.arc(ox, oy, 16, 0, 7); ctx.fill();
   arrow(ctx, ox, oy - 16, ox, oy - 92, colOf('Tn'), hl('Tn', 4), 'Tn'); label(ctx, 'T', ox + 24, oy - 82, colOf('Tn'), 'Tn', 30);
   arrow(ctx, ox, oy + 16, ox, oy + 98, colOf('W2'), hl('W2', 4), 'W2'); label(ctx, 'W₂', ox + 30, oy + 86, colOf('W2'), 'W2', 30);
   label(ctx, 'Fnet?', f2.x + 50, f2.y + f2.h - 20, colOf('a'), 'a', 22);
-  ctx.font = '24px VT323, monospace'; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.textAlign = 'left'; ctx.fillText('+ = forward: m₁ toward the pulley, m₂ down.', 200, 36);
+  ctx.font = `16px ${MONO}`; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.textAlign = 'left'; ctx.fillText('+ = forward: m₁ toward the pulley, m₂ down.', 200, 36);
 }
 
 function drawWheel(ctx, v, k, T, now, tau, Wd, Hd){
@@ -1146,8 +1147,8 @@ function drawWheel(ctx, v, k, T, now, tau, Wd, Hd){
   ctx.strokeStyle = '#f7f4ff'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
   ctx.strokeStyle = '#6b6b80'; ctx.lineWidth = 4;
   for (let i = 0; i < 4; i++){ const a = ang + i * Math.PI / 2; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R * Math.cos(-a), cy + R * Math.sin(-a)); ctx.stroke(); }
-  ctx.strokeStyle = '#ff2bd6'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R * Math.cos(-ang), cy + R * Math.sin(-ang)); ctx.stroke();
-  ctx.fillStyle = '#ff2bd6'; ctx.beginPath(); ctx.arc(cx, cy, 14, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#ff6bd6'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R * Math.cos(-ang), cy + R * Math.sin(-ang)); ctx.stroke();
+  ctx.fillStyle = '#ff6bd6'; ctx.beginPath(); ctx.arc(cx, cy, 14, 0, 7); ctx.fill();
   const sweep = Math.min(Math.abs(ang), 2 * Math.PI - 0.1) * Math.sign(ang);
   arcArrow(ctx, cx, cy, R - 34, 0, sweep, colOf('theta'), hl('theta', 4));
   label(ctx, `θ${Math.abs(ang) > 2 * Math.PI ? ` (${fmt(ang / (2 * Math.PI))} rev)` : ''}`, cx + (R - 70) * Math.cos(-sweep / 2), cy + (R - 70) * Math.sin(-sweep / 2), colOf('theta'), 'theta');
@@ -1157,7 +1158,7 @@ function drawWheel(ctx, v, k, T, now, tau, Wd, Hd){
   if (Math.abs(v.alpha) > 1e-9) arcArrow(ctx, cx, cy, R + 50, Math.PI * 0.18, Math.PI * 0.18 + 0.55 * Math.sign(v.alpha), colOf('alpha'), hl('alpha', 4));
   label(ctx, 'α', cx + R + 60, cy - R * 0.55, colOf('alpha'), 'alpha');
   label(ctx, `t = ${fmt(now)} s`, Wd - 150, 40, colOf('t'), 't', 38);
-  pointMark(ctx, cx + R, cy, 'start', '#19f0ff');
+  pointMark(ctx, cx + R, cy, 'start', '#4fd1ff');
   if (S.cond.rim){
     const px = cx + R * Math.cos(-ang), py = cy + R * Math.sin(-ang), tx = -Math.sin(-ang) * Math.sign(om || 1), ty = Math.cos(-ang) * Math.sign(om || 1);
     ctx.strokeStyle = colOf('r'); ctx.lineWidth = hl('r', 3); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(px, py); ctx.stroke();
@@ -1171,14 +1172,14 @@ function drawWheel(ctx, v, k, T, now, tau, Wd, Hd){
     arrow(ctx, px + 22 * nx, py + 22 * ny, px + 22 * nx + 60 * sa * (-Math.sin(-ang)), py + 22 * ny + 60 * sa * Math.cos(-ang), colOf('at'), hl('at', 4), 'at');
     label(ctx, 'aₜ', px + 22 * nx + 88 * sa * (-Math.sin(-ang)), py + 22 * ny + 88 * sa * Math.cos(-ang), colOf('at'), 'at');
   }
-  pointMark(ctx, cx + R * Math.cos(-ang), cy + R * Math.sin(-ang), 'end', '#ffe600');
+  pointMark(ctx, cx + R * Math.cos(-ang), cy + R * Math.sin(-ang), 'end', '#ffd166');
   caption(ctx, '+ is counterclockwise. Ghost spokes = equal time steps.', Hd);
 }
 
 // ---------- graphs ----------
 function drawGraph(id, fn, T, labelTxt, color, tau, sub, shade){
   const cv = $(id), ctx = cv.getContext('2d'), Wd = cv.width, Hd = cv.height, L = 90, Rm = 24, Tp = 30, B = 42;
-  ctx.fillStyle = '#0a0018'; ctx.fillRect(0, 0, Wd, Hd);
+  ctx.fillStyle = '#070b14'; ctx.fillRect(0, 0, Wd, Hd);
   const N = 120, xs = Array.from({ length: N + 1 }, (_, i) => i * T / N), ys = xs.map(fn);
   let lo = Math.min(0, ...ys), hi = Math.max(0, ...ys); if (hi - lo < 1e-9){ hi += 1; lo -= 1; }
   const X = t => L + (t / T) * (Wd - L - Rm), Y = y => Tp + (1 - (y - lo) / (hi - lo)) * (Hd - Tp - B);
@@ -1186,17 +1187,17 @@ function drawGraph(id, fn, T, labelTxt, color, tau, sub, shade){
   ctx.beginPath(); ctx.moveTo(L, Tp); ctx.lineTo(L, Hd - B); ctx.lineTo(Wd - Rm, Hd - B); ctx.stroke(); ctx.beginPath(); ctx.moveTo(L, Y(0)); ctx.lineTo(Wd - Rm, Y(0)); ctx.stroke();
   if (shade){ ctx.fillStyle = 'rgba(255,230,0,.15)'; ctx.beginPath(); ctx.moveTo(X(0), Y(0)); xs.forEach((t, i) => { if (tau === null || t <= tau) ctx.lineTo(X(t), Y(ys[i])); }); ctx.lineTo(X(tau === null ? T : tau), Y(0)); ctx.closePath(); ctx.fill(); }
   ctx.strokeStyle = color; ctx.lineWidth = 4; ctx.beginPath(); xs.forEach((t, i) => i ? ctx.lineTo(X(t), Y(ys[i])) : ctx.moveTo(X(t), Y(ys[i]))); ctx.stroke();
-  ctx.font = '38px VT323, monospace'; ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(labelTxt, L + 12, Tp + 24);
-  ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = '30px VT323, monospace'; ctx.textAlign = 'right'; ctx.fillText(fmt(hi), L - 8, Tp + 8); ctx.fillText(fmt(lo), L - 8, Hd - B);
+  ctx.font = `26px ${MONO}`; ctx.fillStyle = color; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillText(labelTxt, L + 12, Tp + 24);
+  ctx.fillStyle = 'rgba(255,255,255,.7)'; ctx.font = `20px ${MONO}`; ctx.textAlign = 'right'; ctx.fillText(fmt(hi), L - 8, Tp + 8); ctx.fillText(fmt(lo), L - 8, Hd - B);
   ctx.textAlign = 'center'; ctx.fillText('0', X(0), Hd - 10); ctx.fillText(`${fmt(T)} s`, X(T) - 30, Hd - 10);
   if (sub){ ctx.textAlign = 'right'; ctx.fillText(sub, Wd - Rm - 6, Tp + 24); }
-  if (tau !== null){ ctx.strokeStyle = '#ff2bd6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(tau), Tp); ctx.lineTo(X(tau), Hd - B); ctx.stroke(); ctx.fillStyle = '#ff2bd6'; ctx.beginPath(); ctx.arc(X(tau), Y(fn(tau)), 7, 0, 7); ctx.fill(); }
+  if (tau !== null){ ctx.strokeStyle = '#ff6bd6'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(tau), Tp); ctx.lineTo(X(tau), Hd - B); ctx.stroke(); ctx.fillStyle = '#ff6bd6'; ctx.beginPath(); ctx.arc(X(tau), Y(fn(tau)), 7, 0, 7); ctx.fill(); }
 }
 function drawGraphs(v, k, tau){
   const T = v[k.t], rot = S.ch === 'rotation';
-  drawGraph('gTheta', t => posAt(v, k, t), T, rot ? 'θ(t)  rad' : S.ch === 'pulley' ? 'x(t) distance moved  m' : 'x(t) along ramp  m', '#ff2bd6', tau, 'slope = velocity');
-  drawGraph('gOmega', t => velAt(v, k, t), T, rot ? 'ω(t)  rad/s' : 'v(t)  m/s', '#19f0ff', tau, `shaded area = ${rot ? 'θ' : 'Δx'}`, true);
-  drawGraph('gAlpha', () => v[k.a], T, rot ? 'α(t)  rad/s²' : 'a(t)  m/s²', '#ffe600', tau, 'flat: constant');
+  drawGraph('gTheta', t => posAt(v, k, t), T, rot ? 'θ(t)  rad' : S.ch === 'pulley' ? 'x(t) distance moved  m' : 'x(t) along ramp  m', '#ff6bd6', tau, 'slope = velocity');
+  drawGraph('gOmega', t => velAt(v, k, t), T, rot ? 'ω(t)  rad/s' : 'v(t)  m/s', '#4fd1ff', tau, `shaded area = ${rot ? 'θ' : 'Δx'}`, true);
+  drawGraph('gAlpha', () => v[k.a], T, rot ? 'α(t)  rad/s²' : 'a(t)  m/s²', '#ffd166', tau, 'flat: constant');
 }
 
 // ---------- diagram clicks ----------
@@ -1242,28 +1243,25 @@ $('replayBtn').onclick = () => {
   const { v } = simValues(), k = K(), T = v[k.t], D = Math.min(7000, Math.max(800, T * 1000)), rate = T * 1000 / D;
   $('dgNote').textContent = rate > 1.01 ? `Playing ${fmt(rate)}× faster than real time.` : rate < 0.99 ? `Slow motion (${fmt(rate)}×).` : 'Playing in real time.';
   const t0 = performance.now(); beep(300, 0.3, 'triangle'); S.anim = true;
-  const frame = (now) => { const tau = Math.min(T, ((now - t0) / D) * T); draw(tau); setSpin(velAt(v, k, tau) * (S.ch === 'rotation' ? 1 : 0.6)); if (tau < T) requestAnimationFrame(frame); else { S.anim = false; draw(); } };
+  const frame = (now) => { const tau = Math.min(T, ((now - t0) / D) * T); draw(tau); if (tau < T) requestAnimationFrame(frame); else { S.anim = false; draw(); } };
   requestAnimationFrame(frame);
 };
 
 // ---------- celebrate ----------
 function celebrate(){
   fanfare();
-  say(`🎉 <b>SOLVED!</b> ${S.targets.map((t, i) => `${letter(i)} ${symOf(t)} = ${showVal(t)}`).join(', ')}. Press <b>Replay motion</b> to watch it.${S.bank ? ' Then try another from the 📚 practice bank.' : ''}`);
+  say(`<b>Solved.</b> ${S.targets.map((t, i) => `${letter(i)} ${symOf(t)} = ${showVal(t)}`).join(', ')}. Press <b>Replay motion</b> to watch it.${S.bank ? ' Then try another from the practice bank.' : ''}`);
   if (calm()) return;
-  const b = $('solved'); b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); setTimeout(() => b.classList.remove('show'), 1800);
-  const cv = $('sparks'), ctx = cv.getContext('2d'); cv.width = innerWidth; cv.height = innerHeight;
-  const cols = ['#ff2bd6', '#19f0ff', '#ffe600', '#2bff6a', '#fff'];
-  const ps = Array.from({ length: 140 }, () => ({ x: innerWidth / 2, y: innerHeight / 2, vx: (Math.random() - .5) * 18, vy: (Math.random() - .8) * 18, c: cols[(Math.random() * cols.length) | 0], s: 4 + (Math.random() * 5 | 0) }));
-  const t0 = performance.now();
-  const step = (now) => { ctx.clearRect(0, 0, cv.width, cv.height); ps.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.45; ctx.fillStyle = p.c; ctx.fillRect(p.x | 0, p.y | 0, p.s, p.s); }); if (now - t0 < 1600) requestAnimationFrame(step); else ctx.clearRect(0, 0, cv.width, cv.height); };
-  requestAnimationFrame(step);
+  const b = $('solved'); b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); setTimeout(() => b.classList.remove('show'), 1700);
+  field.pulse(innerWidth / 2, innerHeight / 2, 260);
 }
+// a solved step sends a pulse through the background field, from the work panel
+function stepPulse(){ if (calm()) return; const r = $('workWin').getBoundingClientRect(); field.pulse(r.left + 40, Math.min(innerHeight - 40, Math.max(40, r.top + 60)), 70); }
 
 // ---------- toggles ----------
-$('calmBtn').onclick = () => { const on = !calm(); document.body.classList.toggle('calm', on); $('calmBtn').setAttribute('aria-pressed', String(on)); try { localStorage.setItem('rl-calm', on ? '1' : '0'); } catch {} draw(); };
+$('calmBtn').onclick = () => { const on = !calm(); document.body.classList.toggle('calm', on); $('calmBtn').setAttribute('aria-pressed', String(on)); field.setCalm(on); try { localStorage.setItem('rl-calm', on ? '1' : '0'); } catch {} draw(); };
 $('soundBtn').onclick = () => { S.sound = !S.sound; $('soundBtn').setAttribute('aria-pressed', String(S.sound)); beep(660, 0.08); };
-$('clearBtn').onclick = () => { if (S.busy) return; const bh = $('bhSlot').firstElementChild; if (bh && !calm()) bh.animate([{ transform: 'rotate(0) scale(1)' }, { transform: 'rotate(-720deg) scale(1.6)' }, { transform: 'rotate(-1080deg) scale(1)' }], { duration: 700 }); beep(120, 0.4, 'sawtooth'); S.cond = defaultsFor(S.ch); resetAll(true); renderAll(); say('Gulp. The black hole ate every known, target and equation. Fresh start!'); };
+$('clearBtn').onclick = () => { if (S.busy) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); renderAll(); say('Cleared: every known, target and equation is gone. The conditions are back to their defaults.'); };
 
 // ---------- general system detection: two sheet equations with the same two unknowns ----------
 // Any equation can be written as Z = 0: generated ones carry Z; for library ones it comes from a solver's template.
@@ -1429,15 +1427,15 @@ function drawFBD(b){
   // screen unit vectors for the frame axes (s, n)
   const sAx = b.frame === 'hanging' ? [0, 1] : [Math.cos(th), -Math.sin(th)], nAx = b.frame === 'hanging' ? [1, 0] : [-Math.sin(th), -Math.cos(th)];
   const num = (u) => u === '0' ? 0 : X.evalNum(X.parse(u), { inc: S.build.theta });
-  let svg = `<svg viewBox="0 0 420 300"><g transform="rotate(${-S.build.theta * (b.frame === 'slope')} ${cx} ${cy})"><rect x="${cx - 30}" y="${cy - 20}" width="60" height="40" fill="#ff2bd6" stroke="#fff" stroke-width="2"/></g>`;
+  let svg = `<svg viewBox="0 0 420 300"><g transform="rotate(${-S.build.theta * (b.frame === 'slope')} ${cx} ${cy})"><rect x="${cx - 30}" y="${cy - 20}" width="60" height="40" fill="#ff6bd6" stroke="#fff" stroke-width="2"/></g>`;
   svg += `<line x1="${cx}" y1="${cy}" x2="${cx + sAx[0] * 150}" y2="${cy + sAx[1] * 150}" stroke="#555" stroke-dasharray="4 4"/><line x1="${cx}" y1="${cy}" x2="${cx + nAx[0] * 120}" y2="${cy + nAx[1] * 120}" stroke="#555" stroke-dasharray="4 4"/>`;
-  const cols = { gravity: '#ffe600', normal: '#19f0ff', friction: '#ff8a00', push: '#2bff6a', tension: '#ffffff' };
+  const cols = { gravity: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push: '#3ddc97', tension: '#ffffff' };
   for (const f of fs){
     const d = (DIRS[b.frame] || DIRS.free)[f.dir]; if (!d) continue;
     const us = num(d[0]), un = num(d[1]), dx = us * sAx[0] + un * nAx[0], dy = us * sAx[1] + un * nAx[1];
     const x2 = cx + dx * L, y2 = cy + dy * L, a = Math.atan2(dy, dx);
     svg += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="${cols[f.kind]}" stroke-width="4"/><polygon points="${x2},${y2} ${x2 - 12 * Math.cos(a - 0.4)},${y2 - 12 * Math.sin(a - 0.4)} ${x2 - 12 * Math.cos(a + 0.4)},${y2 - 12 * Math.sin(a + 0.4)}" fill="${cols[f.kind]}"/>`;
-    svg += `<text x="${x2 + dx * 18}" y="${y2 + dy * 18 + 6}" fill="${cols[f.kind]}" font-family="VT323,monospace" font-size="24" text-anchor="middle">${fLabel(b, f)}</text>`;
+    svg += `<text x="${x2 + dx * 18}" y="${y2 + dy * 18 + 6}" fill="${cols[f.kind]}" font-family="SF Mono,Menlo,monospace" font-size="17" font-weight="600" text-anchor="middle">${fLabel(b, f)}</text>`;
   }
   return svg + '</svg>';
 }
@@ -1510,22 +1508,13 @@ function renderAll(full = true){
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();
   draw();
 }
-function placeDeco(){
-  $('cowSlot').innerHTML = SP.cow(4); $('catSlot').innerHTML = SP.catToast(2); $('hamsterSlot').innerHTML = SP.hamster(3); $('bhSlot').innerHTML = SP.blackHole(1);
-  $('deco').innerHTML = `<div class="deco gag" style="left:1%;top:30%;animation:float 4s ease-in-out infinite">${SP.piano(3)}<div style="font:10px var(--chunky);color:#ffe600;text-align:center">g = 9.81</div></div>
-    <div class="deco gag" style="right:1.2%;top:24%;transform:rotate(8deg)">${SP.cow(2)}</div>
-    <div class="deco gag" style="left:1.5%;bottom:10%;animation:spin 9s linear infinite">${SP.catToast(2)}</div>`;
-  loadImg('cow', SP.cow(4)); IMG.cow.onload = () => { if (!S.anim) draw(); };
-}
 async function boot(){
-  $('bootBox').innerHTML = SP.box(6); placeDeco();
   try { if (localStorage.getItem('rl-calm') === '1') document.body.classList.add('calm'); } catch {}
   $('calmBtn').setAttribute('aria-pressed', String(calm()));
-  try { await document.fonts.load('30px VT323'); } catch {}
+  field.setCalm(calm());
   S.cond = defaultsFor(S.ch); applyHidden(); clearWork(); resetInspector();
   S.lastStep = -1; renderAll(); S.lastStep = 1;
-  say('Hi! I’m a <b>spherical cow</b>. Set up your own problem: <b>1</b> add the givens, <b>2</b> set the conditions, <b>3</b> gather equations, <b>4</b> pick the target, <b>5</b> build the path. Or grab one from the 📚 <b>Practice bank</b>.');
-  setTimeout(() => $('boot').remove(), calm() ? 0 : 700);
+  say('Set up your own problem: <b>1</b> add the givens, <b>2</b> set the conditions, <b>3</b> gather equations, <b>4</b> pick the target, <b>5</b> build the path. Or open the <b>Practice bank</b>. (The background is a live electric field: your cursor is a small test charge.)');
   if ('serviceWorker' in navigator && location.protocol === 'https:'){ try { navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch {} }
 }
 boot();
