@@ -8,7 +8,7 @@
 // No dependencies; data.js and app.js pass in names, sample values and units.
 
 // ---------------------------------------------------------------- parsing
-const SUP = { '²': 2, '³': 3 };
+const SUP = { '²': 2, '³': 3, '⁴': 4, '⁵': 5 };
 
 export function parse(src){
   let i = 0;
@@ -469,7 +469,8 @@ export function parseUnit(u){
   return cleanE(out);
 }
 const dimEq = (a, b) => ['m', 'kg', 's'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) < 1e-9);
-export const dimStr = (d) => { const parts = Object.entries(cleanE(d)); if (!parts.length) return 'no unit'; const top = parts.filter(([, p]) => p > 0).map(([k, p]) => k + powStr(p)).join('·') || '1', bot = parts.filter(([, p]) => p < 0).map(([k, p]) => k + powStr(-p)).join('·'); return bot ? `${top}/${bot}` : top; };
+const NAMED = [[{ kg: 1, m: 1, s: -2 }, 'N'], [{ kg: 1, m: 1, s: -3 }, 'N/s'], [{ kg: 1, m: 2, s: -2 }, 'J']];
+export const dimStr = (d) => { const parts = Object.entries(cleanE(d)); if (!parts.length) return 'no unit'; const nm = NAMED.find(([u]) => dimEq(u, d) && Object.keys(cleanE(d)).length === Object.keys(u).length); if (nm) return nm[1]; const top = parts.filter(([, p]) => p > 0).map(([k, p]) => k + powStr(p)).join('·') || '1', bot = parts.filter(([, p]) => p < 0).map(([k, p]) => k + powStr(-p)).join('·'); return bot ? `${top}/${bot}` : top; };
 // dimension of a template tree; throws if two terms of a sum disagree. dims: id → dimension vector.
 export function dimOf(n, dims){
   const mul = (a, b, s = 1) => { const o = { ...a }; for (const k in b) o[k] = (o[k] || 0) + s * b[k]; return cleanE(o); };
@@ -546,15 +547,61 @@ function polyPrint(p, o, tSym){
     if (!c.n.length) return;
     const neg = isNumeric(c) ? numValue(c) < 0 : (c.n.length === 1 && !c.d.length ? c.n[0].c < 0 : evalRat(c, SAMPLE) < 0);
     const mag = neg ? negR(c) : c;
-    let cs = printRat(mag, o);
+    let cs = printRat(mag, o), dot = '';
     const one = isNumeric(mag) && Math.abs(numValue(mag) - 1) < 1e-12;
     if (k > 0 && one) cs = '';
     else if (k > 0 && (/[+−] /.test(cs) || / \/ /.test(cs))) cs = `(${cs})`;
-    const tp = k === 0 ? '' : tSym + (k === 1 ? '' : SUPS[k] || `^${k}`);
+    else if (k > 0 && !isNumeric(mag) && /\s/.test(o.html ? cs.replace(/<[^>]*>/g, '') : cs)) dot = '·';
+    const tp = k === 0 ? '' : dot + tSym + (k === 1 ? '' : SUPS[k] || `^${k}`);
     parts.push({ neg, s: cs + tp });
   });
   if (!parts.length) return '0';
+  parts.sort((a, b) => a.neg - b.neg); // positive terms first, each group in rising powers
   return parts.map((x, j) => (j ? (x.neg ? ' − ' : ' + ') : (x.neg ? '−' : '')) + x.s).join('');
 }
 export const polyText = (p, o) => polyPrint(p, { ...o, html: false, sym: o.plain || ((id) => id) }, (o.plain || ((id) => id))('t'));
 export const polyHTML = (p, o) => polyPrint(p, { ...o, html: true, sym: o.html || ((id) => id) }, (o.html || ((id) => id))('t'));
+
+
+// ---------------------------------------------------------------- functions of time as expressions in t
+// polynomial ⇄ rational in the symbol t, so equations can take functions of time as inputs
+export const polyToRat = (p) => p.reduce((acc, c, k) => addR(acc, mulR(c, powR(symbol('t'), k))), num(0));
+// collect powers of one symbol: r = Σ p[k]·xᵏ with p[k] free of x. null if r isn't a polynomial in x.
+export function ratToPolyIn(r, id = 't'){
+  const key = 'v:' + id;
+  const inside = (k) => { const a = ATOMS.get(k); return a.kind !== 'sym' && symbolsOf({ n: [{ c: 1, e: { [k]: 1 } }], d: [] }).has(id); };
+  for (const f of r.d) for (const m of f.p) if (key in m.e || Object.keys(m.e).some(inside)) return null;
+  const groups = [];
+  for (const m of r.n){
+    if (Object.keys(m.e).some(inside)) return null;
+    const k = m.e[key] || 0;
+    if (k < 0 || k !== Math.round(k)) return null;
+    const e = { ...m.e }; delete e[key];
+    (groups[k] = groups[k] || []).push({ c: m.c, e });
+  }
+  const out = [];
+  for (let k = 0; k < groups.length; k++) out.push(groups[k] ? reduce({ n: polyNorm(groups[k]), d: r.d.map(f => ({ ...f })) }) : num(0));
+  return trim(out);
+}
+export const ratToPoly = (r) => ratToPolyIn(r, 't');
+// replace symbols by expressions: map id → Rat
+export function substRat(r, map){
+  const atom = (key) => {
+    const a = ATOMS.get(key);
+    if (a.kind === 'sym') return a.id in map ? map[a.id] : atomRat(key);
+    if (a.kind === 'sqrt') return sqrtR(substRat(a.base, map));
+    return fnR(a.f, substRat(a.arg, map));
+  };
+  const poly = (p) => p.reduce((acc, m) => addR(acc, Object.entries(m.e).reduce((t, [k, e]) => mulR(t, powR(atom(k), e)), num(m.c))), num(0));
+  let out = poly(r.n);
+  for (const f of r.d) out = mulR(out, powR(invR(poly(f.p)), f.k));
+  return tidyRoots(out);
+}
+// Z = 0 is linear in the symbol id: return id = −(rest) / (coefficient). Throws if it isn't linear.
+export function solveLinear(Z, id, name = id){
+  const p = ratToPolyIn(Z, id);
+  if (!p || p.length !== 2) throw new MathError(p && p.length > 2 ? `${name} appears squared here, so this isn’t a single linear step.` : `${name} isn’t in this equation in a way that can be isolated.`);
+  if (!p[1].n.length) throw new MathError(`The coefficient of ${name} is zero.`);
+  return tidyRoots(mulR(negR(p[0]), invR(p[1])));
+}
+export const zeroOf = (lhs, rhs) => addR(lhs, negR(rhs));
