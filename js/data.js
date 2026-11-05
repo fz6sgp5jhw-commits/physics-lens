@@ -1,6 +1,8 @@
 // Rotation Lab — physics data: variables, equations with hand-checked isolation steps, setups.
 // All values are stored in SI units. Every solver is written out by hand so each step is exact.
 
+import { parse, hasPM, evalNum, MathError, parseUnit, dimOf, dimEq, dimStr } from './expr.js';
+
 const TAU = 2 * Math.PI;
 
 export const VARS = {
@@ -60,12 +62,14 @@ function kinematics(prefix, k, words){
   const { p, u0, u, a, t } = k;
   const [Vp, Vu0, Vu, Va, Vt] = [p, u0, u, a, t].map(V);
   const tUnit = 's';
-  const firstPositive = (A, B, C, msgNone) => {
-    const r = posRoots(A, B, C);
-    if (r === null) return err(`The square root is of a negative number: ${words.never}`);
-    if (!r.length) return err(msgNone);
-    return { value: r[0], note: r.length > 1 ? `Two positive roots (${fmt(r[0])} ${tUnit} and ${fmt(r[1])} ${tUnit}): it passes this ${words.pos} twice. The first time is kept; check which one the problem means.` : '' };
+  // pick the first positive time among the two roots of a quadratic (cands = [+ branch, − branch])
+  const firstPositive = (msgNone) => (v, cands) => {
+    const pos = cands.map((x, i) => ({ x, b: i ? -1 : 1 })).filter(o => isFinite(o.x) && o.x > 1e-12).sort((p, q) => p.x - q.x);
+    if (!pos.length) return err(msgNone);
+    const two = pos.length > 1 && Math.abs(pos[1].x - pos[0].x) > 1e-9 * pos[1].x;
+    return { branch: pos[0].b, note: two ? `Two positive roots (${fmt(pos[0].x)} ${tUnit} and ${fmt(pos[1].x)} ${tUnit}): it passes this ${words.pos} twice. The first time is kept; check which one the problem means.` : '' };
   };
+  const neverSq = (q) => q < -1e-12 ? err(`The square root is of a negative number: ${words.never}`) : null;
   // sign of the final velocity = direction of motion when it first reaches p
   const finalSign = (v) => {
     const r = posRoots(0.5 * v[a], v[u0], -v[p]);
@@ -77,27 +81,29 @@ function kinematics(prefix, k, words){
       vars: [u, u0, a, t], form: `${Vu} = ${Vu0} + ${Va}${Vt}`,
       meaning: words.m1, condition: `constant ${P(a)}`, calc: `Integrate ${P(a)} = d${P(u)}/dt from 0 to t with ${P(a)} constant: ${P(u)} − ${P(u0)} = ${P(a)}t.`,
       solve: {
-        [u]: { steps: [], sub: `{${u0}} + {${a}}{${t}}`, f: v => v[u0] + v[a] * v[t] },
-        [u0]: { steps: [{ eq: `${Vu} − ${Va}${Vt} = ${Vu0}`, why: `subtract ${P(a)}t from both sides` }], sub: `{${u}} − {${a}}{${t}}`, f: v => v[u] - v[a] * v[t] },
+        [u]: { steps: [], sub: `{${u0}} + {${a}}{${t}}` },
+        [u0]: { steps: [{ eq: `${Vu} − ${Va}${Vt} = ${Vu0}`, why: `subtract ${P(a)}t from both sides` }], sub: `{${u}} − {${a}}{${t}}` },
         [a]: { steps: [{ eq: `${Vu} − ${Vu0} = ${Va}${Vt}`, why: `subtract ${P(u0)} from both sides` }, { eq: `${Va} = (${Vu} − ${Vu0}) / ${Vt}`, why: 'divide both sides by t' }],
-               sub: `({${u}} − {${u0}}) / {${t}}`, f: v => v[t] === 0 ? div0(t) : (v[u] - v[u0]) / v[t] },
+               sub: `({${u}} − {${u0}}) / {${t}}` },
         [t]: { steps: [{ eq: `${Vu} − ${Vu0} = ${Va}${Vt}`, why: `subtract ${P(u0)} from both sides` }, { eq: `${Vt} = (${Vu} − ${Vu0}) / ${Va}`, why: `divide both sides by ${P(a)}` }],
-               sub: `({${u}} − {${u0}}) / {${a}}`, f: v => v[a] === 0 ? err(`${P(a)} is zero: the velocity never changes, so no time gets you there.`) : (v[u] - v[u0]) / v[a] },
+               sub: `({${u}} − {${u0}}) / {${a}}`, guard: v => v[a] === 0 ? err(`${P(a)} is zero: the velocity never changes, so no time gets you there.`) : null },
       },
     },
     [prefix + '2']: {
       vars: [p, u0, a, t], form: `${Vp} = ${Vu0}${Vt} + ½${Va}${Vt}²`,
       meaning: words.m2, condition: `constant ${P(a)}`, calc: `Integrate ${P(u)}(t) = ${P(u0)} + ${P(a)}t from 0 to t: ${P(p)} = ${P(u0)}t + ½${P(a)}t².`,
       solve: {
-        [p]: { steps: [], sub: `{${u0}}{${t}} + ½{${a}}{${t}}²`, f: v => v[u0] * v[t] + 0.5 * v[a] * v[t] * v[t] },
+        [p]: { steps: [], sub: `{${u0}}{${t}} + ½{${a}}{${t}}²` },
         [u0]: { steps: [{ eq: `${Vp} − ½${Va}${Vt}² = ${Vu0}${Vt}`, why: `subtract ½${P(a)}t² from both sides` }, { eq: `${Vu0} = (${Vp} − ½${Va}${Vt}²) / ${Vt}`, why: 'divide both sides by t' }],
-                sub: `({${p}} − ½{${a}}{${t}}²) / {${t}}`, f: v => v[t] === 0 ? div0(t) : (v[p] - 0.5 * v[a] * v[t] * v[t]) / v[t] },
+                sub: `({${p}} − ½{${a}}{${t}}²) / {${t}}` },
         [a]: { steps: [{ eq: `${Vp} − ${Vu0}${Vt} = ½${Va}${Vt}²`, why: `subtract ${P(u0)}t from both sides` }, { eq: `${Va} = 2(${Vp} − ${Vu0}${Vt}) / ${Vt}²`, why: 'multiply by 2, divide by t²' }],
-               sub: `2({${p}} − {${u0}}{${t}}) / {${t}}²`, f: v => v[t] === 0 ? div0(t) : 2 * (v[p] - v[u0] * v[t]) / (v[t] * v[t]) },
+               sub: `2({${p}} − {${u0}}{${t}}) / {${t}}²` },
         [t]: { steps: [{ eq: `½${Va}${Vt}² + ${Vu0}${Vt} − ${Vp} = 0`, why: 'move everything to one side: it’s a quadratic in t' },
                        { eq: `${Vt} = [−${Vu0} ± √(${Vu0}² + 2${Va}${Vp})] / ${Va}`, why: `quadratic formula (a = ½${P(a)}, b = ${P(u0)}, c = −${P(p)}); keep the first positive time` }],
                sub: `[−{${u0}} ± √({${u0}}² + 2{${a}}{${p}})] / {${a}}`,
-               f: v => firstPositive(0.5 * v[a], v[u0], -v[p], `No positive time works: with these values it never reaches this ${words.pos}.`) },
+               guard: v => Math.abs(v[a]) < 1e-12 ? (v[u0] === 0 || v[p] / v[u0] <= 0 ? err(`No positive time works: with these values it never reaches this ${words.pos}.`) : null) : neverSq(v[u0] ** 2 + 2 * v[a] * v[p]),
+               alt: [{ when: v => Math.abs(v[a]) < 1e-12, sub: `{${p}} / {${u0}}`, note: `${P(a)} is zero, so it moves steadily: t = ${P(p)} / ${P(u0)}.` }],
+               pick: firstPositive(`No positive time works: with these values it never reaches this ${words.pos}.`) },
       },
     },
     [prefix + '3']: {
@@ -106,48 +112,51 @@ function kinematics(prefix, k, words){
       solve: {
         [u]: { steps: [{ eq: `${Vu} = ±√(${Vu0}² + 2${Va}${Vp})`, why: 'take the square root; the sign is the direction of motion at the end' }],
                sub: `±√({${u0}}² + 2{${a}}{${p}})`,
-               f: v => { const q = v[u0] ** 2 + 2 * v[a] * v[p]; if (q < -1e-12) return err(`${P(u)}² would be negative: ${words.never}`);
-                 const mag = Math.sqrt(Math.max(0, q)), sg = finalSign(v), r = posRoots(0.5 * v[a], v[u0], -v[p]);
+               guard: v => v[u0] ** 2 + 2 * v[a] * v[p] < -1e-12 ? err(`${P(u)}² would be negative: ${words.never}`) : null,
+               pick: (v, cands) => {
+                 const mag = Math.abs(cands[0]), sg = finalSign(v), r = posRoots(0.5 * v[a], v[u0], -v[p]);
                  let note = sg < 0 ? `The root gives ±${fmt(mag)}. When it first gets there it’s moving in the − direction, so ${P(u)} is negative.` : `The root gives ±${fmt(mag)}. When it first gets there it’s moving in the + direction, so the positive root is kept.`;
                  if (r && r.length > 1) note += ` Careful: it passes this ${words.pos} twice, and the second time ${P(u)} = ${fmt(-sg * mag)}. Pick the one the problem means.`;
-                 return { value: sg * mag, note }; } },
+                 return { branch: sg, note }; } },
         [u0]: { steps: [{ eq: `${Vu0}² = ${Vu}² − 2${Va}${Vp}`, why: `subtract 2${P(a)}${P(p)} from both sides` }, { eq: `${Vu0} = ±√(${Vu}² − 2${Va}${Vp})`, why: 'take the square root' }],
-                sub: `√({${u}}² − 2{${a}}{${p}})`,
-                f: v => { const q = v[u] ** 2 - 2 * v[a] * v[p]; if (q < -1e-12) return err(`${P(u0)}² would be negative: these numbers can’t happen together.`);
-                  const mag = Math.sqrt(Math.max(0, q)), sg = v.__u0sign || 1;
-                  return { value: sg * mag, note: v.__u0sign ? `The root gives ±${fmt(mag)}. Your conditions say it starts out moving ${sg < 0 ? 'in the − direction' : 'in the + direction'}, so ${P(u0)} = ${fmt(sg * mag)}.` : `The positive root is kept. If it started out moving in the − direction, ${P(u0)} is the negative of this.` }; } },
+                sub: `±√({${u}}² − 2{${a}}{${p}})`,
+                guard: v => v[u] ** 2 - 2 * v[a] * v[p] < -1e-12 ? err(`${P(u0)}² would be negative: these numbers can’t happen together.`) : null,
+                pick: (v, cands) => { const mag = Math.abs(cands[0]), sg = v.__u0sign || 1;
+                  return { branch: sg, note: v.__u0sign ? `The root gives ±${fmt(mag)}. Your conditions say it starts out moving ${sg < 0 ? 'in the − direction' : 'in the + direction'}, so ${P(u0)} = ${fmt(sg * mag)}.` : `The positive root is kept. If it started out moving in the − direction, ${P(u0)} is the negative of this.` }; } },
         [a]: { steps: [{ eq: `${Vu}² − ${Vu0}² = 2${Va}${Vp}`, why: `subtract ${P(u0)}² from both sides` }, { eq: `${Va} = (${Vu}² − ${Vu0}²) / (2${Vp})`, why: `divide both sides by 2${P(p)}` }],
-               sub: `({${u}}² − {${u0}}²) / (2{${p}})`, f: v => v[p] === 0 ? div0(p) : (v[u] ** 2 - v[u0] ** 2) / (2 * v[p]) },
+               sub: `({${u}}² − {${u0}}²) / (2{${p}})` },
         [p]: { steps: [{ eq: `${Vu}² − ${Vu0}² = 2${Va}${Vp}`, why: `subtract ${P(u0)}² from both sides` }, { eq: `${Vp} = (${Vu}² − ${Vu0}²) / (2${Va})`, why: `divide both sides by 2${P(a)}` }],
-               sub: `({${u}}² − {${u0}}²) / (2{${a}})`, f: v => v[a] === 0 ? err(`${P(a)} is zero, so you can’t divide by it. (With ${P(a)} = 0 the velocity never changes.)`) : (v[u] ** 2 - v[u0] ** 2) / (2 * v[a]) },
+               sub: `({${u}}² − {${u0}}²) / (2{${a}})`, guard: v => v[a] === 0 ? err(`${P(a)} is zero, so you can’t divide by it. (With ${P(a)} = 0 the velocity never changes.)`) : null },
       },
     },
     [prefix + '4']: {
       vars: [p, u0, u, t], form: `${Vp} = ½(${Vu0} + ${Vu})${Vt}`,
       meaning: words.m4, condition: `constant ${P(a)}`, calc: `With ${P(a)} constant, velocity changes linearly, so its average over the interval is (${P(u0)} + ${P(u)})/2.`,
       solve: {
-        [p]: { steps: [], sub: `½({${u0}} + {${u}}){${t}}`, f: v => 0.5 * (v[u0] + v[u]) * v[t] },
+        [p]: { steps: [], sub: `½({${u0}} + {${u}}){${t}}` },
         [t]: { steps: [{ eq: `2${Vp} = (${Vu0} + ${Vu})${Vt}`, why: 'multiply both sides by 2' }, { eq: `${Vt} = 2${Vp} / (${Vu0} + ${Vu})`, why: `divide both sides by (${P(u0)} + ${P(u)})` }],
-               sub: `2{${p}} / ({${u0}} + {${u}})`, f: v => (v[u0] + v[u]) === 0 ? err(`${P(u0)} + ${P(u)} is zero, so you can’t divide by it.`) : 2 * v[p] / (v[u0] + v[u]) },
+               sub: `2{${p}} / ({${u0}} + {${u}})` },
         [u]: { steps: [{ eq: `2${Vp} / ${Vt} = ${Vu0} + ${Vu}`, why: 'multiply by 2, divide by t' }, { eq: `${Vu} = 2${Vp} / ${Vt} − ${Vu0}`, why: `subtract ${P(u0)} from both sides` }],
-               sub: `2{${p}} / {${t}} − {${u0}}`, f: v => v[t] === 0 ? div0(t) : 2 * v[p] / v[t] - v[u0] },
+               sub: `2{${p}} / {${t}} − {${u0}}` },
         [u0]: { steps: [{ eq: `2${Vp} / ${Vt} = ${Vu0} + ${Vu}`, why: 'multiply by 2, divide by t' }, { eq: `${Vu0} = 2${Vp} / ${Vt} − ${Vu}`, why: `subtract ${P(u)} from both sides` }],
-                sub: `2{${p}} / {${t}} − {${u}}`, f: v => v[t] === 0 ? div0(t) : 2 * v[p] / v[t] - v[u] },
+                sub: `2{${p}} / {${t}} − {${u}}` },
       },
     },
     [prefix + '5']: {
       vars: [p, u, a, t], form: `${Vp} = ${Vu}${Vt} − ½${Va}${Vt}²`,
       meaning: words.m5, condition: `constant ${P(a)}`, calc: `Substitute ${P(u0)} = ${P(u)} − ${P(a)}t into the second equation.`,
       solve: {
-        [p]: { steps: [], sub: `{${u}}{${t}} − ½{${a}}{${t}}²`, f: v => v[u] * v[t] - 0.5 * v[a] * v[t] * v[t] },
+        [p]: { steps: [], sub: `{${u}}{${t}} − ½{${a}}{${t}}²` },
         [u]: { steps: [{ eq: `${Vp} + ½${Va}${Vt}² = ${Vu}${Vt}`, why: `add ½${P(a)}t² to both sides` }, { eq: `${Vu} = (${Vp} + ½${Va}${Vt}²) / ${Vt}`, why: 'divide both sides by t' }],
-               sub: `({${p}} + ½{${a}}{${t}}²) / {${t}}`, f: v => v[t] === 0 ? div0(t) : (v[p] + 0.5 * v[a] * v[t] * v[t]) / v[t] },
+               sub: `({${p}} + ½{${a}}{${t}}²) / {${t}}` },
         [a]: { steps: [{ eq: `${Vu}${Vt} − ${Vp} = ½${Va}${Vt}²`, why: `add ½${P(a)}t² and subtract ${P(p)} on both sides` }, { eq: `${Va} = 2(${Vu}${Vt} − ${Vp}) / ${Vt}²`, why: 'multiply by 2, divide by t²' }],
-               sub: `2({${u}}{${t}} − {${p}}) / {${t}}²`, f: v => v[t] === 0 ? div0(t) : 2 * (v[u] * v[t] - v[p]) / (v[t] * v[t]) },
+               sub: `2({${u}}{${t}} − {${p}}) / {${t}}²` },
         [t]: { steps: [{ eq: `½${Va}${Vt}² − ${Vu}${Vt} + ${Vp} = 0`, why: 'move everything to one side: a quadratic in t' },
                        { eq: `${Vt} = [${Vu} ± √(${Vu}² − 2${Va}${Vp})] / ${Va}`, why: 'quadratic formula; keep the first positive time' }],
                sub: `[{${u}} ± √({${u}}² − 2{${a}}{${p}})] / {${a}}`,
-               f: v => firstPositive(0.5 * v[a], -v[u], v[p], 'No positive time works with these values.') },
+               guard: v => Math.abs(v[a]) < 1e-12 ? (v[u] === 0 || v[p] / v[u] <= 0 ? err('No positive time works with these values.') : null) : neverSq(v[u] ** 2 - 2 * v[a] * v[p]),
+               alt: [{ when: v => Math.abs(v[a]) < 1e-12, sub: `{${p}} / {${u}}`, note: `${P(a)} is zero, so it moves steadily: t = ${P(p)} / ${P(u)}.` }],
+               pick: firstPositive('No positive time works with these values.') },
       },
     },
   };
@@ -184,9 +193,9 @@ export const EQS = {
     meaning: 'Weight: gravity pulls straight down with a force proportional to mass.', condition: 'near Earth’s surface',
     calc: 'Newton’s law of gravitation with Earth’s mass and radius rolled into g ≈ 9.81 m/s².',
     solve: {
-      W: { steps: [], sub: '{m}{g}', f: v => v.m * v.g },
-      m: { steps: [{ eq: `${V('m')} = ${V('W')} / ${V('g')}`, why: 'divide both sides by g' }], sub: '{W} / {g}', f: v => v.g === 0 ? div0('g') : v.W / v.g },
-      g: { steps: [{ eq: `${V('g')} = ${V('W')} / ${V('m')}`, why: 'divide both sides by m' }], sub: '{W} / {m}', f: v => v.m === 0 ? div0('m') : v.W / v.m },
+      W: { steps: [], sub: '{m}{g}' },
+      m: { steps: [{ eq: `${V('m')} = ${V('W')} / ${V('g')}`, why: 'divide both sides by g' }], sub: '{W} / {g}' },
+      g: { steps: [{ eq: `${V('g')} = ${V('W')} / ${V('m')}`, why: 'divide both sides by m' }], sub: '{W} / {m}' },
     },
   },
   I1: {
@@ -194,10 +203,10 @@ export const EQS = {
     meaning: 'The part of the weight that pulls the object down the slope.', condition: 'ramp at angle θ',
     calc: 'Tilt the axes to match the ramp. The angle between the weight and the “into the ramp” axis equals the ramp angle θ, so the along-ramp part is W sin θ.',
     solve: {
-      Wpar: { steps: [], sub: '{W} sin {inc}', f: v => v.W * sin(v.inc) },
-      W: { steps: [{ eq: `${V('W')} = ${V('Wpar')} / sin ${V('inc')}`, why: 'divide both sides by sin θ' }], sub: '{Wpar} / sin {inc}', f: v => sin(v.inc) === 0 ? err('sin θ is zero: on flat ground there’s no along-ramp pull.') : v.Wpar / sin(v.inc) },
+      Wpar: { steps: [], sub: '{W} sin {inc}' },
+      W: { steps: [{ eq: `${V('W')} = ${V('Wpar')} / sin ${V('inc')}`, why: 'divide both sides by sin θ' }], sub: '{Wpar} / sin {inc}', guard: v => sin(v.inc) === 0 ? err('sin θ is zero: on flat ground there’s no along-ramp pull.') : null },
       inc: { steps: [{ eq: `sin ${V('inc')} = ${V('Wpar')} / ${V('W')}`, why: 'divide both sides by W' }, { eq: `${V('inc')} = sin⁻¹(${V('Wpar')} / ${V('W')})`, why: 'undo the sine with inverse sine' }],
-             sub: 'sin⁻¹({Wpar} / {W})', f: v => Math.abs(v.Wpar / v.W) > 1 ? err('W∥ can’t be bigger than W: one of them is mistyped.') : r2d(Math.asin(v.Wpar / v.W)) },
+             sub: 'sin⁻¹({Wpar} / {W})', guard: v => Math.abs(v.Wpar / v.W) > 1 ? err('W∥ can’t be bigger than W: one of them is mistyped.') : null },
     },
   },
   I2: {
@@ -205,10 +214,10 @@ export const EQS = {
     meaning: 'The part of the weight that presses the object into the ramp.', condition: 'ramp at angle θ',
     calc: 'Same tilted axes: the into-the-ramp part is the side adjacent to θ, so W cos θ.',
     solve: {
-      Wperp: { steps: [], sub: '{W} cos {inc}', f: v => v.W * cos(v.inc) },
-      W: { steps: [{ eq: `${V('W')} = ${V('Wperp')} / cos ${V('inc')}`, why: 'divide both sides by cos θ' }], sub: '{Wperp} / cos {inc}', f: v => cos(v.inc) === 0 ? err('cos θ is zero: a vertical wall isn’t a ramp.') : v.Wperp / cos(v.inc) },
+      Wperp: { steps: [], sub: '{W} cos {inc}' },
+      W: { steps: [{ eq: `${V('W')} = ${V('Wperp')} / cos ${V('inc')}`, why: 'divide both sides by cos θ' }], sub: '{Wperp} / cos {inc}', guard: v => cos(v.inc) === 0 ? err('cos θ is zero: a vertical wall isn’t a ramp.') : null },
       inc: { steps: [{ eq: `cos ${V('inc')} = ${V('Wperp')} / ${V('W')}`, why: 'divide both sides by W' }, { eq: `${V('inc')} = cos⁻¹(${V('Wperp')} / ${V('W')})`, why: 'undo the cosine with inverse cosine' }],
-             sub: 'cos⁻¹({Wperp} / {W})', f: v => Math.abs(v.Wperp / v.W) > 1 ? err('W⊥ can’t be bigger than W: one of them is mistyped.') : r2d(Math.acos(v.Wperp / v.W)) },
+             sub: 'cos⁻¹({Wperp} / {W})', guard: v => Math.abs(v.Wperp / v.W) > 1 ? err('W⊥ can’t be bigger than W: one of them is mistyped.') : null },
     },
   },
   I3: {
@@ -216,8 +225,8 @@ export const EQS = {
     meaning: 'The ramp pushes back exactly as hard as the object presses in, so nothing moves into the ramp.', condition: 'stays on the surface, no other push into it',
     calc: 'Newton’s second law perpendicular to the ramp: there’s no acceleration that way, so N − W⊥ = 0.',
     solve: {
-      N: { steps: [], sub: '{Wperp}', f: v => v.Wperp },
-      Wperp: { steps: [{ eq: `${V('Wperp')} = ${V('N')}`, why: 'swap sides' }], sub: '{N}', f: v => v.N },
+      N: { steps: [], sub: '{Wperp}' },
+      Wperp: { steps: [{ eq: `${V('Wperp')} = ${V('N')}`, why: 'swap sides' }], sub: '{N}' },
     },
   },
   I4: {
@@ -225,9 +234,9 @@ export const EQS = {
     meaning: 'Sliding friction grows with how hard the surfaces press together.', condition: 'sliding (kinetic friction)', applies: c => c.friction, needs: 'kinetic friction',
     calc: 'An experimental rule (Coulomb’s law of friction), not derived: μk depends on the two surfaces.',
     solve: {
-      f: { steps: [], sub: '{mu}{N}', f: v => v.mu * v.N },
-      mu: { steps: [{ eq: `${V('mu')} = ${V('f')} / ${V('N')}`, why: 'divide both sides by N' }], sub: '{f} / {N}', f: v => v.N === 0 ? div0('N') : v.f / v.N },
-      N: { steps: [{ eq: `${V('N')} = ${V('f')} / ${V('mu')}`, why: 'divide both sides by μk' }], sub: '{f} / {mu}', f: v => v.mu === 0 ? div0('mu') : v.f / v.mu },
+      f: { steps: [], sub: '{mu}{N}' },
+      mu: { steps: [{ eq: `${V('mu')} = ${V('f')} / ${V('N')}`, why: 'divide both sides by N' }], sub: '{f} / {N}' },
+      N: { steps: [{ eq: `${V('N')} = ${V('f')} / ${V('mu')}`, why: 'divide both sides by μk' }], sub: '{f} / {mu}' },
     },
   },
   I5d: {
@@ -235,9 +244,9 @@ export const EQS = {
     meaning: 'Sliding down: gravity’s pull along the slope minus friction holding it back.', condition: 'friction, moving down the slope', applies: c => c.friction && !c.up, needs: 'friction + moving down',
     calc: 'Add the along-ramp forces with + down the slope: W∥ points down (+), friction opposes the motion so it points up (−).',
     solve: {
-      F: { steps: [], sub: '{Wpar} − {f}', f: v => v.Wpar - v.f },
-      Wpar: { steps: [{ eq: `${V('Wpar')} = ${V('F')} + ${V('f')}`, why: 'add f to both sides' }], sub: '{F} + {f}', f: v => v.F + v.f },
-      f: { steps: [{ eq: `${V('f')} = ${V('Wpar')} − ${V('F')}`, why: 'add f, subtract Fnet on both sides' }], sub: '{Wpar} − {F}', f: v => v.Wpar - v.F },
+      F: { steps: [], sub: '{Wpar} − {f}' },
+      Wpar: { steps: [{ eq: `${V('Wpar')} = ${V('F')} + ${V('f')}`, why: 'add f to both sides' }], sub: '{F} + {f}' },
+      f: { steps: [{ eq: `${V('f')} = ${V('Wpar')} − ${V('F')}`, why: 'add f, subtract Fnet on both sides' }], sub: '{Wpar} − {F}' },
     },
   },
   I5u: {
@@ -245,9 +254,9 @@ export const EQS = {
     meaning: 'Sliding up: gravity and friction both point down the slope, so they add.', condition: 'friction, moving up the slope', applies: c => c.friction && c.up, needs: 'friction + moving up',
     calc: 'Moving up the slope, friction opposes the motion, so it points down the slope (+), the same way as W∥.',
     solve: {
-      F: { steps: [], sub: '{Wpar} + {f}', f: v => v.Wpar + v.f },
-      Wpar: { steps: [{ eq: `${V('Wpar')} = ${V('F')} − ${V('f')}`, why: 'subtract f from both sides' }], sub: '{F} − {f}', f: v => v.F - v.f },
-      f: { steps: [{ eq: `${V('f')} = ${V('F')} − ${V('Wpar')}`, why: 'subtract W∥ from both sides' }], sub: '{F} − {Wpar}', f: v => v.F - v.Wpar },
+      F: { steps: [], sub: '{Wpar} + {f}' },
+      Wpar: { steps: [{ eq: `${V('Wpar')} = ${V('F')} − ${V('f')}`, why: 'subtract f from both sides' }], sub: '{F} − {f}' },
+      f: { steps: [{ eq: `${V('f')} = ${V('F')} − ${V('Wpar')}`, why: 'subtract W∥ from both sides' }], sub: '{F} − {Wpar}' },
     },
   },
   I6: {
@@ -255,8 +264,8 @@ export const EQS = {
     meaning: 'No friction: the only force along the slope is gravity’s pull.', condition: 'frictionless', applies: c => !c.friction, needs: 'frictionless',
     calc: 'Along the ramp, N and W⊥ have no component, so the net force is just W∥.',
     solve: {
-      F: { steps: [], sub: '{Wpar}', f: v => v.Wpar },
-      Wpar: { steps: [{ eq: `${V('Wpar')} = ${V('F')}`, why: 'swap sides' }], sub: '{F}', f: v => v.F },
+      F: { steps: [], sub: '{Wpar}' },
+      Wpar: { steps: [{ eq: `${V('Wpar')} = ${V('F')}`, why: 'swap sides' }], sub: '{F}' },
     },
   },
   N1: {
@@ -264,9 +273,9 @@ export const EQS = {
     meaning: 'Newton’s second law: the net force sets the acceleration.', condition: 'net force, constant mass',
     calc: 'F = dp/dt with p = mv and m constant.',
     solve: {
-      F: { steps: [], sub: '{m}{a}', f: v => v.m * v.a },
-      m: { steps: [{ eq: `${V('m')} = ${V('F')} / ${V('a')}`, why: 'divide both sides by a' }], sub: '{F} / {a}', f: v => v.a === 0 ? div0('a') : v.F / v.a },
-      a: { steps: [{ eq: `${V('a')} = ${V('F')} / ${V('m')}`, why: 'divide both sides by m' }], sub: '{F} / {m}', f: v => v.m === 0 ? div0('m') : v.F / v.m },
+      F: { steps: [], sub: '{m}{a}' },
+      m: { steps: [{ eq: `${V('m')} = ${V('F')} / ${V('a')}`, why: 'divide both sides by a' }], sub: '{F} / {a}' },
+      a: { steps: [{ eq: `${V('a')} = ${V('F')} / ${V('m')}`, why: 'divide both sides by m' }], sub: '{F} / {m}' },
     },
   },
   S1: {
@@ -274,10 +283,10 @@ export const EQS = {
     meaning: 'Frictionless ramp: the mass cancels, so every object slides with the same acceleration.', condition: 'frictionless', applies: c => !c.friction, needs: 'frictionless',
     calc: 'Chain F7 → F6 → F2 → F1: ma = W∥ = mg sin θ, and m cancels.',
     solve: {
-      a: { steps: [], sub: '{g} sin {inc}', f: v => v.g * sin(v.inc) },
-      g: { steps: [{ eq: `${V('g')} = ${V('a')} / sin ${V('inc')}`, why: 'divide both sides by sin θ' }], sub: '{a} / sin {inc}', f: v => sin(v.inc) === 0 ? err('sin θ is zero.') : v.a / sin(v.inc) },
+      a: { steps: [], sub: '{g} sin {inc}' },
+      g: { steps: [{ eq: `${V('g')} = ${V('a')} / sin ${V('inc')}`, why: 'divide both sides by sin θ' }], sub: '{a} / sin {inc}', guard: v => sin(v.inc) === 0 ? err('sin θ is zero.') : null },
       inc: { steps: [{ eq: `sin ${V('inc')} = ${V('a')} / ${V('g')}`, why: 'divide both sides by g' }, { eq: `${V('inc')} = sin⁻¹(${V('a')} / ${V('g')})`, why: 'undo the sine' }],
-             sub: 'sin⁻¹({a} / {g})', f: v => Math.abs(v.a / v.g) > 1 ? err('a can’t be bigger than g on a frictionless ramp.') : r2d(Math.asin(v.a / v.g)) },
+             sub: 'sin⁻¹({a} / {g})', guard: v => Math.abs(v.a / v.g) > 1 ? err('a can’t be bigger than g on a frictionless ramp.') : null },
     },
   },
   S2: {
@@ -285,10 +294,10 @@ export const EQS = {
     meaning: 'Sliding down with friction: the mass cancels here too.', condition: 'friction, moving down', applies: c => c.friction && !c.up, needs: 'friction + moving down',
     calc: 'ma = W∥ − f = mg sin θ − μk mg cos θ; divide by m.',
     solve: {
-      a: { steps: [], sub: '{g}(sin {inc} − {mu} cos {inc})', f: v => v.g * (sin(v.inc) - v.mu * cos(v.inc)) },
-      g: { steps: [{ eq: `${V('g')} = ${V('a')} / (sin ${V('inc')} − ${V('mu')} cos ${V('inc')})`, why: 'divide both sides by the bracket' }], sub: '{a} / (sin {inc} − {mu} cos {inc})', f: v => { const b = sin(v.inc) - v.mu * cos(v.inc); return Math.abs(b) < 1e-12 ? err('The bracket is zero: friction exactly balances gravity.') : v.a / b; } },
+      a: { steps: [], sub: '{g}(sin {inc} − {mu} cos {inc})' },
+      g: { steps: [{ eq: `${V('g')} = ${V('a')} / (sin ${V('inc')} − ${V('mu')} cos ${V('inc')})`, why: 'divide both sides by the bracket' }], sub: '{a} / (sin {inc} − {mu} cos {inc})', guard: v => Math.abs(sin(v.inc) - v.mu * cos(v.inc)) < 1e-12 ? err('The bracket is zero: friction exactly balances gravity.') : null },
       mu: { steps: [{ eq: `${V('a')} / ${V('g')} = sin ${V('inc')} − ${V('mu')} cos ${V('inc')}`, why: 'divide both sides by g' }, { eq: `${V('mu')} = (sin ${V('inc')} − ${V('a')} / ${V('g')}) / cos ${V('inc')}`, why: 'move μk cos θ over, then divide by cos θ' }],
-            sub: '(sin {inc} − {a} / {g}) / cos {inc}', f: v => (sin(v.inc) - v.a / v.g) / cos(v.inc) },
+            sub: '(sin {inc} − {a} / {g}) / cos {inc}' },
     },
   },
   S3: {
@@ -296,92 +305,92 @@ export const EQS = {
     meaning: 'Sliding up with friction: gravity and friction both slow it, so the mass cancels and they add.', condition: 'friction, moving up', applies: c => c.friction && c.up, needs: 'friction + moving up',
     calc: 'ma = W∥ + f = mg sin θ + μk mg cos θ; divide by m.',
     solve: {
-      a: { steps: [], sub: '{g}(sin {inc} + {mu} cos {inc})', f: v => v.g * (sin(v.inc) + v.mu * cos(v.inc)) },
-      g: { steps: [{ eq: `${V('g')} = ${V('a')} / (sin ${V('inc')} + ${V('mu')} cos ${V('inc')})`, why: 'divide both sides by the bracket' }], sub: '{a} / (sin {inc} + {mu} cos {inc})', f: v => v.a / (sin(v.inc) + v.mu * cos(v.inc)) },
+      a: { steps: [], sub: '{g}(sin {inc} + {mu} cos {inc})' },
+      g: { steps: [{ eq: `${V('g')} = ${V('a')} / (sin ${V('inc')} + ${V('mu')} cos ${V('inc')})`, why: 'divide both sides by the bracket' }], sub: '{a} / (sin {inc} + {mu} cos {inc})' },
       mu: { steps: [{ eq: `${V('a')} / ${V('g')} = sin ${V('inc')} + ${V('mu')} cos ${V('inc')}`, why: 'divide both sides by g' }, { eq: `${V('mu')} = (${V('a')} / ${V('g')} − sin ${V('inc')}) / cos ${V('inc')}`, why: 'subtract sin θ, then divide by cos θ' }],
-            sub: '({a} / {g} − sin {inc}) / cos {inc}', f: v => (v.a / v.g - sin(v.inc)) / cos(v.inc) },
+            sub: '({a} / {g} − sin {inc}) / cos {inc}' },
     },
   },
 
 
   // ---- tension + pulleys ----
   P1: { label: 'T1', vars: ['W1', 'm1', 'g'], form: `${V('W1')} = ${V('m1')}${V('g')}`, meaning: 'Weight of the block on the table.', condition: 'near Earth’s surface', calc: 'W = mg for block 1.',
-    solve: { W1: { steps: [], sub: '{m1}{g}', f: v => v.m1 * v.g }, m1: { steps: [{ eq: `${V('m1')} = ${V('W1')} / ${V('g')}`, why: 'divide both sides by g' }], sub: '{W1} / {g}', f: v => v.g === 0 ? div0('g') : v.W1 / v.g }, g: { steps: [{ eq: `${V('g')} = ${V('W1')} / ${V('m1')}`, why: 'divide both sides by m₁' }], sub: '{W1} / {m1}', f: v => v.m1 === 0 ? div0('m1') : v.W1 / v.m1 } } },
+    solve: { W1: { steps: [], sub: '{m1}{g}' }, m1: { steps: [{ eq: `${V('m1')} = ${V('W1')} / ${V('g')}`, why: 'divide both sides by g' }], sub: '{W1} / {g}' }, g: { steps: [{ eq: `${V('g')} = ${V('W1')} / ${V('m1')}`, why: 'divide both sides by m₁' }], sub: '{W1} / {m1}' } } },
   P2: { label: 'T2', vars: ['W2', 'm2', 'g'], form: `${V('W2')} = ${V('m2')}${V('g')}`, meaning: 'Weight of the hanging mass.', condition: 'near Earth’s surface', calc: 'W = mg for block 2.',
-    solve: { W2: { steps: [], sub: '{m2}{g}', f: v => v.m2 * v.g }, m2: { steps: [{ eq: `${V('m2')} = ${V('W2')} / ${V('g')}`, why: 'divide both sides by g' }], sub: '{W2} / {g}', f: v => v.g === 0 ? div0('g') : v.W2 / v.g }, g: { steps: [{ eq: `${V('g')} = ${V('W2')} / ${V('m2')}`, why: 'divide both sides by m₂' }], sub: '{W2} / {m2}', f: v => v.m2 === 0 ? div0('m2') : v.W2 / v.m2 } } },
+    solve: { W2: { steps: [], sub: '{m2}{g}' }, m2: { steps: [{ eq: `${V('m2')} = ${V('W2')} / ${V('g')}`, why: 'divide both sides by g' }], sub: '{W2} / {g}' }, g: { steps: [{ eq: `${V('g')} = ${V('W2')} / ${V('m2')}`, why: 'divide both sides by m₂' }], sub: '{W2} / {m2}' } } },
   P3: { label: 'T3', vars: ['N1', 'W1'], form: `${V('N1')} = ${V('W1')}`, meaning: 'The flat table pushes up exactly as hard as the block presses down.', condition: 'flat table, string horizontal', calc: 'Newton’s second law vertically for block 1: no vertical acceleration, so N₁ − W₁ = 0.',
-    solve: { N1: { steps: [], sub: '{W1}', f: v => v.W1 }, W1: { steps: [{ eq: `${V('W1')} = ${V('N1')}`, why: 'swap sides' }], sub: '{N1}', f: v => v.N1 } } },
+    solve: { N1: { steps: [], sub: '{W1}' }, W1: { steps: [{ eq: `${V('W1')} = ${V('N1')}`, why: 'swap sides' }], sub: '{N1}' } } },
   P4: { label: 'T4', vars: ['f', 'mu', 'N1'], form: `${V('f')} = ${V('mu')}${V('N1')}`, meaning: 'Sliding friction on the block, proportional to how hard the table pushes.', condition: 'sliding (kinetic friction)', applies: c => c.friction, needs: 'kinetic friction', calc: 'Coulomb’s law of friction, applied to block 1.',
-    solve: { f: { steps: [], sub: '{mu}{N1}', f: v => v.mu * v.N1 }, mu: { steps: [{ eq: `${V('mu')} = ${V('f')} / ${V('N1')}`, why: 'divide both sides by N₁' }], sub: '{f} / {N1}', f: v => v.N1 === 0 ? div0('N1') : v.f / v.N1 }, N1: { steps: [{ eq: `${V('N1')} = ${V('f')} / ${V('mu')}`, why: 'divide both sides by μk' }], sub: '{f} / {mu}', f: v => v.mu === 0 ? div0('mu') : v.f / v.mu } } },
+    solve: { f: { steps: [], sub: '{mu}{N1}' }, mu: { steps: [{ eq: `${V('mu')} = ${V('f')} / ${V('N1')}`, why: 'divide both sides by N₁' }], sub: '{f} / {N1}' }, N1: { steps: [{ eq: `${V('N1')} = ${V('f')} / ${V('mu')}`, why: 'divide both sides by μk' }], sub: '{f} / {mu}' } } },
   P5: { label: 'T5', vars: ['Tn', 'm1', 'a'], form: `${V('Tn')} = ${V('m1')}${V('a')}`, meaning: 'Block 1: the tension is the only horizontal force, so it alone accelerates the block.', condition: 'frictionless table', applies: c => !c.friction, needs: 'frictionless table', calc: 'Newton’s second law horizontally for block 1 (+ toward the pulley).',
-    solve: { Tn: { steps: [], sub: '{m1}{a}', f: v => v.m1 * v.a }, m1: { steps: [{ eq: `${V('m1')} = ${V('Tn')} / ${V('a')}`, why: 'divide both sides by a' }], sub: '{Tn} / {a}', f: v => v.a === 0 ? div0('a') : v.Tn / v.a }, a: { steps: [{ eq: `${V('a')} = ${V('Tn')} / ${V('m1')}`, why: 'divide both sides by m₁' }], sub: '{Tn} / {m1}', f: v => v.m1 === 0 ? div0('m1') : v.Tn / v.m1 } } },
+    solve: { Tn: { steps: [], sub: '{m1}{a}' }, m1: { steps: [{ eq: `${V('m1')} = ${V('Tn')} / ${V('a')}`, why: 'divide both sides by a' }], sub: '{Tn} / {a}' }, a: { steps: [{ eq: `${V('a')} = ${V('Tn')} / ${V('m1')}`, why: 'divide both sides by m₁' }], sub: '{Tn} / {m1}' } } },
   P5f: { label: 'T5', vars: ['Tn', 'f', 'm1', 'a'], form: `${V('Tn')} − ${V('f')} = ${V('m1')}${V('a')}`, meaning: 'Block 1: the string pulls it forward, friction drags it back.', condition: 'kinetic friction', applies: c => c.friction, needs: 'kinetic friction', calc: 'Newton’s second law horizontally for block 1 (+ toward the pulley): T forward, f backward.',
-    solve: { Tn: { steps: [{ eq: `${V('Tn')} = ${V('m1')}${V('a')} + ${V('f')}`, why: 'add f to both sides' }], sub: '{m1}{a} + {f}', f: v => v.m1 * v.a + v.f },
-      f: { steps: [{ eq: `${V('f')} = ${V('Tn')} − ${V('m1')}${V('a')}`, why: 'add f, subtract m₁a on both sides' }], sub: '{Tn} − {m1}{a}', f: v => v.Tn - v.m1 * v.a },
-      m1: { steps: [{ eq: `${V('m1')} = (${V('Tn')} − ${V('f')}) / ${V('a')}`, why: 'divide both sides by a' }], sub: '({Tn} − {f}) / {a}', f: v => v.a === 0 ? div0('a') : (v.Tn - v.f) / v.a },
-      a: { steps: [{ eq: `${V('a')} = (${V('Tn')} − ${V('f')}) / ${V('m1')}`, why: 'divide both sides by m₁' }], sub: '({Tn} − {f}) / {m1}', f: v => v.m1 === 0 ? div0('m1') : (v.Tn - v.f) / v.m1 } } },
+    solve: { Tn: { steps: [{ eq: `${V('Tn')} = ${V('m1')}${V('a')} + ${V('f')}`, why: 'add f to both sides' }], sub: '{m1}{a} + {f}' },
+      f: { steps: [{ eq: `${V('f')} = ${V('Tn')} − ${V('m1')}${V('a')}`, why: 'add f, subtract m₁a on both sides' }], sub: '{Tn} − {m1}{a}' },
+      m1: { steps: [{ eq: `${V('m1')} = (${V('Tn')} − ${V('f')}) / ${V('a')}`, why: 'divide both sides by a' }], sub: '({Tn} − {f}) / {a}' },
+      a: { steps: [{ eq: `${V('a')} = (${V('Tn')} − ${V('f')}) / ${V('m1')}`, why: 'divide both sides by m₁' }], sub: '({Tn} − {f}) / {m1}' } } },
   P6: { label: 'T6', vars: ['W2', 'Tn', 'm2', 'a'], form: `${V('W2')} − ${V('Tn')} = ${V('m2')}${V('a')}`, meaning: 'Hanging mass: gravity pulls it down, the string holds it up. The difference accelerates it.', condition: 'ideal string and pulley', calc: 'Newton’s second law vertically for block 2 (+ downward): W₂ down, T up.',
-    solve: { W2: { steps: [{ eq: `${V('W2')} = ${V('m2')}${V('a')} + ${V('Tn')}`, why: 'add T to both sides' }], sub: '{m2}{a} + {Tn}', f: v => v.m2 * v.a + v.Tn },
-      Tn: { steps: [{ eq: `${V('Tn')} = ${V('W2')} − ${V('m2')}${V('a')}`, why: 'add T, subtract m₂a on both sides' }], sub: '{W2} − {m2}{a}', f: v => v.W2 - v.m2 * v.a },
-      m2: { steps: [{ eq: `${V('m2')} = (${V('W2')} − ${V('Tn')}) / ${V('a')}`, why: 'divide both sides by a' }], sub: '({W2} − {Tn}) / {a}', f: v => v.a === 0 ? div0('a') : (v.W2 - v.Tn) / v.a },
-      a: { steps: [{ eq: `${V('a')} = (${V('W2')} − ${V('Tn')}) / ${V('m2')}`, why: 'divide both sides by m₂' }], sub: '({W2} − {Tn}) / {m2}', f: v => v.m2 === 0 ? div0('m2') : (v.W2 - v.Tn) / v.m2 } } },
+    solve: { W2: { steps: [{ eq: `${V('W2')} = ${V('m2')}${V('a')} + ${V('Tn')}`, why: 'add T to both sides' }], sub: '{m2}{a} + {Tn}' },
+      Tn: { steps: [{ eq: `${V('Tn')} = ${V('W2')} − ${V('m2')}${V('a')}`, why: 'add T, subtract m₂a on both sides' }], sub: '{W2} − {m2}{a}' },
+      m2: { steps: [{ eq: `${V('m2')} = (${V('W2')} − ${V('Tn')}) / ${V('a')}`, why: 'divide both sides by a' }], sub: '({W2} − {Tn}) / {a}' },
+      a: { steps: [{ eq: `${V('a')} = (${V('W2')} − ${V('Tn')}) / ${V('m2')}`, why: 'divide both sides by m₂' }], sub: '({W2} − {Tn}) / {m2}' } } },
   P7: { label: 'S1', vars: ['a', 'm1', 'm2', 'g'], form: `${V('a')} = ${V('m2')}${V('g')} / (${V('m1')} + ${V('m2')})`, meaning: 'Treat both blocks as one system: only the hanging weight drives the total mass.', condition: 'frictionless table', applies: c => !c.friction, needs: 'frictionless table', calc: 'Add T5 and T6: T cancels, leaving m₂g = (m₁ + m₂)a.',
-    solve: { a: { steps: [], sub: '{m2}{g} / ({m1} + {m2})', f: v => v.m2 * v.g / (v.m1 + v.m2) },
-      m2: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) = ${V('m2')}${V('g')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m2')}(${V('g')} − ${V('a')}) = ${V('a')}${V('m1')}`, why: 'collect the m₂ terms on one side' }, { eq: `${V('m2')} = ${V('a')}${V('m1')} / (${V('g')} − ${V('a')})`, why: 'divide by (g − a)' }], sub: '{a}{m1} / ({g} − {a})', f: v => v.g === v.a ? err('a = g would need an infinite hanging mass.') : v.a * v.m1 / (v.g - v.a) },
-      m1: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) = ${V('m2')}${V('g')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m1')} = ${V('m2')}(${V('g')} − ${V('a')}) / ${V('a')}`, why: 'subtract am₂, then divide by a' }], sub: '{m2}({g} − {a}) / {a}', f: v => v.a === 0 ? div0('a') : v.m2 * (v.g - v.a) / v.a },
-      g: { steps: [{ eq: `${V('g')} = ${V('a')}(${V('m1')} + ${V('m2')}) / ${V('m2')}`, why: 'multiply by (m₁ + m₂), divide by m₂' }], sub: '{a}({m1} + {m2}) / {m2}', f: v => v.m2 === 0 ? div0('m2') : v.a * (v.m1 + v.m2) / v.m2 } } },
+    solve: { a: { steps: [], sub: '{m2}{g} / ({m1} + {m2})' },
+      m2: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) = ${V('m2')}${V('g')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m2')}(${V('g')} − ${V('a')}) = ${V('a')}${V('m1')}`, why: 'collect the m₂ terms on one side' }, { eq: `${V('m2')} = ${V('a')}${V('m1')} / (${V('g')} − ${V('a')})`, why: 'divide by (g − a)' }], sub: '{a}{m1} / ({g} − {a})', guard: v => v.g === v.a ? err('a = g would need an infinite hanging mass.') : null },
+      m1: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) = ${V('m2')}${V('g')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m1')} = ${V('m2')}(${V('g')} − ${V('a')}) / ${V('a')}`, why: 'subtract am₂, then divide by a' }], sub: '{m2}({g} − {a}) / {a}' },
+      g: { steps: [{ eq: `${V('g')} = ${V('a')}(${V('m1')} + ${V('m2')}) / ${V('m2')}`, why: 'multiply by (m₁ + m₂), divide by m₂' }], sub: '{a}({m1} + {m2}) / {m2}' } } },
   P7f: { label: 'S1', vars: ['a', 'm1', 'm2', 'g', 'mu'], form: `${V('a')} = ${V('g')}(${V('m2')} − ${V('mu')}${V('m1')}) / (${V('m1')} + ${V('m2')})`, meaning: 'Whole system: the hanging weight minus the friction on block 1, shared by both masses.', condition: 'kinetic friction', applies: c => c.friction, needs: 'kinetic friction', calc: 'Add T5 and T6 with f = μk m₁g: T cancels, leaving m₂g − μk m₁g = (m₁ + m₂)a.',
-    solve: { a: { steps: [], sub: '{g}({m2} − {mu}{m1}) / ({m1} + {m2})', f: v => { const a = v.g * (v.m2 - v.mu * v.m1) / (v.m1 + v.m2); return a < 0 ? { value: a, note: 'Negative: friction is stronger than the hanging weight. Starting from rest the blocks would not move at all; this only describes blocks already sliding forward and slowing down.' } : a; } },
-      mu: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) / ${V('g')} = ${V('m2')} − ${V('mu')}${V('m1')}`, why: 'multiply by (m₁ + m₂), divide by g' }, { eq: `${V('mu')} = [${V('m2')} − ${V('a')}(${V('m1')} + ${V('m2')}) / ${V('g')}] / ${V('m1')}`, why: 'move μk m₁ over, then divide by m₁' }], sub: '[{m2} − {a}({m1} + {m2}) / {g}] / {m1}', f: v => v.m1 === 0 ? div0('m1') : (v.m2 - v.a * (v.m1 + v.m2) / v.g) / v.m1 },
-      m2: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) = ${V('g')}${V('m2')} − ${V('mu')}${V('g')}${V('m1')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m2')} = ${V('m1')}(${V('a')} + ${V('mu')}${V('g')}) / (${V('g')} − ${V('a')})`, why: 'collect the m₂ terms, then divide by (g − a)' }], sub: '{m1}({a} + {mu}{g}) / ({g} − {a})', f: v => v.g === v.a ? err('a = g is impossible here.') : v.m1 * (v.a + v.mu * v.g) / (v.g - v.a) },
-      m1: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) = ${V('g')}${V('m2')} − ${V('mu')}${V('g')}${V('m1')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m1')} = ${V('m2')}(${V('g')} − ${V('a')}) / (${V('a')} + ${V('mu')}${V('g')})`, why: 'collect the m₁ terms, then divide' }], sub: '{m2}({g} − {a}) / ({a} + {mu}{g})', f: v => (v.a + v.mu * v.g) === 0 ? err('The bracket a + μk g is zero.') : v.m2 * (v.g - v.a) / (v.a + v.mu * v.g) },
-      g: { steps: [{ eq: `${V('g')} = ${V('a')}(${V('m1')} + ${V('m2')}) / (${V('m2')} − ${V('mu')}${V('m1')})`, why: 'multiply by (m₁ + m₂), divide by the bracket' }], sub: '{a}({m1} + {m2}) / ({m2} − {mu}{m1})', f: v => (v.m2 - v.mu * v.m1) === 0 ? err('m₂ − μk m₁ is zero.') : v.a * (v.m1 + v.m2) / (v.m2 - v.mu * v.m1) } } },
+    solve: { a: { steps: [], sub: '{g}({m2} − {mu}{m1}) / ({m1} + {m2})', note: (v, a) => a < 0 ? 'Negative: friction is stronger than the hanging weight. Starting from rest the blocks would not move at all; this only describes blocks already sliding forward and slowing down.' : '' },
+      mu: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) / ${V('g')} = ${V('m2')} − ${V('mu')}${V('m1')}`, why: 'multiply by (m₁ + m₂), divide by g' }, { eq: `${V('mu')} = [${V('m2')} − ${V('a')}(${V('m1')} + ${V('m2')}) / ${V('g')}] / ${V('m1')}`, why: 'move μk m₁ over, then divide by m₁' }], sub: '[{m2} − {a}({m1} + {m2}) / {g}] / {m1}' },
+      m2: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) = ${V('g')}${V('m2')} − ${V('mu')}${V('g')}${V('m1')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m2')} = ${V('m1')}(${V('a')} + ${V('mu')}${V('g')}) / (${V('g')} − ${V('a')})`, why: 'collect the m₂ terms, then divide by (g − a)' }], sub: '{m1}({a} + {mu}{g}) / ({g} − {a})', guard: v => v.g === v.a ? err('a = g is impossible here.') : null },
+      m1: { steps: [{ eq: `${V('a')}(${V('m1')} + ${V('m2')}) = ${V('g')}${V('m2')} − ${V('mu')}${V('g')}${V('m1')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m1')} = ${V('m2')}(${V('g')} − ${V('a')}) / (${V('a')} + ${V('mu')}${V('g')})`, why: 'collect the m₁ terms, then divide' }], sub: '{m2}({g} − {a}) / ({a} + {mu}{g})', guard: v => (v.a + v.mu * v.g) === 0 ? err('The bracket a + μk g is zero.') : null },
+      g: { steps: [{ eq: `${V('g')} = ${V('a')}(${V('m1')} + ${V('m2')}) / (${V('m2')} − ${V('mu')}${V('m1')})`, why: 'multiply by (m₁ + m₂), divide by the bracket' }], sub: '{a}({m1} + {m2}) / ({m2} − {mu}{m1})', guard: v => (v.m2 - v.mu * v.m1) === 0 ? err('m₂ − μk m₁ is zero.') : null } } },
   P8: { label: 'S2', vars: ['Tn', 'm1', 'm2', 'g'], form: `${V('Tn')} = ${V('m1')}${V('m2')}${V('g')} / (${V('m1')} + ${V('m2')})`, meaning: 'Tension straight from the masses: always less than the hanging weight.', condition: 'frictionless table', applies: c => !c.friction, needs: 'frictionless table', calc: 'Put a = m₂g / (m₁ + m₂) into T = m₁a.',
-    solve: { Tn: { steps: [], sub: '{m1}{m2}{g} / ({m1} + {m2})', f: v => v.m1 * v.m2 * v.g / (v.m1 + v.m2) },
-      m1: { steps: [{ eq: `${V('Tn')}(${V('m1')} + ${V('m2')}) = ${V('m1')}${V('m2')}${V('g')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m1')} = ${V('Tn')}${V('m2')} / (${V('m2')}${V('g')} − ${V('Tn')})`, why: 'collect the m₁ terms, then divide' }], sub: '{Tn}{m2} / ({m2}{g} − {Tn})', f: v => (v.m2 * v.g - v.Tn) <= 0 ? err('T can’t be as big as the hanging weight unless m₁ is infinite.') : v.Tn * v.m2 / (v.m2 * v.g - v.Tn) },
-      m2: { steps: [{ eq: `${V('Tn')}(${V('m1')} + ${V('m2')}) = ${V('m1')}${V('m2')}${V('g')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m2')} = ${V('Tn')}${V('m1')} / (${V('m1')}${V('g')} − ${V('Tn')})`, why: 'collect the m₂ terms, then divide' }], sub: '{Tn}{m1} / ({m1}{g} − {Tn})', f: v => (v.m1 * v.g - v.Tn) <= 0 ? err('T can’t be as big as m₁g here.') : v.Tn * v.m1 / (v.m1 * v.g - v.Tn) } } },
+    solve: { Tn: { steps: [], sub: '{m1}{m2}{g} / ({m1} + {m2})' },
+      m1: { steps: [{ eq: `${V('Tn')}(${V('m1')} + ${V('m2')}) = ${V('m1')}${V('m2')}${V('g')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m1')} = ${V('Tn')}${V('m2')} / (${V('m2')}${V('g')} − ${V('Tn')})`, why: 'collect the m₁ terms, then divide' }], sub: '{Tn}{m2} / ({m2}{g} − {Tn})', guard: v => (v.m2 * v.g - v.Tn) <= 0 ? err('T can’t be as big as the hanging weight unless m₁ is infinite.') : null },
+      m2: { steps: [{ eq: `${V('Tn')}(${V('m1')} + ${V('m2')}) = ${V('m1')}${V('m2')}${V('g')}`, why: 'multiply both sides by (m₁ + m₂)' }, { eq: `${V('m2')} = ${V('Tn')}${V('m1')} / (${V('m1')}${V('g')} − ${V('Tn')})`, why: 'collect the m₂ terms, then divide' }], sub: '{Tn}{m1} / ({m1}{g} − {Tn})', guard: v => (v.m1 * v.g - v.Tn) <= 0 ? err('T can’t be as big as m₁g here.') : null } } },
   P8f: { label: 'S2', vars: ['Tn', 'm1', 'm2', 'g', 'mu'], form: `${V('Tn')} = ${V('m1')}${V('m2')}${V('g')}(1 + ${V('mu')}) / (${V('m1')} + ${V('m2')})`, meaning: 'Tension with friction on the table.', condition: 'kinetic friction', applies: c => c.friction, needs: 'kinetic friction', calc: 'Put the system acceleration into T = W₂ − m₂a and simplify.',
-    solve: { Tn: { steps: [], sub: '{m1}{m2}{g}(1 + {mu}) / ({m1} + {m2})', f: v => v.m1 * v.m2 * v.g * (1 + v.mu) / (v.m1 + v.m2) },
-      mu: { steps: [{ eq: `1 + ${V('mu')} = ${V('Tn')}(${V('m1')} + ${V('m2')}) / (${V('m1')}${V('m2')}${V('g')})`, why: 'multiply by (m₁ + m₂), divide by m₁m₂g' }, { eq: `${V('mu')} = ${V('Tn')}(${V('m1')} + ${V('m2')}) / (${V('m1')}${V('m2')}${V('g')}) − 1`, why: 'subtract 1' }], sub: '{Tn}({m1} + {m2}) / ({m1}{m2}{g}) − 1', f: v => v.Tn * (v.m1 + v.m2) / (v.m1 * v.m2 * v.g) - 1 } } },
+    solve: { Tn: { steps: [], sub: '{m1}{m2}{g}(1 + {mu}) / ({m1} + {m2})' },
+      mu: { steps: [{ eq: `1 + ${V('mu')} = ${V('Tn')}(${V('m1')} + ${V('m2')}) / (${V('m1')}${V('m2')}${V('g')})`, why: 'multiply by (m₁ + m₂), divide by m₁m₂g' }, { eq: `${V('mu')} = ${V('Tn')}(${V('m1')} + ${V('m2')}) / (${V('m1')}${V('m2')}${V('g')}) − 1`, why: 'subtract 1' }], sub: '{Tn}({m1} + {m2}) / ({m1}{m2}{g}) − 1' } } },
 
   // ---- rotation: a point at radius r ----
   E6: {
     label: 'R6', vars: ['s', 'r', 'theta'], form: `${V('s')} = ${V('r')}${V('theta')}`,
     meaning: 'Arc length = radius × angle (angle in radians!).', condition: 'θ in radians', calc: 'This is the definition of the radian: θ = s/r.',
     solve: {
-      s: { steps: [], sub: '{r}{theta}', f: v => v.r * v.theta },
-      r: { steps: [{ eq: `${V('r')} = ${V('s')} / ${V('theta')}`, why: 'divide both sides by θ' }], sub: '{s} / {theta}', f: v => v.theta === 0 ? div0('theta') : v.s / v.theta },
-      theta: { steps: [{ eq: `${V('theta')} = ${V('s')} / ${V('r')}`, why: 'divide both sides by r' }], sub: '{s} / {r}', f: v => v.r === 0 ? div0('r') : v.s / v.r },
+      s: { steps: [], sub: '{r}{theta}' },
+      r: { steps: [{ eq: `${V('r')} = ${V('s')} / ${V('theta')}`, why: 'divide both sides by θ' }], sub: '{s} / {theta}' },
+      theta: { steps: [{ eq: `${V('theta')} = ${V('s')} / ${V('r')}`, why: 'divide both sides by r' }], sub: '{s} / {r}' },
     },
   },
   E7: {
     label: 'R7', vars: ['v', 'r', 'w'], form: `${V('v')} = ${V('r')}${V('w')}`,
     meaning: 'Points farther from the axis move faster.', condition: 'ω in rad/s', calc: 'Differentiate s = rθ with r fixed: ds/dt = r dθ/dt.',
     solve: {
-      v: { steps: [], sub: '{r}{w}', f: v => v.r * v.w },
-      r: { steps: [{ eq: `${V('r')} = ${V('v')} / ${V('w')}`, why: 'divide both sides by ω' }], sub: '{v} / {w}', f: v => v.w === 0 ? div0('w') : v.v / v.w },
-      w: { steps: [{ eq: `${V('w')} = ${V('v')} / ${V('r')}`, why: 'divide both sides by r' }], sub: '{v} / {r}', f: v => v.r === 0 ? div0('r') : v.v / v.r },
+      v: { steps: [], sub: '{r}{w}' },
+      r: { steps: [{ eq: `${V('r')} = ${V('v')} / ${V('w')}`, why: 'divide both sides by ω' }], sub: '{v} / {w}' },
+      w: { steps: [{ eq: `${V('w')} = ${V('v')} / ${V('r')}`, why: 'divide both sides by r' }], sub: '{v} / {r}' },
     },
   },
   E8: {
     label: 'R8', vars: ['at', 'r', 'alpha'], form: `${V('at')} = ${V('r')}${V('alpha')}`,
     meaning: 'Speeding up the spin speeds up the point along its path.', condition: 'α in rad/s²', calc: 'Differentiate v = rω: dv/dt = r dω/dt.',
     solve: {
-      at: { steps: [], sub: '{r}{alpha}', f: v => v.r * v.alpha },
-      r: { steps: [{ eq: `${V('r')} = ${V('at')} / ${V('alpha')}`, why: 'divide both sides by α' }], sub: '{at} / {alpha}', f: v => v.alpha === 0 ? div0('alpha') : v.at / v.alpha },
-      alpha: { steps: [{ eq: `${V('alpha')} = ${V('at')} / ${V('r')}`, why: 'divide both sides by r' }], sub: '{at} / {r}', f: v => v.r === 0 ? div0('r') : v.at / v.r },
+      at: { steps: [], sub: '{r}{alpha}' },
+      r: { steps: [{ eq: `${V('r')} = ${V('at')} / ${V('alpha')}`, why: 'divide both sides by α' }], sub: '{at} / {alpha}' },
+      alpha: { steps: [{ eq: `${V('alpha')} = ${V('at')} / ${V('r')}`, why: 'divide both sides by r' }], sub: '{at} / {r}' },
     },
   },
   E9: {
     label: 'R9', vars: ['ac', 'w', 'r'], form: `${V('ac')} = ${V('w')}²${V('r')}`,
     meaning: 'Even at steady spin, the point accelerates toward the centre.', condition: 'ω in rad/s', calc: 'From a = v²/r with v = rω: a = (rω)²/r = ω²r.',
     solve: {
-      ac: { steps: [], sub: '{w}²{r}', f: v => v.w * v.w * v.r },
-      r: { steps: [{ eq: `${V('r')} = ${V('ac')} / ${V('w')}²`, why: 'divide both sides by ω²' }], sub: '{ac} / {w}²', f: v => v.w === 0 ? div0('w') : v.ac / (v.w * v.w) },
+      ac: { steps: [], sub: '{w}²{r}' },
+      r: { steps: [{ eq: `${V('r')} = ${V('ac')} / ${V('w')}²`, why: 'divide both sides by ω²' }], sub: '{ac} / {w}²' },
       w: { steps: [{ eq: `${V('w')}² = ${V('ac')} / ${V('r')}`, why: 'divide both sides by r' }, { eq: `${V('w')} = ±√(${V('ac')} / ${V('r')})`, why: 'take the square root; a꜀ only tells you how fast it spins, not which way' }],
-           sub: '√({ac} / {r})', f: v => { if (v.r === 0) return div0('r'); if (v.ac / v.r < 0) return err('Can’t take the square root of a negative number.');
-             const mag = Math.sqrt(v.ac / v.r);
-             return { value: mag, note: `The root gives ±${fmt(mag)}. Centripetal acceleration points to the centre whichever way the wheel turns, so it can’t tell you the direction. The positive root (counterclockwise) is kept. If it spins clockwise, ω is the negative of this.` }; } },
+           sub: '±√({ac} / {r})',
+           pick: (v, cands) => { const mag = Math.abs(cands[0]);
+             return { branch: 1, note: `The root gives ±${fmt(mag)}. Centripetal acceleration points to the centre whichever way the wheel turns, so it can’t tell you the direction. The positive root (counterclockwise) is kept. If it spins clockwise, ω is the negative of this.` }; } },
     },
   },
 };
@@ -499,4 +508,58 @@ export function fmt(x){
   const a = Math.abs(x);
   if (a >= 1e5 || a < 1e-3) return x.toExponential(3).replace(/\.?0+e/, 'e').replace('e+', '×10^').replace('e-', '×10^-');
   return String(+x.toPrecision(4));
+}
+
+// ---------- units, sample values and print order (Phase A: symbolic core) ----------
+// SI dimension of every quantity, from its unit. Angles are dimensionless.
+export const DIMS = Object.fromEntries(Object.entries(VARS).map(([id, d]) => [id, parseUnit(d.unit)]));
+// A typical size for each quantity. A symbol given without a number uses it to pick roots and signs
+// (and to draw the diagram); the answer itself stays symbolic.
+export const SAMPLE = {
+  dx: 4, v0: 3, vf: 5, a: 2, t: 2, m: 3, g: 9.81, inc: 30, W: 29.4, Wpar: 14.7, Wperp: 25.5, N: 25.5, f: 5, mu: 0.15, F: 10,
+  m1: 4, m2: 2, W1: 39.2, W2: 19.6, N1: 39.2, Tn: 12,
+  theta: 8, w0: 2, w: 6, alpha: 1.5, r: 0.5, s: 4, v: 3, at: 0.75, ac: 18,
+};
+// Order symbols are written in a product: coefficient-like first (μk m g), then the rest.
+export const PRINT_ORDER = ['mu', 'r', 'm', 'm1', 'm2', 'g', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'f', 'F', 'Tn', 'inc',
+  'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'v', 'a', 'alpha', 'at', 'ac', 't'];
+
+// ---------- every solver's numbers come from its `sub` template ----------
+// A solver is { steps, sub, guard?, pick?, alt?, note? }:
+//   sub     the plug-in template; parsed once, it gives both the numeric and the symbolic answer
+//   guard   v → error or null: a physics-specific message before the generic “… is zero” ones
+//   pick    for templates with ±: (v, [plus, minus]) → { branch: ±1, note } or an error
+//   alt     [{ when(v), sub, note }]: a different template for a special case (a = 0 in a quadratic)
+//   note    (v, value) → string shown under the answer
+// sol.f(v) returns { value, note, branch, tree } or { error }.
+const NAME = (id) => VARS[id] ? VARS[id].plain : id;
+export function runSolver(sol, v){
+  if (sol.guard){ const g = sol.guard(v); if (g) return g; }
+  const alt = sol.alt && sol.alt.find(x => x.when(v));
+  const tree = alt ? alt.tree : sol.tree;
+  try {
+    let value, branch = 1, note = alt ? alt.note : '';
+    if (hasPM(tree)){
+      const cands = [1, -1].map(sg => { try { return evalNum(tree, v, sg, NAME); } catch (e){ if (e instanceof MathError) return NaN; throw e; } });
+      const p = sol.pick ? sol.pick(v, cands) : { branch: 1 };
+      if (p.error) return p;
+      branch = p.branch; note = p.note || note;
+      value = evalNum(tree, v, branch, NAME);
+    } else value = evalNum(tree, v, 1, NAME);
+    if (sol.note){ const n = sol.note(v, value); if (n) note = n; }
+    return { value, note, branch, tree };
+  } catch (e){ if (e instanceof MathError) return { error: e.message }; throw e; }
+}
+for (const [id, eq] of Object.entries(EQS)){
+  for (const [x, sol] of Object.entries(eq.solve)){
+    sol.tree = parse(sol.sub);
+    (sol.alt || []).forEach(a => { a.tree = parse(a.sub); });
+    // units: every term of the template must agree, and the result must have the unit of x
+    for (const t of [sol.tree, ...(sol.alt || []).map(a => a.tree)]){
+      const d = dimOf(t, DIMS);
+      if (!dimEq(d, DIMS[x])) throw new Error(`${id} → ${x}: template gives ${dimStr(d)}, want ${dimStr(DIMS[x])}`);
+    }
+    sol.unitText = dimStr(DIMS[x]);
+    sol.f = (v) => runSolver(sol, v);
+  }
 }
