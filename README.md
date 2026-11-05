@@ -9,6 +9,8 @@ How it works: you set up your own problem.
 4. Add the target(s) the question asks for.
 5. Solve glowing equations on your sheet; each answer can unlock the next.
 
+Givens can be numbers or **symbols only** (m, θ, μk, g…). With symbols you get the answer in symbols, simplified (a = g(sin θ − μk cos θ)), and the lab checks it against the step-by-step numbers at random values.
+
 Units so far: Inclines & Newton’s laws, Tension & pulleys (block on a table + hanging mass, with or without friction), Rotation kinematics. The 📚 practice bank loads problem text only; “Check my setup” grades your givens, conditions and targets.
 
 ## Run it
@@ -17,6 +19,7 @@ Plain HTML and JavaScript, no build step. Serve the folder (for example `python3
 ## Files
 - `index.html`: layout and styles
 - `js/data.js`: variables, equations and hand-written solving steps
+- `js/expr.js`: expression engine (symbolic answers, numeric checks, units)
 - `js/app.js`: path finding, solving, diagram, graphs, effects
 - `js/sprites.js`: original pixel-art gags
 - `sw.js`, `manifest.webmanifest`, `icons/`: installable offline app

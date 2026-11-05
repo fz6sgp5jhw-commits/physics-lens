@@ -49,7 +49,8 @@ export async function loadPractice(page, i){
 
 // Add a given through the quantity palette + editor, like a student would.
 // dir: 0 = first direction word (+), 1 = second (−).
-export async function addGiven(page, id, mag, unit, dir = 0){
+// With { symbol: true } the given is entered as a symbol (no number), using the editor's kind switch.
+export async function addGiven(page, id, mag, unit, dir = 0, { symbol = false } = {}){
   await page.evaluate(async ({ id }) => {
     const { VARS, CHAPTERS } = await import('./js/data.js');
     const ch = CHAPTERS[window.__rl.ch];
@@ -58,6 +59,12 @@ export async function addGiven(page, id, mag, unit, dir = 0){
     if (!b) throw new Error(`no palette button for ${id}`);
     b.click();
   }, { id });
+  if (symbol){
+    await page.click('#editorSlot [data-kind="symbol"]');
+    if (await page.locator(`#editorSlot [data-dir="${dir}"]`).count()) await page.click(`#editorSlot [data-dir="${dir}"]`);
+    await page.click('#edSave');
+    return;
+  }
   if (await page.locator(`#editorSlot [data-dir="${dir}"]`).count()) await page.click(`#editorSlot [data-dir="${dir}"]`);
   await page.fill('#edVal', String(mag));
   await page.selectOption('#edUnit', unit);
@@ -90,17 +97,19 @@ export const HIDDEN = {
 
 // Apply an answer key the way a student would: zero / g givens via their hidden-given condition,
 // everything else from the palette. `skip` / `flip` / `condOverride` / `skipTargets` let tests break it on purpose.
-export async function applyKey(page, p, { skip = [], flip = [], condOverride = {}, skipTargets = [] } = {}){
+// With { symbols: true } every stated given is entered as a symbol, including g ("On Earth" is turned off).
+export async function applyKey(page, p, { skip = [], flip = [], condOverride = {}, skipTargets = [], symbols = false } = {}){
   const hidden = HIDDEN[p.ch];
   const viaCond = new Set();
   // conditions first: some quantities (r for a point on the rim) only appear once their condition is on
   for (const [k, v] of Object.entries({ ...p.key.cond, ...condOverride })) await setCondition(page, k, v);
+  if (symbols && hidden.g) await setCondition(page, 'earth', false); // g becomes a symbol, so it must be in the palette
   for (const [id, [mag, unit, dir]] of Object.entries(p.key.givens)){
     if (skip.includes(id)) continue;
     const c = hidden[id];
-    const isHidden = c && (id === 'g' ? mag === 9.81 : mag === 0);
+    const isHidden = c && (id === 'g' ? mag === 9.81 && !symbols : mag === 0);
     if (isHidden){ viaCond.add(c); continue; }
-    await addGiven(page, id, mag, unit, flip.includes(id) ? 1 - (dir || 0) : (dir || 0));
+    await addGiven(page, id, mag, unit, flip.includes(id) ? 1 - (dir || 0) : (dir || 0), { symbol: symbols });
   }
   // hidden givens that the key doesn't use must be off (earth defaults on in incline/pulley)
   for (const c of new Set(Object.values(hidden))) await setCondition(page, c, viaCond.has(c));

@@ -16,7 +16,8 @@ Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it th
 
 ## Files
 - `index.html`: layout and all CSS (retro 90s desktop theme)
-- `js/data.js`: physics content: `VARS`, `EQS`, `CHAPTERS`, `PRACTICE`, `fmt`, `posRoots`, and the `kinematics()` builder
+- `js/data.js`: physics content: `VARS`, `EQS`, `CHAPTERS`, `PRACTICE`, `fmt`, `posRoots`, the `kinematics()` builder, and `DIMS`, `SAMPLE`, `PRINT_ORDER`
+- `js/expr.js`: expression engine: parses `sub` templates, evaluates them with numbers, simplifies them with symbols (canonical rational form), prints them, checks units
 - `js/app.js`: state, rendering, path finding, solving, diagrams, graphs, practice bank, setup checker, effects
 - `js/sprites.js`: original pixel-art gags drawn procedurally as SVG
 - `sw.js`, `manifest.webmanifest`, `icons/`: installable offline app
@@ -35,13 +36,18 @@ Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it th
 - Effects: spherical-cow mascot, gags, SOLVED burst, 90s error dialogs. **Calm mode** must hide all of them.
 
 ## Conventions
-- **Math is computed by code, never guessed.** Every solver is written by hand per equation and variable (`EQS[id].solve[var] = { steps, sub, f }`). `steps` are the isolation steps with a plain-English `why`; `sub` is the plug-in template with `{var}` slots; `f` returns a number, `{ value, note }` or `{ error }`.
+- **Math is computed by code, never guessed.** Every solver is written by hand per equation and variable: `EQS[id].solve[var] = { steps, sub, guard?, pick?, alt?, note? }`. `steps` are the isolation steps with a plain-English `why`. `sub` is the plug-in template with `{var}` slots and is the **single source** of the answer: `expr.js` evaluates it for numbers and simplifies it for symbols. Don't write arithmetic anywhere else.
+  - `guard(v)` → a physics-specific `err(...)` or null (generic "… is zero" and "square root of a negative" messages come from the engine).
+  - `pick(v, [plus, minus])` → `{ branch: ±1, note }` for templates with `±`; `alt: [{ when, sub, note }]` for special cases (a = 0 in a quadratic); `note(v, value)` for a remark under the answer.
+  - `sol.f(v)` is derived at load time and returns `{ value, note, branch, tree }` or `{ error }`. Loading `data.js` throws if any template's units don't match the variable it solves for.
+- Template syntax: `{id}`, numbers, `½`, `+ − ±`, `/`, implicit multiplication (left to right), `²` `³`, `√(…)`, `sin cos tan` and `sin⁻¹ cos⁻¹` (angles in degrees, like `inc`), `(…)` and `[…]`.
+- Symbols as givens: a symbol stands for a positive size; the direction toggle carries the sign. It still has a typical value (`SAMPLE`) used only to choose roots and signs and to draw the diagram. Symbolic answers show "PUT IN WHAT YOU KNOW", "SIMPLIFY" and "CHECK WITH NUMBERS" (the whole path re-run with numbers at random values, compared with the simplified answer).
 - Sign conventions are explicit per unit (`CHAPTERS[x].axis`, `dirs`). Inclines: + is down the slope. Pulleys: + is forward (m₂ falls). Rotation: + is counterclockwise.
 - Square roots and quadratics pick a root deliberately and explain it in `note` (first positive time; velocity sign from the direction of motion; conditions can supply the initial-velocity sign via `__u0sign`).
 - Unit-specific wording uses `nm(id)` and `dr(id)` in app.js (names and direction words can be overridden per chapter). Don't read `VARS[id].name` directly in the UI.
 - Text style in the UI: plain, short, second person; error dialogs are playful but always explain the physics.
 - Art: original pixel art only; no copyrighted characters, no real people.
-- When you change any cached file, **bump the cache name in `sw.js`** (currently `rotation-lab-v5`) or installed copies won't update.
+- When you change any cached file, **bump the cache name in `sw.js`** (currently `rotation-lab-v6`) or installed copies won't update.
 
 ## Tests (set these up first, run after every change)
 1. **Solver round-trips:** for consistent states (several per unit, including negative directions and friction), remove each variable and check every solver recovers it (relative error < 1e-6). Current status: incline 164/164, pulley 176/176, rotation all pass. The only known "mismatches" are genuinely ambiguous cases (a height passed twice), which must be flagged in `note`.
@@ -51,7 +57,9 @@ Plain HTML + ES modules, **no build step, no framework, no bundler**. Keep it th
    - Rotation: t = 5 s; θ = 10 rad; v = 6 m/s
 3. **Setup checker negative test:** a wrong direction, a missing hidden given, a wrong condition and a missing target must each be reported.
 4. **Browser smoke test:** page loads with no console errors; calm mode hides gags; diagram hotspots respond.
-Use headless Chrome (Playwright) for 2–4. The app exposes its state as `window.__rl` for tests.
+5. **Expression engine** (`tests/expr.test.js`): simplifier cases, units of every template, and every template simplified with symbols = evaluated with numbers at random values.
+6. **Phase A gate** (`tests/symbolic.test.js`): all 13 practice problems set up with symbols (g too), solved with Show me, evaluated at the problem's numbers; classic forms checked (a = g(sin θ − μk cos θ), T = m₂(g − a), t = √(2Δx / (g(sin θ − μk cos θ))), …).
+Run everything with `npm test` (Node's test runner; `playwright-core` drives the installed Google Chrome for 2–4 and 6). The app exposes its state as `window.__rl` for tests.
 
 ## The plan: next version (see the design doc for details)
 Core rule: **every diagram the student builds produces an equation** (free-body diagram → ΣF = ma; motion ladder → v = dx/dt, a = dv/dt; energy bar chart → before + work = after; momentum diagram → p before = p after).
@@ -60,7 +68,7 @@ Build in phases. A phase is done only when its gate test passes and all earlier 
 
 | Phase | Changes (numbers refer to the design doc's change table) | Gate test |
 |---|---|---|
-| A. Symbolic core | 1 expression engine + simplifier (sin/cos/tan of an angle as atoms; cancel factors; sin/cos → tan), 2 units on every quantity and coefficient, 4 symbols as givens. Make each equation's `sub` template the single source for both symbolic and numeric answers. Add a "check with numbers" (random-value) comparison. | All 13 practice problems solve with symbols and match their numeric answers |
+| A. Symbolic core ✓ (gate passes) | 1 expression engine + simplifier (sin/cos/tan of an angle as atoms; cancel factors; sin/cos → tan), 2 units on every quantity and coefficient, 4 symbols as givens. Make each equation's `sub` template the single source for both symbolic and numeric answers. Add a "check with numbers" (random-value) comparison. | All 13 practice problems solve with symbols and match their numeric answers |
 | B. Motion ladder | 3 polynomials in t with symbolic coefficients: d/dt, ∫dt with a start value, evaluate, solve linear/quadratic in t (first positive root); 5 "acceleration varies with time" condition (greys out constant-a equations); 10 function-of-t and "time when …" targets | Motor shaft: θ(t) = 250t − 20.3t² − 1.44t³ gives ω(t) = 250 − 40.6t − 4.32t² and ω = 0 at t = 4.24 s (reject −13.6 s) |
 | C. Build canvas + free-body diagrams | 6 snapping shape palette (ramp, block, ball, wheel, pulley, string, floor) with handles and named properties; existing diagrams become templates. 8 free-body builder: arrows snapped to named directions, chosen axes, component table, ΣF equations onto the sheet, checker (gravity, normal at contacts, friction only if present, third-law pairs). 11 general system detection with symbolic add/substitute. 13 sample-value sliders for replay. | Ramp pushed by F = kt (frictionless, angle θ, from rest): a = (k cosθ/m)t − g sinθ; a = 0 at t* = mg tanθ/k; v(t) = (k cosθ/2m)t² − g sinθ·t (still sliding down at t*, stops at 2t*); N = mg cosθ + kt sinθ |
 | D. Scenarios + what matters | 4 scenario-table givens, 10 ranking targets, 12 what-matters panel, limiting cases, per-scenario assumption checks | Two touching blocks pushed by F, same μk: P = F·m_B/(m_A + m_B), μk and g flagged as not mattering; ranking 4 > 2 > 3 > 1 (9, 8, 6, 4 N) for scenarios (m_A, m_B, F, μk) = (2,1,12,0.1), (1,2,12,0.1), (2,2,12,0.3), (1,1,18,0.2); scenario 3 flagged as barely sliding |

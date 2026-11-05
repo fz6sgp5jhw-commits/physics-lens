@@ -1,11 +1,15 @@
-import { VARS, EQS, CHAPTERS, PRACTICE, V, fmt } from './data.js';
+import { VARS, EQS, CHAPTERS, PRACTICE, V, fmt, SAMPLE, PRINT_ORDER } from './data.js';
+import * as X from './expr.js';
 import * as SP from './sprites.js';
 
 const $ = (id) => document.getElementById(id);
 const S = window.__rl = {
   ch: 'incline', cond: {}, condOk: false, givens: {}, found: {}, targets: [], sheet: [], path: [],
   bank: null, editing: null, focus: [], hot: [], hover: null, busy: false, sound: false, anim: false, inspectName: null, lastStep: 0,
+  // how symbolic answers are printed (also used by the tests)
+  printOpts: { plain: (id) => VARS[id].plain, html: (id) => V(id), order: PRINT_ORDER, spaced: (id) => /[A-Za-zα-ω]{2,}/.test(VARS[id].plain), fmt },
 };
+X.setSamples(SAMPLE);
 
 // ---------- state helpers ----------
 const chapter = () => CHAPTERS[S.ch];
@@ -30,6 +34,23 @@ const dr = (id) => (chapter().dirs && chapter().dirs[id]) || VARS[id].dir;
 const unitOf = (id) => VARS[id].unit;
 const calm = () => document.body.classList.contains('calm');
 const userGivens = () => Object.values(S.givens).filter(g => g.from === 'you').length;
+// ---------- symbols ----------
+// A symbol given has no number: it stands for the size, and the direction toggle carries the sign.
+// Internally it still gets a typical value (SAMPLE) so roots, signs and the diagram can be chosen.
+const isSymGiven = (id) => S.givens[id] && S.givens[id].kind === 'symbol';
+const anySym = () => Object.values(S.givens).some(g => g.kind === 'symbol');
+const exprOf = (id) => {
+  const g = S.givens[id];
+  if (g) return g.kind === 'symbol' ? X.scale(X.symbol(id), g.dir ? -1 : 1) : X.number(g.val);
+  const f = S.found[id]; return f.expr || X.number(f.val);
+};
+const isSymbolic = (id) => isSymGiven(id) || !!(S.found[id] && S.found[id].expr && !X.isNumeric(S.found[id].expr));
+// a known's value for display: a number with its unit, or its symbolic form
+const showVal = (id) => {
+  if (isSymGiven(id)) return (S.givens[id].dir ? '−' : '') + VARS[id].sym;
+  if (isSymbolic(id)) return X.toHTML(S.found[id].expr, S.printOpts);
+  return `${fmt(val(id))} ${unitOf(id)}`;
+};
 const letter = (i) => '(' + 'abcdefgh'[i] + ')';
 
 function shortest(eqList, from, target){
@@ -134,6 +155,7 @@ function renderUnit(){
 function describe(id, g){
   const d = VARS[id];
   const dirTxt = dr(id) ? ` ${dr(id)[g.dir]} <span class="small muted">(${g.dir ? '−' : '+'})</span>` : '';
+  if (g.kind === 'symbol') return `<span class="small muted">symbol, no number</span>${dirTxt}`;
   return `${fmt(g.mag)} ${g.unit === 'no unit' ? '' : g.unit}${dirTxt}`;
 }
 function renderKnowns(){
@@ -144,9 +166,9 @@ function renderKnowns(){
     const g = S.givens[id], f = S.found[id];
     const row = document.createElement('div'); row.className = 'known ' + (f ? 'found' : g.from === 'condition' ? 'cond' : ''); row.dataset.v = id;
     let txt, sub, act = '';
-    if (f){ txt = `${fmt(f.val)} ${unitOf(id)}`; sub = `found in step ${f.step}`; }
+    if (f){ txt = showVal(id); sub = `found in step ${f.step}`; }
     else { txt = describe(id, g); sub = g.from === 'condition' ? `from condition: ${g.why}` : nm(id); act = g.from === 'you' ? `<button data-edit="${id}" title="Edit">✎</button><button data-del="${id}" title="Remove">×</button>` : ''; }
-    row.innerHTML = `<div class="vsym">${VARS[id].sym}</div><div><div class="kv">${VARS[id].sym} = ${txt}</div><div class="kd">${sub}</div></div><div class="kact">${act}</div>`;
+    row.innerHTML = `<div class="vsym">${VARS[id].sym}</div><div><div class="kv">${VARS[id].sym}${g && g.kind === 'symbol' ? ':' : ' ='} ${txt}</div><div class="kd">${sub}</div></div><div class="kact">${act}</div>`;
     row.addEventListener('mouseenter', () => setHover(id)); row.addEventListener('mouseleave', () => setHover(null));
     box.appendChild(row);
   }
@@ -160,18 +182,30 @@ function renderKnowns(){
   }
   renderEditor();
 }
-function openEditor(id){ if (S.busy) return; const g = S.givens[id]; S.editing = { id, mag: g ? g.mag : '', unit: g ? g.unit : (Object.keys(VARS[id].units)[0]), dir: g ? g.dir : 0 }; renderEditor(); setTimeout(() => $('edVal')?.focus(), 0); }
+function openEditor(id){ if (S.busy) return; const g = S.givens[id]; S.editing = { id, kind: g && g.kind === 'symbol' ? 'symbol' : 'value', mag: g && g.mag !== null ? g.mag : '', unit: g ? g.unit : (Object.keys(VARS[id].units)[0]), dir: g ? g.dir : 0 }; renderEditor(); setTimeout(() => $('edVal')?.focus(), 0); }
 function renderEditor(){
   const slot = $('editorSlot');
   if (!S.editing){ slot.innerHTML = ''; return; }
-  const { id, mag, unit, dir } = S.editing, d = VARS[id];
+  const { id, mag, unit, dir, kind } = S.editing, d = VARS[id];
   slot.innerHTML = `<div class="editor"><div><b>${d.sym}</b>: ${nm(id)}</div>
-    <div class="erow"><input id="edVal" type="text" inputmode="decimal" value="${mag}" placeholder="size"><select id="edUnit">${Object.keys(d.units).map(u => `<option ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>
+    <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button></div>
+    ${kind === 'symbol'
+      ? `<div class="erow small">No number: you’ll get the answer in symbols, with <b>${d.sym}</b> in it. Its unit is ${d.unit || 'none'}.</div>`
+      : `<div class="erow"><input id="edVal" type="text" inputmode="decimal" value="${mag}" placeholder="size"><select id="edUnit">${Object.keys(d.units).map(u => `<option ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`}
     ${dr(id) ? `<div class="erow dirs">Direction: ${dr(id).map((w, i) => `<button data-dir="${i}" aria-pressed="${i === dir}">${w} (${i ? '−' : '+'})</button>`).join('')}</div>` : ''}
     <div class="erow"><button class="go" id="edSave">Add known</button><button id="edCancel">Cancel</button>${S.targets.includes(id) ? '<span class="small" style="color:#a00">This is one of your targets: adding it as a known removes it.</span>' : ''}</div></div>`;
-  slot.querySelectorAll('[data-dir]').forEach(b => b.onclick = () => { S.editing.mag = $('edVal').value; S.editing.unit = $('edUnit').value; S.editing.dir = +b.dataset.dir; renderEditor(); });
+  const keep = () => { if ($('edVal')){ S.editing.mag = $('edVal').value; S.editing.unit = $('edUnit').value; } };
+  slot.querySelectorAll('[data-dir]').forEach(b => b.onclick = () => { keep(); S.editing.dir = +b.dataset.dir; renderEditor(); });
+  slot.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { keep(); S.editing.kind = b.dataset.kind; renderEditor(); });
   $('edCancel').onclick = () => { S.editing = null; renderEditor(); };
   const save = () => {
+    if (S.editing.kind === 'symbol'){
+      const dirI = dr(id) ? S.editing.dir : 0;
+      S.givens[id] = { from: 'you', kind: 'symbol', mag: null, unit: d.unit, dir: dirI, val: (dirI ? -1 : 1) * SAMPLE[id] };
+      S.targets = S.targets.filter(t => t !== id);
+      S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
+      return;
+    }
     const txt = $('edVal').value.trim().replace(',', '.'), x = Number(txt);
     if (txt === '' || !isFinite(x)){ dialog('Not a number', `<b>SYNTAX ERROR</b>Type the size as a number, like <b>12</b> or <b>2.5e3</b>. Use the direction buttons for which way it points.`); return; }
     let dirI = S.editing.dir;
@@ -183,7 +217,7 @@ function renderEditor(){
     S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
   };
   $('edSave').onclick = save;
-  $('edVal').addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+  $('edVal')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
 }
 
 // ---------- 2. conditions ----------
@@ -271,7 +305,7 @@ function gather(e){
 function renderTargets(){
   const box = $('targets');
   const opts = chVars().filter(id => !known(id) && !S.targets.includes(id));
-  box.innerHTML = `<span class="small"><b>🎯 The question asks for:</b></span>` + S.targets.map((t, i) => `<span class="tchip ${known(t) ? 'done' : t === curTarget() ? 'current' : ''}">${letter(i)} ${VARS[t].sym}${known(t) ? ` = ${fmt(val(t))} ${unitOf(t)}` : ''}<button data-rmt="${t}" title="Remove target">×</button></span>`).join('')
+  box.innerHTML = `<span class="small"><b>🎯 The question asks for:</b></span>` + S.targets.map((t, i) => `<span class="tchip ${known(t) ? 'done' : t === curTarget() ? 'current' : ''}">${letter(i)} ${VARS[t].sym}${known(t) ? ` = ${showVal(t)}` : ''}<button data-rmt="${t}" title="Remove target">×</button></span>`).join('')
     + `<select id="addTarget"><option value="">+ add a target…</option>${opts.map(id => `<option value="${id}">${VARS[id].plain}: ${nm(id)}</option>`).join('')}</select>`;
   box.querySelectorAll('[data-rmt]').forEach(b => b.onclick = () => { S.targets = S.targets.filter(t => t !== b.dataset.rmt); renderAll(false); });
   $('addTarget').onchange = (e) => { const id = e.target.value; if (!id) return; addTarget(id); };
@@ -357,12 +391,49 @@ function extras(id, x){
   if (id === 'theta') return ` <span class="small muted">= ${fmt(x / (2 * Math.PI))} rev</span>`;
   return '';
 }
+// symbols and numbers put into a template, for the "put in what you know" line
+const plugSym = (sub) => sub.replace(/\{(\w+)\}/g, (_, id) => {
+  if (isSymGiven(id)) return S.givens[id].dir ? `(−${V(id)})` : V(id);
+  if (isSymbolic(id)) return `(${X.toHTML(S.found[id].expr, S.printOpts)})`;
+  return id === 'inc' ? `<span class="num">${fmt(val(id))}°</span>` : `<span class="num">(${fmt(val(id))}${unitOf(id) ? ' ' + unitOf(id) : ''})</span>`;
+});
+// random values for the symbols, near their typical sizes
+function randomSymbols(ids){
+  const o = {};
+  for (const id of ids) o[id] = id === 'inc' ? 15 + 50 * Math.random() : SAMPLE[id] * (0.6 + 0.8 * Math.random());
+  return o;
+}
+// Re-run the whole path with plain numbers at the random values (templates only, no simplifier)
+// and compare with the simplified symbolic answer at the same values.
+function checkWithNumbers(R, tree, branch){
+  const syms = Object.keys(S.givens).filter(isSymGiven);
+  for (let tries = 0; tries < 6; tries++){
+    const rnd = randomSymbols(syms);
+    try {
+      const v = {};
+      for (const [id, g] of Object.entries(S.givens)) v[id] = g.kind === 'symbol' ? (g.dir ? -1 : 1) * rnd[id] : g.val;
+      for (const p of S.path) v[p.v] = X.evalNum(p.tree, v, p.branch);
+      const stepwise = X.evalNum(tree, v, branch), simplified = X.evalRat(R, rnd);
+      if (!isFinite(stepwise) || !isFinite(simplified)) continue;
+      const ok = Math.abs(stepwise - simplified) <= 1e-6 * Math.max(1, Math.abs(stepwise));
+      return { ok, rnd, stepwise, simplified };
+    } catch (e){ if (!(e instanceof X.MathError)) throw e; }
+  }
+  return null;
+}
 async function solve(eqId, target){
   const eq = EQS[eqId], sol = eq.solve[target], v = vals();
   let res = sol.f(v); if (typeof res === 'number') res = { value: res };
   if (res.error){ dialog('Math says no', `<b>CAN’T SOLVE THAT</b>${res.error}`); return; }
-  if (target === 't' && res.value < 0){ dialog('Time travel detected', `<b>NEGATIVE TIME!</b>That gives t = ${fmt(res.value)} s: it would have had to happen before the clock started. Check the directions of your givens.`); return; }
-  if (['m', 'W', 'N', 'mu', 'f', 'g'].includes(target) && res.value < 0){ dialog('Impossible value', `<b>NEGATIVE ${plain(target).toUpperCase()}?!</b>That gives ${plain(target)} = ${fmt(res.value)}, but it’s a size and can’t be negative. Check the directions and the conditions (is friction really slowing it this way?).`); return; }
+  // symbolic answer: the same template, with symbols and found expressions put in, then simplified
+  let R = null;
+  if (anySym()){
+    try { const env = {}; for (const x of eq.vars) if (known(x)) env[x] = exprOf(x); R = X.toRat(res.tree, env, res.branch); }
+    catch (e){ if (!(e instanceof X.MathError)) throw e; dialog('Math says no', `<b>CAN’T SOLVE THAT</b>${e.message}`); return; }
+  }
+  const symb = R && !X.isNumeric(R);
+  if (!symb && target === 't' && res.value < 0){ dialog('Time travel detected', `<b>NEGATIVE TIME!</b>That gives t = ${fmt(res.value)} s: it would have had to happen before the clock started. Check the directions of your givens.`); return; }
+  if (!symb && ['m', 'W', 'N', 'mu', 'f', 'g'].includes(target) && res.value < 0){ dialog('Impossible value', `<b>NEGATIVE ${plain(target).toUpperCase()}?!</b>That gives ${plain(target)} = ${fmt(res.value)}, but it’s a size and can’t be negative. Check the directions and the conditions (is friction really slowing it this way?).`); return; }
   S.busy = true;
   const cur = curTarget(), before = shortest(appEqs(), knownSet(), cur), step = S.path.length + 1;
   $('workTitle').textContent = `6. Work · step ${step}: ${eq.label} → ${plain(target)}`;
@@ -371,13 +442,34 @@ async function solve(eqId, target){
   if (!sol.steps.length) lines[0].why += `; it’s already solved for ${plain(target)}`;
   const work = $('work'); work.innerHTML = '<div class="section">ISOLATE (SYMBOLS FIRST)</div>';
   $('workWin').scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'nearest' });
-  for (const l of lines){ const d = document.createElement('div'); d.className = 'line'; d.innerHTML = `${l.html}<span class="why">${l.why}</span>`; work.appendChild(d); paintSyms(); await sleep(30); d.classList.add('show'); beep(880, 0.04); await sleep(420); }
-  const sh = document.createElement('div'); sh.className = 'section'; sh.textContent = 'PLUG IN NUMBERS (SI UNITS, SIGNS FROM DIRECTIONS)'; work.appendChild(sh);
-  const d2 = document.createElement('div'); d2.className = 'line'; d2.innerHTML = `${V(target)} = ${plug(sol.sub, v)}`; work.appendChild(d2); paintSyms(); await sleep(30); d2.classList.add('show'); await sleep(420);
-  const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${VARS[target].sym} = ${fmt(res.value)} ${unitOf(target)}`; work.appendChild(r);
-  const ex = extras(target, res.value); if (ex){ const e2 = document.createElement('div'); e2.innerHTML = ex; work.appendChild(e2); }
-  if (res.note){ const n = document.createElement('div'); n.className = 'note'; n.textContent = res.note; work.appendChild(n); }
-  S.found[target] = { val: res.value, step };
+  const addLine = async (html, cls = 'line') => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; work.appendChild(d); paintSyms(); await sleep(30); d.classList.add('show'); };
+  const section = (txt) => { const sh = document.createElement('div'); sh.className = 'section'; sh.textContent = txt; work.appendChild(sh); };
+  for (const l of lines){ await addLine(`${l.html}<span class="why">${l.why}</span>`); beep(880, 0.04); await sleep(420); }
+  const tree = res.tree, sub = tree === sol.tree ? sol.sub : sol.alt.find(a => a.tree === tree).sub;
+  if (symb){
+    section('PUT IN WHAT YOU KNOW');
+    await addLine(`${V(target)} = ${plugSym(sub)}`); await sleep(420);
+    section('SIMPLIFY');
+    const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${VARS[target].sym} = ${X.toHTML(R, S.printOpts)}`; work.appendChild(r); paintSyms();
+  } else {
+    section('PLUG IN NUMBERS (SI UNITS, SIGNS FROM DIRECTIONS)');
+    await addLine(`${V(target)} = ${plug(sub, v)}`); await sleep(420);
+    const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${VARS[target].sym} = ${fmt(res.value)} ${unitOf(target)}`; work.appendChild(r);
+    const ex = extras(target, res.value); if (ex){ const e2 = document.createElement('div'); e2.innerHTML = ex; work.appendChild(e2); }
+  }
+  const u = document.createElement('div'); u.className = 'small units'; u.innerHTML = `Units ✓ every term works out to ${sol.unitText}.`; work.appendChild(u);
+  if (res.note){ const n = document.createElement('div'); n.className = 'note'; n.textContent = (symb && res.branch !== undefined && X.hasPM(tree) ? 'Root chosen with typical values for the symbols. ' : '') + res.note; work.appendChild(n); }
+  if (symb){
+    section('CHECK WITH NUMBERS');
+    const c = checkWithNumbers(R, tree, res.branch);
+    const at = c ? Object.entries(c.rnd).map(([id, x]) => `${VARS[id].plain} = ${fmt(x)}${id === 'inc' ? '°' : unitOf(id) ? ' ' + unitOf(id) : ''}`).join(', ') : '';
+    const d = document.createElement('div'); d.className = 'small check';
+    d.innerHTML = !c ? 'Couldn’t find random values that work for every step, so no numeric check this time.'
+      : c.ok ? `✓ At random values (${at}), working step by step with numbers gives ${fmt(c.stepwise)} and the simplified answer gives ${fmt(c.simplified)}.`
+      : `✗ At ${at} the step-by-step numbers give ${fmt(c.stepwise)} but the simplified answer gives ${fmt(c.simplified)}. The simplifier slipped: please report this problem.`;
+    work.appendChild(d);
+  }
+  S.found[target] = { val: res.value, expr: R, step };
   const after = shortest(appEqs(), knownSet(), curTarget());
   let fb;
   if (target === cur) fb = `🎯 That’s target ${letter(S.targets.indexOf(target))}. ${curTarget() ? `Next up: ${VARS[curTarget()].sym}.` : 'Solved!'}`;
@@ -386,7 +478,7 @@ async function solve(eqId, target){
   else if (after) fb = `Valid algebra, but ${VARS[target].sym} doesn’t bring ${VARS[cur].sym} closer. The shortest route is still ${after.length} step${after.length > 1 ? 's' : ''}. More knowns never hurt, though.`;
   else fb = `Found ${VARS[target].sym}. The target still isn’t reachable: look for a hidden given or a condition.`;
   const f = document.createElement('div'); f.className = 'feedback'; f.innerHTML = fb; work.appendChild(f);
-  S.path.push({ eq: eqId, v: target, val: res.value, html: work.innerHTML, title: $('workTitle').textContent });
+  S.path.push({ eq: eqId, v: target, val: res.value, expr: R, tree, branch: res.branch, html: work.innerHTML, title: $('workTitle').textContent });
   beep(1200, 0.06); S.busy = false; renderAll(false);
   if (target === cur && !curTarget()) celebrate();
 }
@@ -429,7 +521,7 @@ $('showBtn').onclick = async () => {
 function renderPath(){
   const box = $('pathList');
   if (!S.path.length){ box.innerHTML = '<div class="empty">Your steps will stack up here: which equation, what it found.</div>'; return; }
-  box.innerHTML = '<ol>' + S.path.map((p, i) => `<li data-i="${i}">${EQS[p.eq].label} → ${VARS[p.v].sym} = ${fmt(p.val)} ${unitOf(p.v)}</li>`).join('') + '</ol>';
+  box.innerHTML = '<ol>' + S.path.map((p, i) => `<li data-i="${i}">${EQS[p.eq].label} → ${VARS[p.v].sym} = ${p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`}</li>`).join('') + '</ol>';
   box.querySelectorAll('li').forEach(li => li.onclick = () => { const p = S.path[+li.dataset.i]; $('work').innerHTML = p.html; $('work').querySelectorAll('.line').forEach(l => l.classList.add('show')); $('workTitle').textContent = p.title; paintSyms(); });
 }
 
@@ -452,6 +544,12 @@ $('checkSetup').onclick = () => {
     const want = (dir ? -1 : 1) * mag * VARS[id].units[unit], g = S.givens[id];
     if (!g){ lines.push(`✗ Missing a known: <b>${VARS[id].sym}</b> (${nm(id)}). ${want === 0 ? 'It’s hidden in the wording.' : ''}`); bad++; continue; }
     const close = (a, b) => Math.abs(a - b) <= 0.01 * Math.max(1e-9, Math.abs(b)) || (Math.abs(b) < 1e-9 && Math.abs(a) < 1e-9);
+    if (g.kind === 'symbol'){
+      if (want === 0){ lines.push(`✗ ${VARS[id].sym} is zero here (it’s hidden in the wording), not an unknown size: give it as a number.`); bad++; }
+      else if ((want < 0) === (g.dir === 1)) lines.push(`✓ ${VARS[id].sym} given as a symbol${dr(id) ? `, ${dr(id)[g.dir]}` : ''}`);
+      else { lines.push(`✗ ${VARS[id].sym}: right to use a symbol, but the <b>direction is backwards</b>.`); bad++; }
+      continue;
+    }
     if (close(g.val, want)) lines.push(`✓ ${VARS[id].sym} = ${describe(id, g)}`);
     else if (close(-g.val, want)){ lines.push(`✗ ${VARS[id].sym}: right size, but the <b>direction is backwards</b>.`); bad++; }
     else { lines.push(`✗ ${VARS[id].sym}: the value doesn’t match the problem. Check the number and the unit.`); bad++; }
@@ -754,7 +852,7 @@ $('dg').addEventListener('mouseleave', () => setHover(null));
 $('dg').addEventListener('click', (e) => { const h = hitAt(canvasPos(e)); if (!h) return; beep(740, 0.04); if (h.kind === 'var') inspectVar(h.id); else if (h.kind === 'point') inspectPoint(h.name); });
 
 function chip(id){
-  const st = stateOf(id), x = known(id) ? `= ${fmt(val(id))} ${unitOf(id)}` : st === 'target' ? '🎯' : '?';
+  const st = stateOf(id), x = known(id) ? `= ${showVal(id)}` : st === 'target' ? '🎯' : '?';
   const acts = known(id) ? '' : `<button data-add="${id}" title="Add as a known">+ known</button>${st !== 'target' ? `<button data-tgt="${id}" title="Make it a target">🎯</button>` : ''}`;
   return `<span class="ichip ${st}" data-v="${id}">${VARS[id].sym} ${x}${acts}</span>`;
 }
@@ -796,9 +894,9 @@ $('replayBtn').onclick = () => {
 // ---------- celebrate ----------
 function celebrate(){
   fanfare();
-  say(`🎉 <b>SOLVED!</b> ${S.targets.map((t, i) => `${letter(i)} ${VARS[t].sym} = ${fmt(val(t))} ${unitOf(t)}`).join(', ')}. Press <b>Replay motion</b> to watch it.${S.bank ? ' Then try another from the 📚 practice bank.' : ''}`);
-  const b = $('solved'); b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); setTimeout(() => b.classList.remove('show'), 1800);
+  say(`🎉 <b>SOLVED!</b> ${S.targets.map((t, i) => `${letter(i)} ${VARS[t].sym} = ${showVal(t)}`).join(', ')}. Press <b>Replay motion</b> to watch it.${S.bank ? ' Then try another from the 📚 practice bank.' : ''}`);
   if (calm()) return;
+  const b = $('solved'); b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); setTimeout(() => b.classList.remove('show'), 1800);
   const cv = $('sparks'), ctx = cv.getContext('2d'); cv.width = innerWidth; cv.height = innerHeight;
   const cols = ['#ff2bd6', '#19f0ff', '#ffe600', '#2bff6a', '#fff'];
   const ps = Array.from({ length: 140 }, () => ({ x: innerWidth / 2, y: innerHeight / 2, vx: (Math.random() - .5) * 18, vy: (Math.random() - .8) * 18, c: cols[(Math.random() * cols.length) | 0], s: 4 + (Math.random() * 5 | 0) }));

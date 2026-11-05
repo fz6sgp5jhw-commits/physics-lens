@@ -56,3 +56,18 @@ test('diagram hotspots respond in each unit', async () => {
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
+
+test('calm mode hides the SOLVED burst', async () => {
+  const { page, errors } = await openApp(env.browser, env.url); // calm on
+  try {
+    await page.click('#bankBtn'); await page.click('[data-load="0"]');
+    await page.evaluate(() => { document.getElementById('solved').dataset.seen = ''; new MutationObserver(() => { if (document.getElementById('solved').classList.contains('show')) document.getElementById('solved').dataset.seen = '1'; }).observe(document.getElementById('solved'), { attributes: true }); });
+    const { applyKey } = await import('./helpers.js');
+    const { PRACTICE } = await import('../js/data.js');
+    await applyKey(page, PRACTICE[0]);
+    await page.click('#showBtn');
+    await page.waitForFunction(() => { const S = window.__rl; return S.targets.every(t => t in S.found) && !S.busy; });
+    assert.equal(await page.evaluate(() => document.getElementById('solved').dataset.seen), '');
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
