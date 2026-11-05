@@ -76,3 +76,27 @@ test('numeric evaluation: ± branches, degrees, division by zero', () => {
   assert.ok(Math.abs(X.evalNum(X.parse('sin⁻¹({a} / {g})'), { a: 1, g: 2 }) - 30) < 1e-9);
   assert.throws(() => X.evalNum(X.parse('{dx} / ({v0} + {vf})'), { dx: 1, v0: 2, vf: -2 }, 1, (id) => VARS[id].plain), /v₀ \+ v is zero/);
 });
+
+test('polynomials in t: d/dt, ∫dt with a start value, solving for t', () => {
+  const po = { ...o };
+  const theta = X.polyFromNumbers([0, 250, -20.3, -1.44]);
+  const w = X.polyD(theta);
+  assert.equal(X.polyText(w, po), '250 − 40.6t − 4.32t²');
+  assert.equal(X.polyText(X.polyD(w), po), '−40.6 − 8.64t');
+  // ∫ back up with the start value gives the same function
+  assert.equal(X.polyText(X.polyInt(w, X.number(0)), po), '250t − 20.3t² − 1.44t³');
+  // quadratic: both roots, the physical one is 4.2425 s
+  const s = X.polySolve(w, X.number(0));
+  assert.equal(s.method, 'quadratic');
+  assert.deepEqual(s.roots.map(r => +r.x.toFixed(4)).sort((a, b) => a - b), [-13.6406, 4.2425]);
+  // linear, with symbols: ω(t) = ω₀ + αt = 0 → t = −ω₀/α
+  const lin = X.polySolve([sym.w0, sym.alpha], X.number(0));
+  assert.equal(X.toText(lin.roots[0].r, o), '−ω₀ / α');
+  // symbolic coefficients survive integration
+  assert.equal(X.polyText(X.polyInt(X.polyFromNumbers([4, 0, -0.6]), sym.w0), po), 'ω₀ + 4t − 0.2t³');
+  // cubic with numbers: found numerically
+  const c = X.polySolve(theta, X.number(100));
+  assert.equal(c.method, 'numeric');
+  for (const r of c.roots) assert.ok(Math.abs(X.polyNum(theta, r.x) - 100) < 1e-6);
+  assert.throws(() => X.polySolve([sym.w0, X.number(0), X.number(0), sym.alpha], X.number(0)), /only linear and quadratic/);
+});

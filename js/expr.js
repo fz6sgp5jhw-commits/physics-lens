@@ -356,7 +356,7 @@ export function symbolsOf(r, out = new Set()){
 const SUPS = { 2: '²', 3: '³', 4: '⁴' };
 const atomRank = (key, order) => { const a = ATOMS.get(key); if (a.kind === 'sym'){ const i = order.indexOf(a.id); return i < 0 ? 999 : i; } return a.kind === 'fn' ? 1000 : 2000; };
 function fracOf(x){ // small fractions print as p/q
-  for (let q = 1; q <= 12; q++){ const p = Math.round(x * q); if (Math.abs(p / q - x) < 1e-9 * Math.max(1, Math.abs(x))) return [p, q]; }
+  for (let q = 1; q <= 6; q++){ const p = Math.round(x * q); if (Math.abs(p / q - x) < 1e-9 * Math.max(1, Math.abs(x))) return [p, q]; }
   return null;
 }
 // sin^a · cos^-b of the same angle → tan
@@ -422,6 +422,7 @@ function printMonoFlat(m, o){ // magnitude only, the sign is handled by the call
 }
 export function printRat(r, o){
   if (!r.n.length) return '0';
+  if (isNumeric(r)){ const x = numValue(r); return (x < 0 ? '−' : '') + o.fmt(Math.abs(x)); }
   // numerator = content × (sum)
   const { m: C, rest } = r.n.length > 1 ? content(r.n) : { m: r.n[0], rest: [] };
   const e = tanify(C.e);
@@ -490,3 +491,70 @@ export function dimOf(n, dims){
   }
 }
 export { dimEq };
+
+// ---------------------------------------------------------------- polynomials in t (the motion ladder)
+// A polynomial is an array of rationals: p[k] is the coefficient of tᵏ. Coefficients can hold symbols.
+export const R = { add: addR, mul: mulR, neg: negR, inv: invR, sqrt: sqrtR, pow: powR, num, isZero: (r) => !r.n.length };
+const trim = (p) => { const q = [...p]; while (q.length && !q[q.length - 1].n.length) q.pop(); return q; };
+export const polyFromNumbers = (cs) => trim(cs.map(c => num(+c || 0)));
+// d/dt (c·tᵏ) = k·c·tᵏ⁻¹
+export const polyD = (p) => trim(p.slice(1).map((c, k) => scale(c, k + 1)));
+// ∫₀ᵗ p dt + start
+export const polyInt = (p, start) => trim([start, ...p.map((c, k) => scale(c, 1 / (k + 1)))]);
+export const polyAt = (p, t) => p.reduce((s, c, k) => addR(s, mulR(c, powR(t, k))), num(0));
+export const polyDegree = (p) => trim(p).length - 1;
+export const polyNum = (p, t, vals = {}) => p.reduce((s, c, k) => s + evalRat(c, vals) * t ** k, 0);
+
+// Solve p(t) = value. Returns { roots: [{ r: Rat, x: number at sample values }], method } with every real root,
+// or throws MathError. Linear and quadratic are exact (symbols allowed); higher degrees need numbers.
+export function polySolve(p, value){
+  const q = trim(p.map((c, k) => k === 0 ? addR(c, negR(value)) : c));
+  const deg = q.length - 1;
+  const at = (r) => evalRat(r, SAMPLE);
+  if (deg < 1) throw new MathError('It never changes, so there’s no single time when it has that value.');
+  if (deg === 1){
+    const r = mulR(negR(q[0]), invR(q[1]));
+    return { roots: [{ r, x: at(r) }], method: 'linear', q };
+  }
+  if (deg === 2){
+    const [c, b, a] = q;
+    const disc = addR(mulR(b, b), scale(mulR(a, c), -4));
+    if (at(disc) < -1e-12) throw new MathError('The quadratic has no real roots: it never reaches that value.');
+    const sq = sqrtR(disc), den = invR(scale(a, 2));
+    const roots = [1, -1].map(s => { const r = mulR(addR(negR(b), s > 0 ? sq : negR(sq)), den); return { r, x: at(r) }; });
+    return { roots, method: 'quadratic', q, disc };
+  }
+  if (!q.every(isNumeric)) throw new MathError('With symbols, only linear and quadratic equations in t can be solved exactly.');
+  // numbers only: scan for sign changes, then bisect
+  const cs = q.map(numValue), f = (t) => cs.reduce((s, c, k) => s + c * t ** k, 0);
+  const bound = 1 + Math.max(...cs.slice(0, -1).map(c => Math.abs(c / cs[cs.length - 1])));
+  const roots = [], N = 4000;
+  let x0 = -bound, f0 = f(x0);
+  for (let i = 1; i <= N; i++){
+    const x1 = -bound + 2 * bound * i / N, f1 = f(x1);
+    if (f0 === 0) roots.push(x0);
+    else if (f0 * f1 < 0){ let lo = x0, hi = x1; for (let j = 0; j < 80; j++){ const m = (lo + hi) / 2; if (f(lo) * f(m) <= 0) hi = m; else lo = m; } roots.push((lo + hi) / 2); }
+    x0 = x1; f0 = f1;
+  }
+  return { roots: roots.map(x => ({ r: num(x), x })), method: 'numeric', q };
+}
+
+// print a polynomial in t, lowest power first: 250 − 40.6t − 4.32t², ω₀ + 4t − 0.2t³
+function polyPrint(p, o, tSym){
+  const parts = [];
+  p.forEach((c, k) => {
+    if (!c.n.length) return;
+    const neg = isNumeric(c) ? numValue(c) < 0 : (c.n.length === 1 && !c.d.length ? c.n[0].c < 0 : evalRat(c, SAMPLE) < 0);
+    const mag = neg ? negR(c) : c;
+    let cs = printRat(mag, o);
+    const one = isNumeric(mag) && Math.abs(numValue(mag) - 1) < 1e-12;
+    if (k > 0 && one) cs = '';
+    else if (k > 0 && (/[+−] /.test(cs) || / \/ /.test(cs))) cs = `(${cs})`;
+    const tp = k === 0 ? '' : tSym + (k === 1 ? '' : SUPS[k] || `^${k}`);
+    parts.push({ neg, s: cs + tp });
+  });
+  if (!parts.length) return '0';
+  return parts.map((x, j) => (j ? (x.neg ? ' − ' : ' + ') : (x.neg ? '−' : '')) + x.s).join('');
+}
+export const polyText = (p, o) => polyPrint(p, { ...o, html: false, sym: o.plain || ((id) => id) }, (o.plain || ((id) => id))('t'));
+export const polyHTML = (p, o) => polyPrint(p, { ...o, html: true, sym: o.html || ((id) => id) }, (o.html || ((id) => id))('t'));
