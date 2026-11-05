@@ -11,6 +11,8 @@ How it works: you set up your own problem.
 
 Givens can be numbers or **symbols only** (m, θ, μk, g…). With symbols you get the answer in symbols, simplified (a = g(sin θ − μk cos θ)), and the lab checks it against the step-by-step numbers at random values.
 
+When the angular acceleration **varies with time**, give θ(t), ω(t) or α(t) as a polynomial and use the **motion ladder** on your sheet: d/dt down a rung, ∫dt up (with the start value), put in a time, or find the time when a quantity has a value.
+
 Units so far: Inclines & Newton’s laws, Tension & pulleys (block on a table + hanging mass, with or without friction), Rotation kinematics. The 📚 practice bank loads problem text only; “Check my setup” grades your givens, conditions and targets.
 
 ## Run it

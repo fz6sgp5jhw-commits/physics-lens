@@ -4,12 +4,14 @@ import * as SP from './sprites.js';
 
 const $ = (id) => document.getElementById(id);
 const S = window.__rl = {
-  ch: 'incline', cond: {}, condOk: false, givens: {}, found: {}, targets: [], sheet: [], path: [],
+  ch: 'incline', cond: {}, condOk: false, givens: {}, found: {}, funcs: {}, targets: [], sheet: [], path: [],
   bank: null, editing: null, focus: [], hot: [], hover: null, busy: false, sound: false, anim: false, inspectName: null, lastStep: 0,
   // how symbolic answers are printed (also used by the tests)
   printOpts: { plain: (id) => VARS[id].plain, html: (id) => V(id), order: PRINT_ORDER, spaced: (id) => /[A-Za-zα-ω]{2,}/.test(VARS[id].plain), fmt },
 };
 X.setSamples(SAMPLE);
+S.isKnown = (id) => known(id);
+S.polyText = (p) => X.polyText(p, S.printOpts);
 
 // ---------- state helpers ----------
 const chapter = () => CHAPTERS[S.ch];
@@ -20,12 +22,14 @@ const chEqs = () => chapter().sections.flatMap(sec => sec.eqs.map(e => ({ e, sec
 const applies = (e) => { const sec = chapter().sections.find(s => s.eqs.includes(e)); return (!sec || sectionOk(sec)) && (!EQS[e].applies || EQS[e].applies(S.cond)); };
 const naReason = (e) => { const sec = chapter().sections.find(s => s.eqs.includes(e)); if (sec && !sectionOk(sec)) return sec.needs; return EQS[e].needs || ''; };
 const appEqs = () => chEqs().map(x => x.e).filter(applies);
-const known = (id) => id in S.givens || id in S.found;
+// targets and knowns can be scalars ('w') or functions of time ('fn:w')
+const isFn = (id) => typeof id === 'string' && id.startsWith('fn:');
+const known = (id) => isFn(id) ? id.slice(3) in S.funcs : id in S.givens || id in S.found;
 const val = (id) => id in S.givens ? S.givens[id].val : id in S.found ? S.found[id].val : undefined;
 const vals = () => { const o = {}; for (const id of chVars()) if (known(id)) o[id] = val(id); if (S.ch === 'incline') o.__u0sign = S.cond.up ? -1 : 1; return o; };
 const curTarget = () => S.targets.find(t => !known(t)) || null;
 const stateOf = (id) => id in S.givens ? 'given' : id in S.found ? 'found' : S.targets.includes(id) ? 'target' : 'unknown';
-const knownSet = () => new Set(chVars().filter(known));
+const knownSet = () => new Set([...chVars().filter(known), ...Object.keys(S.funcs).map(x => 'fn:' + x)]);
 const unknownsOf = (e, ks) => EQS[e].vars.filter(v => !ks.has(v));
 const solvable = (e, ks) => { const u = unknownsOf(e, ks); return u.length === 1 && EQS[e].solve[u[0]] ? u[0] : null; };
 const plain = (id) => VARS[id].plain;
@@ -33,7 +37,18 @@ const nm = (id) => (chapter().names && chapter().names[id]) || VARS[id].name;
 const dr = (id) => (chapter().dirs && chapter().dirs[id]) || VARS[id].dir;
 const unitOf = (id) => VARS[id].unit;
 const calm = () => document.body.classList.contains('calm');
-const userGivens = () => Object.values(S.givens).filter(g => g.from === 'you').length;
+const userGivens = () => Object.values(S.givens).filter(g => g.from === 'you').length + Object.values(S.funcs).filter(f => f.from === 'given').length;
+const symOf = (id) => isFn(id) ? `${VARS[id.slice(3)].sym}(t)` : VARS[id].sym;
+const plainOf = (id) => isFn(id) ? `${VARS[id.slice(3)].plain}(t)` : VARS[id].plain;
+// the motion ladder: active when acceleration varies with time, or once any function of t is known
+const ladder = () => (chapter().ladder && (S.cond.varA || Object.keys(S.funcs).length)) ? chapter().ladder : null;
+const polyHTML = (p) => X.polyHTML(p, S.printOpts);
+// the unit of the tᵏ coefficient of a quantity: rad/s → rad/s, rad/s², rad/s³ …
+const SUPN = ['', '', '²', '³', '⁴', '⁵'];
+function unitPer(id, k){
+  const u = VARS[id].unit, [top, bot = ''] = u.split('/'), sp = bot ? (bot === 's' ? 1 : bot === 's²' ? 2 : bot === 's³' ? 3 : 0) : 0;
+  const n = sp + k; return n ? `${top}/s${SUPN[n]}` : top;
+}
 // ---------- symbols ----------
 // A symbol given has no number: it stands for the size, and the direction toggle carries the sign.
 // Internally it still gets a typical value (SAMPLE) so roots, signs and the diagram can be chosen.
@@ -44,9 +59,10 @@ const exprOf = (id) => {
   if (g) return g.kind === 'symbol' ? X.scale(X.symbol(id), g.dir ? -1 : 1) : X.number(g.val);
   const f = S.found[id]; return f.expr || X.number(f.val);
 };
-const isSymbolic = (id) => isSymGiven(id) || !!(S.found[id] && S.found[id].expr && !X.isNumeric(S.found[id].expr));
+const isSymbolic = (id) => isFn(id) || isSymGiven(id) || !!(S.found[id] && S.found[id].expr && !X.isNumeric(S.found[id].expr));
 // a known's value for display: a number with its unit, or its symbolic form
 const showVal = (id) => {
+  if (isFn(id)) return polyHTML(S.funcs[id.slice(3)].poly);
   if (isSymGiven(id)) return (S.givens[id].dir ? '−' : '') + VARS[id].sym;
   if (isSymbolic(id)) return X.toHTML(S.found[id].expr, S.printOpts);
   return `${fmt(val(id))} ${unitOf(id)}`;
@@ -62,10 +78,10 @@ function shortest(eqList, from, target){
   for (let depth = 0; depth < 14 && frontier.length; depth++){
     const next = [];
     for (const { k, path } of frontier){
-      for (const e of eqList){
-        const u = solvable(e, k); if (!u) continue;
+      for (const m of moves(eqList, k)){
+        const u = m.v;
         const k2 = new Set(k); k2.add(u);
-        const p2 = [...path, { eq: e, v: u }];
+        const p2 = [...path, m];
         if (u === target) return p2;
         const kk = key(k2); if (seen.has(kk)) continue; seen.add(kk);
         next.push({ k: k2, path: p2 });
@@ -74,6 +90,25 @@ function shortest(eqList, from, target){
     frontier = next;
   }
   return null;
+}
+
+// Every move available from the known set ks: equations, then the motion ladder.
+//   deriv: d/dt down a rung · integ: ∫dt up a rung (needs the start value) · eval: a function at the known t
+//   solveT: the time when a function has a known value · start: a function at t = 0 gives the start value
+function moves(eqList, ks){
+  const out = [];
+  for (const e of eqList){ const u = solvable(e, ks); if (u) out.push({ kind: 'eq', eq: e, v: u }); }
+  const L = ladder(); if (!L) return out;
+  const f = (x) => ks.has('fn:' + x), R = L.rungs;
+  for (let i = 0; i < R.length - 1; i++) if (f(R[i]) && !f(R[i + 1])) out.push({ kind: 'deriv', from: R[i], v: 'fn:' + R[i + 1] });
+  for (let i = 1; i < R.length; i++){ const st = L.start[R[i - 1]]; if (f(R[i]) && !f(R[i - 1]) && (!st || ks.has(st))) out.push({ kind: 'integ', from: R[i], v: 'fn:' + R[i - 1], start: st }); }
+  for (const x of R){
+    if (!f(x)) continue;
+    if (ks.has('t') && !ks.has(x)) out.push({ kind: 'eval', from: x, v: x });
+    if (ks.has(x) && !ks.has('t')) out.push({ kind: 'solveT', from: x, v: 't' });
+    const st = L.start[x]; if (st && !ks.has(st)) out.push({ kind: 'start', from: x, v: st });
+  }
+  return out;
 }
 
 // ---------- sound ----------
@@ -116,15 +151,15 @@ $('dlgOk').onclick = () => $('dlg').classList.remove('show');
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ $('dlg').classList.remove('show'); $('bank').classList.remove('show'); } });
 
 // ---------- chapter / reset ----------
-function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false, earth: true } : ch === 'pulley' ? { friction: false, earth: true } : { rim: false }; }
+function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false, earth: true } : ch === 'pulley' ? { friction: false, earth: true } : { rim: false, varA: false }; }
 function switchChapter(ch){ S.ch = ch; S.cond = defaultsFor(ch); resetAll(false); }
 function resetAll(keepText = true){
-  S.givens = {}; S.found = {}; S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null;
+  S.givens = {}; S.found = {}; S.funcs = {}; S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null;
   if (!keepText){ $('problem').value = ''; S.bank = null; }
   S.cond = { ...defaultsFor(S.ch), ...Object.fromEntries(Object.entries(S.cond).filter(([k]) => k in defaultsFor(S.ch))) };
   applyHidden(); clearWork(); resetInspector();
 }
-function clearDerived(){ S.found = {}; S.path = []; clearWork(); }
+function clearDerived(){ S.found = {}; S.path = []; for (const [id, f] of Object.entries(S.funcs)) if (f.from !== 'given') delete S.funcs[id]; clearWork(); }
 function clearWork(){ $('work').innerHTML = '<div class="empty">Gather equations onto your sheet, pick a target, then solve a glowing equation. Its algebra appears here, one step at a time.</div>'; $('workTitle').textContent = '6. Work'; }
 
 // hidden givens that come from conditions (“starts from rest” → v₀ = 0)
@@ -161,7 +196,7 @@ function describe(id, g){
 function renderKnowns(){
   const box = $('knowns'); box.innerHTML = '';
   const ids = chVars().filter(known);
-  if (!ids.length){ box.innerHTML = '<div class="small muted">Nothing yet. Read the problem and add each quantity it gives you.</div>'; }
+  if (!ids.length && !Object.keys(S.funcs).length){ box.innerHTML = '<div class="small muted">Nothing yet. Read the problem and add each quantity it gives you.</div>'; }
   for (const id of ids){
     const g = S.givens[id], f = S.found[id];
     const row = document.createElement('div'); row.className = 'known ' + (f ? 'found' : g.from === 'condition' ? 'cond' : ''); row.dataset.v = id;
@@ -172,6 +207,13 @@ function renderKnowns(){
     row.addEventListener('mouseenter', () => setHover(id)); row.addEventListener('mouseleave', () => setHover(null));
     box.appendChild(row);
   }
+  for (const [id, f] of Object.entries(S.funcs)){
+    const row = document.createElement('div'); row.className = 'known fn ' + (f.from === 'given' ? '' : 'found'); row.dataset.v = id;
+    const act = f.from === 'given' ? `<button data-edit="${id}" title="Edit">✎</button><button data-delfn="${id}" title="Remove">×</button>` : '';
+    row.innerHTML = `<div class="vsym">${VARS[id].sym}(t)</div><div><div class="kv">${VARS[id].sym}(t) = ${polyHTML(f.poly)}</div><div class="kd">${f.from === 'given' ? `${nm(id)}, as a function of time` : `found in step ${f.step}`}</div></div><div class="kact">${act}</div>`;
+    box.appendChild(row);
+  }
+  box.querySelectorAll('[data-delfn]').forEach(b => b.onclick = () => { delete S.funcs[b.dataset.delfn]; clearDerived(); renderAll(false); });
   box.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openEditor(b.dataset.edit));
   box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { delete S.givens[b.dataset.del]; clearDerived(); renderAll(false); });
   const pal = $('palette'); pal.innerHTML = '';
@@ -182,23 +224,38 @@ function renderKnowns(){
   }
   renderEditor();
 }
-function openEditor(id){ if (S.busy) return; const g = S.givens[id]; S.editing = { id, kind: g && g.kind === 'symbol' ? 'symbol' : 'value', mag: g && g.mag !== null ? g.mag : '', unit: g ? g.unit : (Object.keys(VARS[id].units)[0]), dir: g ? g.dir : 0 }; renderEditor(); setTimeout(() => $('edVal')?.focus(), 0); }
+function openEditor(id, moment = false){ if (S.busy) return; const g = S.givens[id], fg = !g && S.funcs[id] && S.funcs[id].from === 'given' ? S.funcs[id] : null; S.editing = { id, moment, coefs: fg ? fg.coefs : ['', '', '', ''], kind: fg ? 'fn' : g && g.kind === 'symbol' ? 'symbol' : 'value', mag: g && g.mag !== null ? g.mag : '', unit: g ? g.unit : (Object.keys(VARS[id].units)[0]), dir: g ? g.dir : 0 }; renderEditor(); setTimeout(() => $('edVal')?.focus(), 0); }
+const canFn = (id) => !!(ladder() && S.cond.varA && chapter().ladder.rungs.includes(id));
 function renderEditor(){
   const slot = $('editorSlot');
   if (!S.editing){ slot.innerHTML = ''; return; }
   const { id, mag, unit, dir, kind } = S.editing, d = VARS[id];
   slot.innerHTML = `<div class="editor"><div><b>${d.sym}</b>: ${nm(id)}</div>
-    <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button></div>
-    ${kind === 'symbol'
+    ${S.editing.moment ? `<div class="erow small">Its value <b>at the moment the question asks about</b>. The lab finds the time t when it has this value.</div>` : ''}
+    <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button>${canFn(id) ? `<button data-kind="fn" aria-pressed="${kind === 'fn'}">Function of t</button>` : ''}</div>
+    ${kind === 'fn'
+      ? `<div class="erow fnrow"><b>${d.sym}(t) =</b> ${[0, 1, 2, 3].map(k => `${k ? '+' : ''} <span class="coef"><input data-coef="${k}" type="text" inputmode="decimal" value="${S.editing.coefs[k]}" placeholder="0"><small>${unitPer(id, k)}</small></span>${k ? ` t${SUPN[k]}` : ''}`).join(' ')}</div>
+         <div class="erow small">Type each coefficient with its sign (+ is ${dr(id) ? dr(id)[0] : 'positive'}). Leave a box empty for 0. Each one has its own unit, shown under it.</div>`
+      : kind === 'symbol'
       ? `<div class="erow small">No number: you’ll get the answer in symbols, with <b>${d.sym}</b> in it. Its unit is ${d.unit || 'none'}.</div>`
       : `<div class="erow"><input id="edVal" type="text" inputmode="decimal" value="${mag}" placeholder="size"><select id="edUnit">${Object.keys(d.units).map(u => `<option ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`}
-    ${dr(id) ? `<div class="erow dirs">Direction: ${dr(id).map((w, i) => `<button data-dir="${i}" aria-pressed="${i === dir}">${w} (${i ? '−' : '+'})</button>`).join('')}</div>` : ''}
+    ${dr(id) && kind !== 'fn' ? `<div class="erow dirs">Direction: ${dr(id).map((w, i) => `<button data-dir="${i}" aria-pressed="${i === dir}">${w} (${i ? '−' : '+'})</button>`).join('')}</div>` : ''}
     <div class="erow"><button class="go" id="edSave">Add known</button><button id="edCancel">Cancel</button>${S.targets.includes(id) ? '<span class="small" style="color:#a00">This is one of your targets: adding it as a known removes it.</span>' : ''}</div></div>`;
-  const keep = () => { if ($('edVal')){ S.editing.mag = $('edVal').value; S.editing.unit = $('edUnit').value; } };
+  const keep = () => { if ($('edVal')){ S.editing.mag = $('edVal').value; S.editing.unit = $('edUnit').value; } slot.querySelectorAll('[data-coef]').forEach(i => { S.editing.coefs[+i.dataset.coef] = i.value; }); };
   slot.querySelectorAll('[data-dir]').forEach(b => b.onclick = () => { keep(); S.editing.dir = +b.dataset.dir; renderEditor(); });
   slot.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { keep(); S.editing.kind = b.dataset.kind; renderEditor(); });
   $('edCancel').onclick = () => { S.editing = null; renderEditor(); };
   const save = () => {
+    if (S.editing.kind === 'fn'){
+      keep();
+      const cs = S.editing.coefs.map(c => String(c).trim().replace(',', '.').replace('−', '-'));
+      if (cs.some(c => c !== '' && !isFinite(Number(c)))){ dialog('Not a number', `<b>SYNTAX ERROR</b>Each coefficient must be a number like <b>-20.3</b>, or empty for 0.`); return; }
+      const nums = cs.map(c => c === '' ? 0 : Number(c));
+      if (nums.every(c => c === 0)){ dialog('All zero', `<b>NOTHING THERE</b>All the coefficients are zero. Type at least one.`); return; }
+      S.funcs[id] = { from: 'given', poly: X.polyFromNumbers(nums), coefs: S.editing.coefs.slice() };
+      S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
+      return;
+    }
     if (S.editing.kind === 'symbol'){
       const dirI = dr(id) ? S.editing.dir : 0;
       S.givens[id] = { from: 'you', kind: 'symbol', mag: null, unit: d.unit, dir: dirI, val: (dirI ? -1 : 1) * SAMPLE[id] };
@@ -212,7 +269,7 @@ function renderEditor(){
     if (x < 0 && dr(id)){ dirI = 1 - dirI; say(`I flipped the direction for you: sizes are always positive, and the direction buttons carry the sign.`); }
     const u = $('edUnit').value, mag = Math.abs(x);
     if (!dr(id) && x < 0 && !['inc'].includes(id)){ dialog('Negative size?', `<b>THAT CAN’T BE NEGATIVE</b>${nm(id)} is a size with no direction, so it can’t be negative.`); return; }
-    S.givens[id] = { from: 'you', mag, unit: u, dir: dirI, val: (dirI ? -1 : 1) * mag * d.units[u] };
+    S.givens[id] = { from: 'you', mag, unit: u, dir: dirI, val: (dirI ? -1 : 1) * mag * d.units[u], moment: S.editing.moment };
     S.targets = S.targets.filter(t => t !== id);
     S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
   };
@@ -305,20 +362,55 @@ function gather(e){
 function renderTargets(){
   const box = $('targets');
   const opts = chVars().filter(id => !known(id) && !S.targets.includes(id));
-  box.innerHTML = `<span class="small"><b>🎯 The question asks for:</b></span>` + S.targets.map((t, i) => `<span class="tchip ${known(t) ? 'done' : t === curTarget() ? 'current' : ''}">${letter(i)} ${VARS[t].sym}${known(t) ? ` = ${showVal(t)}` : ''}<button data-rmt="${t}" title="Remove target">×</button></span>`).join('')
-    + `<select id="addTarget"><option value="">+ add a target…</option>${opts.map(id => `<option value="${id}">${VARS[id].plain}: ${nm(id)}</option>`).join('')}</select>`;
+  box.innerHTML = `<span class="small"><b>🎯 The question asks for:</b></span>` + S.targets.map((t, i) => `<span class="tchip ${known(t) ? 'done' : t === curTarget() ? 'current' : ''}">${letter(i)} ${symOf(t)}${known(t) ? ` = ${showVal(t)}` : ''}<button data-rmt="${t}" title="Remove target">×</button></span>`).join('')
+    + `<select id="addTarget"><option value="">+ add a target…</option>${opts.map(id => `<option value="${id}">${VARS[id].plain}: ${nm(id)}</option>`).join('')}${ladderTargets()}</select>`;
   box.querySelectorAll('[data-rmt]').forEach(b => b.onclick = () => { S.targets = S.targets.filter(t => t !== b.dataset.rmt); renderAll(false); });
-  $('addTarget').onchange = (e) => { const id = e.target.value; if (!id) return; addTarget(id); };
+  $('addTarget').onchange = (e) => {
+    const id = e.target.value; if (!id) return;
+    if (id.startsWith('when:')){ // the time when X has a value: target t, and X at that moment becomes a given
+      const x = id.slice(5); if (!S.targets.includes('t') && !known('t')) S.targets.push('t');
+      renderAll(false); openEditor(x, true); say(`🎯 Target: the <b>time</b> when ${VARS[x].sym} has the value you type. That value is a given: it’s what ${VARS[x].sym} is at that moment.`);
+      return;
+    }
+    addTarget(id);
+  };
+}
+function ladderTargets(){
+  const L = ladder(); if (!L || !S.cond.varA) return '';
+  return `<optgroup label="Functions of time">${L.rungs.filter(x => !known('fn:' + x) && !S.targets.includes('fn:' + x)).map(x => `<option value="fn:${x}">${VARS[x].plain}(t): ${nm(x)} as a function of time</option>`).join('')}</optgroup>`
+    + (known('t') ? '' : `<optgroup label="⏱ The time when …">${L.rungs.filter(x => !known(x)).map(x => `<option value="when:${x}">t when ${VARS[x].plain} = …</option>`).join('')}</optgroup>`);
 }
 function addTarget(id){
   if (S.targets.includes(id) || known(id)) return;
   S.targets.push(id); renderAll(false);
-  say(`🎯 Target ${letter(S.targets.length - 1)}: <b>${VARS[id].sym}</b>, the ${nm(id)}. ${S.sheet.length ? 'Look for a glowing equation on your sheet.' : 'Now gather equations that contain it.'}`);
+  say(`🎯 Target ${letter(S.targets.length - 1)}: <b>${symOf(id)}</b>, the ${nm(isFn(id) ? id.slice(3) : id)}${isFn(id) ? ' as a function of time' : ''}. ${S.sheet.length ? 'Look for a glowing equation on your sheet.' : 'Now gather equations that contain it.'}`);
+}
+const MOVE_TXT = {
+  deriv: (m) => `d/dt ↓ ${symOf(m.v)}`, integ: (m) => `∫dt ↑ ${symOf(m.v)}`, eval: (m) => `Put in t → ${symOf(m.v)}`,
+  solveT: (m) => `Solve ${VARS[m.from].sym}(t) = ${showVal(m.from)} for t`, start: (m) => `Set t = 0 → ${symOf(m.v)}`,
+};
+function ladderCard(L, ks){
+  const card = document.createElement('div');
+  const mv = moves([], ks);
+  card.className = 'eq ladder ' + (mv.length ? 'lit' : 'dim');
+  const rung = (x, i) => {
+    const here = mv.filter(m => m.from === x);
+    const val = S.funcs[x] ? polyHTML(S.funcs[x].poly) : '<span class="muted">?</span>';
+    return `<div class="rung"><span class="rname">${VARS[x].sym}(t)</span> = <span class="rval">${val}</span><span class="small muted"> ${unitPer(x, 0)}</span>
+      <div class="ract">${here.map(m => `<button class="go" data-move="${mv.indexOf(m)}">${MOVE_TXT[m.kind](m)} ▶</button>`).join('')}</div></div>${i < L.rungs.length - 1 ? `<div class="rlink small muted">↓ d/dt · ↑ ∫dt${L.start[x] ? '' : ''}</div>` : ''}`;
+  };
+  const missing = L.rungs.slice(1).map((x, i) => [L.rungs[i], x]).filter(([hi, lo]) => S.funcs[lo] && !S.funcs[hi] && L.start[hi] && !ks.has(L.start[hi])).map(([hi]) => `To go up to ${VARS[hi].sym}(t) with ∫dt you need the start value ${VARS[L.start[hi]].sym}.`);
+  card.innerHTML = `<div class="eqhead"><span class="eqlabel">LADDER</span><span class="cond">${S.cond.varA ? 'acceleration varies with time' : 'functions of time'}</span></div>
+    <div class="ladderbody">${L.rungs.map(rung).join('')}</div>${missing.length ? `<div class="small" style="color:#a00">${missing.join(' ')}</div>` : ''}`;
+  card.querySelectorAll('[data-move]').forEach(b => b.onclick = () => { if (!S.busy) ladderOp(mv[+b.dataset.move]); });
+  return card;
 }
 function renderSheet(){
   const box = $('sheet'); box.innerHTML = '';
   const ks = knownSet();
-  if (!S.sheet.length) box.innerHTML = '<div class="sheet-empty">Your sheet is empty. In the library, press <b>+ Gather</b> on the equations you think this problem needs.</div>';
+  const L = ladder();
+  if (L) box.appendChild(ladderCard(L, ks));
+  if (!S.sheet.length && !L) box.innerHTML = '<div class="sheet-empty">Your sheet is empty. In the library, press <b>+ Gather</b> on the equations you think this problem needs.</div>';
   for (const e of S.sheet){
     const eq = EQS[e], ok = applies(e), u = unknownsOf(e, ks), s = solvable(e, ks);
     const card = document.createElement('div');
@@ -348,7 +440,7 @@ function renderSheet(){
   else if (!cur) st.innerHTML = '🎉 Every target is found. Press <b>Replay motion</b> to watch it.';
   else {
     const sp = shortest(S.sheet.filter(applies), ks, cur), lp = shortest(appEqs(), ks, cur);
-    const tl = `${letter(S.targets.indexOf(cur))} ${VARS[cur].sym}`;
+    const tl = `${letter(S.targets.indexOf(cur))} ${symOf(cur)}`;
     if (sp) st.innerHTML = `Your sheet can reach ${tl} in <b>${sp.length}</b> step${sp.length > 1 ? 's' : ''}.`;
     else if (lp) st.innerHTML = `Your sheet can’t reach ${tl} yet. Gather more from the library (or ask the 🐄 for a hint).`;
     else st.innerHTML = `Even the whole library can’t reach ${tl} yet. Is there a hidden given or a condition to set?`;
@@ -412,7 +504,9 @@ function checkWithNumbers(R, tree, branch){
     try {
       const v = {};
       for (const [id, g] of Object.entries(S.givens)) v[id] = g.kind === 'symbol' ? (g.dir ? -1 : 1) * rnd[id] : g.val;
-      for (const p of S.path) v[p.v] = X.evalNum(p.tree, v, p.branch);
+      const fns = {};
+      for (const [id, f] of Object.entries(S.funcs)) if (f.from === 'given') fns[id] = f.poly.map(c => X.evalRat(c, {}));
+      for (const p of S.path) routeStep(p, v, fns);
       const stepwise = X.evalNum(tree, v, branch), simplified = X.evalRat(R, rnd);
       if (!isFinite(stepwise) || !isFinite(simplified)) continue;
       const ok = Math.abs(stepwise - simplified) <= 1e-6 * Math.max(1, Math.abs(stepwise));
@@ -420,6 +514,94 @@ function checkWithNumbers(R, tree, branch){
     } catch (e){ if (!(e instanceof X.MathError)) throw e; }
   }
   return null;
+}
+// one step of the path, redone with plain numbers (v: scalars, fns: id → numeric coefficients)
+function routeStep(p, v, fns){
+  const L = chapter().ladder, poly = (cs, t) => cs.reduce((s, c, k) => s + c * t ** k, 0);
+  if (p.kind === 'eq'){ v[p.v] = X.evalNum(p.tree, v, p.branch); return; }
+  const x = isFn(p.v) ? p.v.slice(3) : p.v;
+  if (p.kind === 'deriv') fns[x] = fns[p.from].slice(1).map((c, k) => c * (k + 1));
+  else if (p.kind === 'integ') fns[x] = [p.start ? v[p.start] : 0, ...fns[p.from].map((c, k) => c / (k + 1))];
+  else if (p.kind === 'eval') v[x] = poly(fns[p.from], v.t);
+  else if (p.kind === 'start') v[x] = fns[p.from][0] || 0;
+  else if (p.kind === 'solveT'){
+    const cs = fns[p.from].map((c, k) => k ? c : c - v[p.from]);
+    const sol = X.polySolve(X.polyFromNumbers(cs), X.number(0));
+    const pos = sol.roots.map(r => r.x).filter(t => t > 1e-12).sort((a, b) => a - b);
+    if (!pos.length) throw new X.MathError('no positive root');
+    v.t = pos[0];
+  }
+}
+const MOVE_LABEL = { deriv: 'd/dt', integ: '∫dt', eval: 'put in t', solveT: 'solve for t', start: 't = 0' };
+// a ladder move: differentiate, integrate, evaluate, solve for t, or read the start value. All exact (symbols allowed).
+async function ladderOp(m){
+  const L = chapter().ladder, step = S.path.length + 1, cur = curTarget();
+  const x = isFn(m.v) ? m.v.slice(3) : m.v, from = m.from, P = S.funcs[from].poly;
+  const sy = (id) => VARS[id].sym, fnS = (id) => `${V(id)}(${V('t')})`;
+  const fm = (x) => fmt(x).replace(/^-/, '−');
+  const lines = []; let result, poly = null, expr = null, val = null, note = '';
+  try {
+    if (m.kind === 'deriv'){
+      poly = X.polyD(P);
+      lines.push([`${fnS(x)} = d${V(from)}/d${V('t')}`, `${sy(x)} is the rate of change of ${sy(from)}`]);
+      lines.push([`${fnS(x)} = d/d${V('t')} [ ${polyHTML(P)} ]`, `put in ${sy(from)}(t)`]);
+      lines.push([`${fnS(x)} = ${polyHTML(poly)}`, 'differentiate each term: d/dt (c·tⁿ) = n·c·tⁿ⁻¹']);
+      note = `Units: each coefficient’s unit gains another /s (${P.map((c, k) => c.n.length && k ? unitPer(from, k) + ' → ' + unitPer(x, k - 1) : '').filter(Boolean).join(', ')}).`;
+    } else if (m.kind === 'integ'){
+      const start = m.start ? exprOf(m.start) : X.number(0);
+      poly = X.polyInt(P, start);
+      lines.push([`${fnS(x)} = ${x === L.rungs[0] ? '' : `${m.start ? V(m.start) : '0'} + `}∫₀<sup>t</sup> ${V(from)} d${V('t')}`, m.start ? `${sy(x)} starts at ${sy(m.start)} and changes by the area under ${sy(from)}(t)` : L.zeroNote[x]]);
+      lines.push([`${fnS(x)} = ${m.start ? showVal(m.start) + ' + ' : ''}∫₀<sup>t</sup> [ ${polyHTML(P)} ] d${V('t')}`, `put in ${sy(from)}(t)${m.start ? ` and ${sy(m.start)}` : ''}`]);
+      lines.push([`${fnS(x)} = ${polyHTML(poly)}`, 'integrate each term: ∫ c·tⁿ dt = c·tⁿ⁺¹/(n + 1)']);
+      note = 'Units: each coefficient’s unit loses a /s, and the start value supplies the constant.';
+    } else if (m.kind === 'eval'){
+      expr = X.polyAt(P, exprOf('t'));
+      lines.push([`${V(x)} = ${fnS(from)} at the known ${V('t')}`, `${sy(x)} is the value of ${sy(from)}(t) at that moment`]);
+      lines.push([`${V(x)} = ${polyHTML(P).replaceAll(V('t'), `(${showVal('t')})`)}`, 'put in t']);
+    } else if (m.kind === 'start'){
+      expr = P[0] || X.number(0);
+      lines.push([`${V(x)} = ${fnS(from)} at ${V('t')} = 0`, `${sy(x)} is the value at the start`]);
+      lines.push([`${V(x)} = ${polyHTML(P).replaceAll(V('t'), '(0)')}`, 'every term with t vanishes']);
+    } else if (m.kind === 'solveT'){
+      const want = exprOf(from);
+      const sol = X.polySolve(P, want), q = sol.q;
+      lines.push([`${fnS(from)} = ${showVal(from)}`, `the moment the question asks about`]);
+      lines.push([`${polyHTML(q)} = 0`, 'move everything to one side']);
+      const unit = 's';
+      const show = (r) => X.isNumeric(r.r) ? `${fm(r.x)} ${unit}` : X.toHTML(r.r, S.printOpts);
+      if (sol.method === 'linear') lines.push([`${V('t')} = ${show(sol.roots[0])}`, 'it’s linear in t: isolate t']);
+      else if (sol.method === 'quadratic'){
+        const [c, b, a] = q.map(r => X.isNumeric(r) ? fm(X.numValue(r)) : `(${X.toHTML(r, S.printOpts)})`);
+        lines.push([`${V('t')} = [−b ± √(b² − 4ac)] / (2a)`, `quadratic formula with a = ${a}, b = ${b}, c = ${c}`]);
+        lines.push([`${V('t')} = ${sol.roots.map(show).join(' or ')}`, 'two roots']);
+      } else lines.push([`${V('t')} = ${sol.roots.map(show).join(' or ')}`, `degree ${q.length - 1}: the real roots, found numerically`]);
+      const sorted = [...sol.roots].sort((a, b) => a.x - b.x), pos = sorted.filter(r => r.x > 1e-12);
+      if (!pos.length) throw new X.MathError(`No positive time works: ${sy(from)} never reaches that value after the clock starts.`);
+      const keep = pos[0];
+      const rejected = sorted.filter(r => r !== keep).map(r => r.x <= 1e-12 ? `${fm(r.x)} s is rejected: it’s before the clock started (t < 0)` : `${fm(r.x)} s is a later time it has this value again`);
+      if (rejected.length) note = `Keep t = ${fm(keep.x)} s, the first time after t = 0. ${rejected.join('; ')}.`;
+      expr = keep.r;
+    }
+  } catch (e){ if (!(e instanceof X.MathError)) throw e; dialog('Math says no', `<b>CAN’T DO THAT</b>${e.message}`); return; }
+  S.busy = true;
+  const symb = anySym();
+  if (expr){ val = X.evalRat(expr, SAMPLE); if (!symb || X.isNumeric(expr)) expr = X.isNumeric(expr) ? expr : expr; }
+  $('workTitle').textContent = `6. Work · step ${step}: ladder ${MOVE_LABEL[m.kind]} → ${plainOf(m.v)}`;
+  const work = $('work'); work.innerHTML = `<div class="section">MOTION LADDER: ${MOVE_LABEL[m.kind].toUpperCase()}</div>`;
+  $('workWin').scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'nearest' });
+  for (const [h, why] of lines){ const d = document.createElement('div'); d.className = 'line'; d.innerHTML = `${h}<span class="why">${why}</span>`; work.appendChild(d); paintSyms(); await sleep(30); d.classList.add('show'); beep(880, 0.04); await sleep(380); }
+  const r = document.createElement('div'); r.className = 'result';
+  r.innerHTML = poly ? `${symOf(m.v)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${X.isNumeric(expr) ? `${fmt(val)} ${unitOf(x)}` : X.toHTML(expr, S.printOpts)}`;
+  work.appendChild(r);
+  if (note){ const n = document.createElement('div'); n.className = 'note'; n.textContent = note; work.appendChild(n); }
+  if (poly) S.funcs[x] = { from: 'ladder', poly, step };
+  else S.found[x] = { val, expr: X.isNumeric(expr) ? null : expr, step };
+  const f = document.createElement('div'); f.className = 'feedback';
+  f.innerHTML = m.v === cur ? `🎯 That’s target ${letter(S.targets.indexOf(m.v))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}` : `Found ${symOf(m.v)}.`;
+  work.appendChild(f);
+  S.path.push({ kind: m.kind, from, start: m.start, v: m.v, val, expr, poly, html: work.innerHTML, title: $('workTitle').textContent });
+  beep(1200, 0.06); S.busy = false; renderAll(false);
+  if (m.v === cur && !curTarget()) celebrate();
 }
 async function solve(eqId, target){
   const eq = EQS[eqId], sol = eq.solve[target], v = vals();
@@ -450,11 +632,11 @@ async function solve(eqId, target){
     section('PUT IN WHAT YOU KNOW');
     await addLine(`${V(target)} = ${plugSym(sub)}`); await sleep(420);
     section('SIMPLIFY');
-    const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${VARS[target].sym} = ${X.toHTML(R, S.printOpts)}`; work.appendChild(r); paintSyms();
+    const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${symOf(target)} = ${X.toHTML(R, S.printOpts)}`; work.appendChild(r); paintSyms();
   } else {
     section('PLUG IN NUMBERS (SI UNITS, SIGNS FROM DIRECTIONS)');
     await addLine(`${V(target)} = ${plug(sub, v)}`); await sleep(420);
-    const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${VARS[target].sym} = ${fmt(res.value)} ${unitOf(target)}`; work.appendChild(r);
+    const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${symOf(target)} = ${fmt(res.value)} ${unitOf(target)}`; work.appendChild(r);
     const ex = extras(target, res.value); if (ex){ const e2 = document.createElement('div'); e2.innerHTML = ex; work.appendChild(e2); }
   }
   const u = document.createElement('div'); u.className = 'small units'; u.innerHTML = `Units ✓ every term works out to ${sol.unitText}.`; work.appendChild(u);
@@ -472,13 +654,13 @@ async function solve(eqId, target){
   S.found[target] = { val: res.value, expr: R, step };
   const after = shortest(appEqs(), knownSet(), curTarget());
   let fb;
-  if (target === cur) fb = `🎯 That’s target ${letter(S.targets.indexOf(target))}. ${curTarget() ? `Next up: ${VARS[curTarget()].sym}.` : 'Solved!'}`;
-  else if (!cur) fb = `Found ${VARS[target].sym}. Add a 🎯 target to get feedback on your route.`;
+  if (target === cur) fb = `🎯 That’s target ${letter(S.targets.indexOf(target))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}`;
+  else if (!cur) fb = `Found ${symOf(target)}. Add a 🎯 target to get feedback on your route.`;
   else if (before && after && after.length < before.length) fb = `✔ Good move: one step closer. ${after.length} step${after.length > 1 ? 's' : ''} to go.`;
-  else if (after) fb = `Valid algebra, but ${VARS[target].sym} doesn’t bring ${VARS[cur].sym} closer. The shortest route is still ${after.length} step${after.length > 1 ? 's' : ''}. More knowns never hurt, though.`;
-  else fb = `Found ${VARS[target].sym}. The target still isn’t reachable: look for a hidden given or a condition.`;
+  else if (after) fb = `Valid algebra, but ${symOf(target)} doesn’t bring ${symOf(cur)} closer. The shortest route is still ${after.length} step${after.length > 1 ? 's' : ''}. More knowns never hurt, though.`;
+  else fb = `Found ${symOf(target)}. The target still isn’t reachable: look for a hidden given or a condition.`;
   const f = document.createElement('div'); f.className = 'feedback'; f.innerHTML = fb; work.appendChild(f);
-  S.path.push({ eq: eqId, v: target, val: res.value, expr: R, tree, branch: res.branch, html: work.innerHTML, title: $('workTitle').textContent });
+  S.path.push({ kind: 'eq', eq: eqId, v: target, val: res.value, expr: R, tree, branch: res.branch, html: work.innerHTML, title: $('workTitle').textContent });
   beep(1200, 0.06); S.busy = false; renderAll(false);
   if (target === cur && !curTarget()) celebrate();
 }
@@ -500,8 +682,10 @@ $('hintBtn').onclick = () => {
   const ks = knownSet(), lp = shortest(appEqs(), ks, cur);
   if (!lp){ say(chapter().stuck ? 'No route yet. ' + chapter().stuck : S.ch === 'incline' ? 'No route yet. Hidden givens? “Starts from rest” means v₀ = 0, “stops” means v = 0. Is “On Earth” ticked so g is known?' : 'No route yet. “Starts from rest” means ω₀ = 0 and “stops” means ω = 0. For a point on the rim, tick “Track a point”.'); return; }
   const sp = shortest(S.sheet.filter(applies), ks, cur);
-  if (sp){ const n = sp[0]; say(`Psst… on your sheet, <b>${EQS[n.eq].label}</b> has just one unknown, <b>${VARS[n.v].sym}</b>. ${n.v === cur ? 'And it’s your target!' : 'Finding it gets you closer.'}`); return; }
-  const miss = lp.find(s => !S.sheet.includes(s.eq));
+  if (sp && sp[0].kind !== 'eq'){ const n = sp[0]; say(`Psst… on your <b>motion ladder</b>, you can ${MOVE_TXT[n.kind](n)}. ${n.v === cur ? 'That’s your target!' : 'That gets you closer.'}`); return; }
+  if (sp){ const n = sp[0]; say(`Psst… on your sheet, <b>${EQS[n.eq].label}</b> has just one unknown, <b>${symOf(n.v)}</b>. ${n.v === cur ? 'And it’s your target!' : 'Finding it gets you closer.'}`); return; }
+  const miss = lp.find(s => s.kind === 'eq' && !S.sheet.includes(s.eq));
+  if (!miss){ say('Your motion ladder can get there: look at the buttons on its rungs.'); return; }
   const sec = chapter().sections.find(x => x.eqs.includes(miss.eq));
   say(`Your sheet is missing a link. Look for an equation that connects <b>${EQS[miss.eq].vars.map(x => VARS[x].sym).join(', ')}</b>, in the library section “${sec.title}”.`);
 };
@@ -512,16 +696,16 @@ $('showBtn').onclick = async () => {
   while (curTarget()){
     const lp = shortest(appEqs(), knownSet(), curTarget());
     if (!lp){ dialog('No route', '<b>TARGET UNREACHABLE</b>No chain of equations gets from your knowns to the target. Look for a hidden given or a condition you haven’t set.'); return; }
-    for (const s of lp) if (!S.sheet.includes(s.eq)){ S.sheet.push(s.eq); renderAll(false); await sleep(350); }
-    say(`Path to ${VARS[curTarget()].sym}: ${lp.map(s => `${EQS[s.eq].label}→${VARS[s.v].sym}`).join(', then ')}.`);
-    for (const s of lp){ await solve(s.eq, s.v); await sleep(450); }
+    for (const s of lp) if (s.kind === 'eq' && !S.sheet.includes(s.eq)){ S.sheet.push(s.eq); renderAll(false); await sleep(350); }
+    say(`Path to ${symOf(curTarget())}: ${lp.map(s => `${s.kind === 'eq' ? EQS[s.eq].label : MOVE_LABEL[s.kind]}→${symOf(s.v)}`).join(', then ')}.`);
+    for (const s of lp){ if (s.kind === 'eq') await solve(s.eq, s.v); else await ladderOp(s); await sleep(450); }
   }
 };
 
 function renderPath(){
   const box = $('pathList');
   if (!S.path.length){ box.innerHTML = '<div class="empty">Your steps will stack up here: which equation, what it found.</div>'; return; }
-  box.innerHTML = '<ol>' + S.path.map((p, i) => `<li data-i="${i}">${EQS[p.eq].label} → ${VARS[p.v].sym} = ${p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`}</li>`).join('') + '</ol>';
+  box.innerHTML = '<ol>' + S.path.map((p, i) => `<li data-i="${i}">${p.kind === 'eq' ? EQS[p.eq].label : MOVE_LABEL[p.kind]} → ${symOf(p.v)} = ${isFn(p.v) ? polyHTML(p.poly) : p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`}</li>`).join('') + '</ol>';
   box.querySelectorAll('li').forEach(li => li.onclick = () => { const p = S.path[+li.dataset.i]; $('work').innerHTML = p.html; $('work').querySelectorAll('.line').forEach(l => l.classList.add('show')); $('workTitle').textContent = p.title; paintSyms(); });
 }
 
@@ -559,13 +743,31 @@ $('checkSetup').onclick = () => {
     if (!!S.cond[k] !== want){ const c = chapter().conditions.find(x => x.key === k); const w = c.type === 'choice' ? c.options.find(o => o[0] === want)[1] : (want ? 'on' : 'off'); lines.push(`✗ Condition “${c.label}” should be: <b>${w}</b>.`); bad++; }
   }
   if (!S.condOk){ lines.push('✗ You haven’t confirmed the conditions in step 2 yet.'); bad++; }
-  for (const t of p.key.targets) if (!S.targets.includes(t)){ lines.push(`✗ The question asks for <b>${VARS[t].sym}</b> (${nm(t)}): add it as a 🎯 target.`); bad++; }
+  for (const t of p.key.targets) if (!S.targets.includes(t)){ lines.push(`✗ The question asks for <b>${symOf(t)}</b> (${nm(t)}): add it as a 🎯 target.`); bad++; }
   dialog(bad ? 'Setup check' : 'Setup check: perfect!', `<b>${bad ? `${bad} THING${bad > 1 ? 'S' : ''} TO FIX` : 'ALL SET UP CORRECTLY'}</b>${lines.join('<br>')}`, !bad);
 };
 
 // ---------- simulation values for the diagram ----------
+// numeric position polynomial from the ladder (symbols at their typical values), or null
+function ladderPositionPoly(){
+  const L = ladder(); if (!L) return null;
+  const num = (id) => S.funcs[id] ? S.funcs[id].poly.map(c => X.evalRat(c, SAMPLE)) : null;
+  const [p, u, a] = L.rungs, st = (id) => L.start[id] && known(L.start[id]) ? val(L.start[id]) : 0;
+  const int = (cs, c0) => [c0, ...cs.map((c, k) => c / (k + 1))];
+  if (num(p)) return num(p);
+  if (num(u)) return int(num(u), 0);
+  if (num(a)) return int(int(num(a), st(u)), 0);
+  return null;
+}
 function simValues(){
   const k = K(), v = vals(); let illus = false;
+  const fp = ladderPositionPoly();
+  if (fp){
+    const T = known('t') && val('t') > 0 ? val('t') : 4;
+    v.__P = fp; v[k.t] = T; v[k.u0] = fp[1] || 0; v[k.a] = posAccel(v, k, T); v[k.p] = posAt(v, k, T);
+    if (S.cond.rim && !('r' in v)) v.r = 0.5;
+    return { v, illus: !known('t') };
+  }
   const eqs = appEqs();
   const close = () => { let changed = true; while (changed){ changed = false; for (const e of eqs){ const u = EQS[e].vars.filter(x => !(x in v)); if (u.length !== 1 || !EQS[e].solve[u[0]]) continue; let r = EQS[e].solve[u[0]].f(v); if (typeof r === 'number') r = { value: r }; if (r && !r.error && isFinite(r.value)){ v[u[0]] = r.value; changed = true; } } } };
   close();
@@ -583,8 +785,9 @@ function simValues(){
   if (!(k.p in v)) v[k.p] = v[k.u0] * v[k.t] + 0.5 * v[k.a] * v[k.t] ** 2;
   return { v, illus };
 }
-const posAt = (v, k, tau) => v[k.u0] * tau + 0.5 * v[k.a] * tau * tau;
-const velAt = (v, k, tau) => v[k.u0] + v[k.a] * tau;
+const posAt = (v, k, tau) => v.__P ? v.__P.reduce((s, c, n) => s + c * tau ** n, 0) : v[k.u0] * tau + 0.5 * v[k.a] * tau * tau;
+const velAt = (v, k, tau) => v.__P ? v.__P.reduce((s, c, n) => n ? s + n * c * tau ** (n - 1) : s, 0) : v[k.u0] + v[k.a] * tau;
+const posAccel = (v, k, tau) => v.__P ? v.__P.reduce((s, c, n) => n > 1 ? s + n * (n - 1) * c * tau ** (n - 2) : s, 0) : v[k.a];
 
 // ---------- drawing helpers ----------
 const COL = { given: '#19f0ff', found: '#ffe600', target: '#ff2bd6', unknown: '#9a9aaa' };
@@ -894,7 +1097,7 @@ $('replayBtn').onclick = () => {
 // ---------- celebrate ----------
 function celebrate(){
   fanfare();
-  say(`🎉 <b>SOLVED!</b> ${S.targets.map((t, i) => `${letter(i)} ${VARS[t].sym} = ${showVal(t)}`).join(', ')}. Press <b>Replay motion</b> to watch it.${S.bank ? ' Then try another from the 📚 practice bank.' : ''}`);
+  say(`🎉 <b>SOLVED!</b> ${S.targets.map((t, i) => `${letter(i)} ${symOf(t)} = ${showVal(t)}`).join(', ')}. Press <b>Replay motion</b> to watch it.${S.bank ? ' Then try another from the 📚 practice bank.' : ''}`);
   if (calm()) return;
   const b = $('solved'); b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); setTimeout(() => b.classList.remove('show'), 1800);
   const cv = $('sparks'), ctx = cv.getContext('2d'); cv.width = innerWidth; cv.height = innerHeight;

@@ -78,6 +78,7 @@ function kinematics(prefix, k, words){
   };
   return {
     [prefix + '1']: {
+      applies: c => !c.varA, needs: 'constant acceleration',
       vars: [u, u0, a, t], form: `${Vu} = ${Vu0} + ${Va}${Vt}`,
       meaning: words.m1, condition: `constant ${P(a)}`, calc: `Integrate ${P(a)} = d${P(u)}/dt from 0 to t with ${P(a)} constant: ${P(u)} − ${P(u0)} = ${P(a)}t.`,
       solve: {
@@ -90,6 +91,7 @@ function kinematics(prefix, k, words){
       },
     },
     [prefix + '2']: {
+      applies: c => !c.varA, needs: 'constant acceleration',
       vars: [p, u0, a, t], form: `${Vp} = ${Vu0}${Vt} + ½${Va}${Vt}²`,
       meaning: words.m2, condition: `constant ${P(a)}`, calc: `Integrate ${P(u)}(t) = ${P(u0)} + ${P(a)}t from 0 to t: ${P(p)} = ${P(u0)}t + ½${P(a)}t².`,
       solve: {
@@ -107,6 +109,7 @@ function kinematics(prefix, k, words){
       },
     },
     [prefix + '3']: {
+      applies: c => !c.varA, needs: 'constant acceleration',
       vars: [u, u0, a, p], form: `${Vu}² = ${Vu0}² + 2${Va}${Vp}`,
       meaning: words.m3, condition: `constant ${P(a)}`, calc: `Eliminate t between the first two equations (or use ${P(a)} = ${P(u)} d${P(u)}/d${P(p)} and integrate).`,
       solve: {
@@ -130,6 +133,7 @@ function kinematics(prefix, k, words){
       },
     },
     [prefix + '4']: {
+      applies: c => !c.varA, needs: 'constant acceleration',
       vars: [p, u0, u, t], form: `${Vp} = ½(${Vu0} + ${Vu})${Vt}`,
       meaning: words.m4, condition: `constant ${P(a)}`, calc: `With ${P(a)} constant, velocity changes linearly, so its average over the interval is (${P(u0)} + ${P(u)})/2.`,
       solve: {
@@ -143,6 +147,7 @@ function kinematics(prefix, k, words){
       },
     },
     [prefix + '5']: {
+      applies: c => !c.varA, needs: 'constant acceleration',
       vars: [p, u, a, t], form: `${Vp} = ${Vu}${Vt} − ½${Va}${Vt}²`,
       meaning: words.m5, condition: `constant ${P(a)}`, calc: `Substitute ${P(u0)} = ${P(u)} − ${P(a)}t into the second equation.`,
       solve: {
@@ -402,6 +407,7 @@ export const CHAPTERS = {
   incline: {
     title: 'Inclines & Newton’s laws', short: 'Inclines',
     kin: { p: 'dx', u0: 'v0', u: 'vf', a: 'a', t: 't' }, diagram: 'incline',
+    ladder: { rungs: ['dx', 'vf', 'a'], start: { dx: null, vf: 'v0' }, zeroNote: { dx: 'Δx is measured from where it starts, so Δx(0) = 0.' } },
     vars: ['dx', 'v0', 'vf', 'a', 't', 'inc', 'm', 'g', 'W', 'Wpar', 'Wperp', 'N', 'f', 'mu', 'F'],
     axis: '+ is <b>down the slope</b>. Pick the direction for each vector; the lab sets the sign.',
     intro: `<p>On a ramp, tilt your axes so one runs <b>along the slope</b> and one runs <b>into it</b>. Gravity then splits into two parts: W∥ pulls the object down the slope, and W⊥ presses it into the ramp, where the normal force N cancels it.</p>
@@ -424,6 +430,7 @@ export const CHAPTERS = {
   pulley: {
     title: 'Tension & pulleys', short: 'Pulleys',
     kin: { p: 'dx', u0: 'v0', u: 'vf', a: 'a', t: 't' }, diagram: 'pulley',
+    ladder: { rungs: ['dx', 'vf', 'a'], start: { dx: null, vf: 'v0' }, zeroNote: { dx: 'Δx is measured from where it starts, so Δx(0) = 0.' } },
     vars: ['m1', 'm2', 'g', 'a', 'Tn', 'W1', 'W2', 'N1', 'f', 'mu', 'dx', 'v0', 'vf', 't'],
     dirs: { dx: ['forward (m₂ falls)', 'backward (m₂ rises)'], v0: ['forward (m₂ falls)', 'backward (m₂ rises)'], vf: ['forward (m₂ falls)', 'backward (m₂ rises)'], a: ['forward (m₂ falls)', 'backward (m₂ rises)'] },
     names: { dx: 'distance each block moves', v0: 'initial speed of the blocks', vf: 'final speed of the blocks', a: 'acceleration of both blocks', f: 'kinetic friction on m₁ (size)' },
@@ -453,16 +460,17 @@ export const CHAPTERS = {
   rotation: {
     title: 'Rotation kinematics', short: 'Rotation',
     kin: { p: 'theta', u0: 'w0', u: 'w', a: 'alpha', t: 't' }, diagram: 'wheel',
+    ladder: { rungs: ['theta', 'w', 'alpha'], start: { theta: null, w: 'w0' }, zeroNote: { theta: 'θ is the angle turned since t = 0, so θ(0) = 0.' } },
     vars: ['theta', 'w0', 'w', 'alpha', 't'], rimVars: ['r', 's', 'v', 'at', 'ac'],
     axis: '+ is <b>counterclockwise</b>. Pick the direction for each vector; the lab sets the sign.',
     intro: `<p>A rigid wheel turns as one piece: every point sweeps the <b>same angle</b> in the same time. Its motion is described by angle θ, angular velocity ω and angular acceleration α.</p>
       <p>These are the rotational twins of position, velocity and acceleration, so the equations have the same shape. The radius r converts to a point’s path: s = rθ, v = rω.</p>`,
     sections: [
-      { title: 'Angular kinematics', note: 'Five quantities: θ, ω₀, ω, α, t. Each equation leaves one of them out.', eqs: ['E1', 'E2', 'E3', 'E4', 'E5'] },
+      { title: 'Angular kinematics (constant α)', note: 'Five quantities: θ, ω₀, ω, α, t. Each equation leaves one of them out. If α varies with time, use the motion ladder on your sheet instead.', eqs: ['E1', 'E2', 'E3', 'E4', 'E5'] },
       { title: 'A point at radius r', note: 'Turn on “Track a point” in the conditions to use these.', eqs: ['E6', 'E7', 'E8', 'E9'], applies: c => c.rim, needs: 'track a point at radius r' },
     ],
     conditions: [
-      { key: 'constA', type: 'locked', label: 'Constant angular acceleration', note: 'Needed for every equation in this chapter.' },
+      { key: 'varA', type: 'choice', label: 'Angular acceleration', options: [[false, 'Constant'], [true, 'Varies with time']] },
       { key: 'rim', type: 'toggle', label: 'Track a point at distance r from the axis' },
       { key: 'rest', type: 'hidden', label: 'Starts from rest', sets: { w0: 0 } },
       { key: 'stop', type: 'hidden', label: 'Comes to a stop', sets: { w: 0 } },
