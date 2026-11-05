@@ -271,6 +271,7 @@ function renderKnowns(){
     if (f){ txt = showVal(id); sub = `found in step ${f.step}`; }
     else { txt = describe(id, g); sub = g.from === 'condition' ? `from condition: ${g.why}` : nm(id); act = g.from === 'you' ? `<button data-edit="${id}" title="Edit">✎</button><button data-del="${id}" title="Remove">×</button>` : ''; }
     row.innerHTML = `<div class="vsym">${VARS[id].sym}</div><div><div class="kv">${VARS[id].sym}${g && g.kind === 'symbol' ? ':' : ' ='} ${txt}</div><div class="kd">${sub}</div></div><div class="kact">${act}</div>`;
+    row.title = sub.replace(/<[^>]*>/g, '');
     row.addEventListener('mouseenter', () => setHover(id)); row.addEventListener('mouseleave', () => setHover(null));
     box.appendChild(row);
   }
@@ -471,7 +472,8 @@ const MOVE_TXT = {
 function ladderCard(L, ks){
   const card = document.createElement('div');
   const mv = moves([], ks);
-  card.className = 'eq ladder ' + (mv.length ? 'lit' : 'dim');
+  const lastP = S.path[S.path.length - 1];
+  card.className = 'eq ladder ' + (mv.length ? 'lit' : 'dim') + (lastP && lastP.kind !== 'eq' ? ' last' : '');
   const rung = (x, i) => {
     const here = mv.filter(m => m.from === x);
     const val = S.funcs[x] ? polyHTML(S.funcs[x].poly) : '<span class="muted">?</span>';
@@ -485,11 +487,13 @@ function ladderCard(L, ks){
   return card;
 }
 function renderSheet(){
-  const box = $('sheet'); box.innerHTML = '';
+  const box = $('sheet'), ww = $('workWin');
+  if (ww.parentElement === box) box.after(ww); // take the work panel out before rebuilding the cards
+  box.innerHTML = '';
   const ks = knownSet();
   const L = ladder();
   if (L) box.appendChild(ladderCard(L, ks));
-  if (!S.sheet.length && !L) box.innerHTML = '<div class="sheet-empty">Your sheet is empty. In the library, press <b>+ Gather</b> on the equations you think this problem needs.</div>';
+  if (!S.sheet.length && !L) box.innerHTML = '<div class="sheet-empty">Your sheet is empty. Open the <b>Library</b> (top right of the canvas) and press <b>+ Gather</b> on the equations you think this problem needs, or draw a free-body diagram in <b>Forces</b>.</div>';
   for (const e of S.sheet){
     const eq = EQS[e], ok = applies(e), u = unknownsOf(e, ks), s = solvable(e, ks), fu = fnSolvable(e, ks);
     const card = document.createElement('div');
@@ -502,8 +506,11 @@ function renderSheet(){
     else if (fu) act = `<button class="go" data-solve="fn:${fu}">Solve for ${symOf('fn:' + fu)} ▶</button>${'fn:' + fu === curTarget() ? '<span class="small" style="color:var(--hot)">← target!</span>' : ''}`;
     else if (u.length === 0) act = `<button data-check="1">Check ✓</button><span class="small muted">All known.</span>`;
     else act = `<span class="small muted">Still missing: ${u.filter(x => !ks.has('fn:' + x)).map(x => VARS[x].sym).join(', ')}</span>`;
+    const got = S.path.filter(p => p.kind === 'eq' && p.eq === e).map(p => `→ ${symOf(p.v)} = ${isFn(p.v) ? polyHTML(p.poly) : p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`}`);
+    const lastP = S.path[S.path.length - 1];
+    if (lastP && lastP.kind === 'eq' && lastP.eq === e) card.classList.add('last');
     card.innerHTML = `<button class="rm" data-rm="1" title="Remove from sheet">×</button><div class="eqhead"><span class="eqlabel">${eq.label}</span><span class="cond">only if ${eq.condition}</span></div>
-      <div class="form">${eq.form}</div><div class="act">${act}</div>`;
+      <div class="form">${eq.form}</div>${got.length ? `<div class="found">${got.join('<br>')}</div>` : ''}${got.length && u.length === 0 ? '' : `<div class="act">${act}</div>`}`;
     card.addEventListener('click', (ev) => {
       if (S.busy) return;
       if (ev.target.closest('[data-rm]')){ S.sheet = S.sheet.filter(x => x !== e); renderAll(false); return; }
@@ -514,6 +521,8 @@ function renderSheet(){
     });
     box.appendChild(card);
   }
+  // the work opens under the card that was solved last
+  const last = box.querySelector('.eq.last'); if (last) last.after(ww);
   // status line
   const st = $('sheetStatus'), cur = curTarget();
   if (!S.targets.length) st.innerHTML = 'Pick what the question asks for with <b>🎯 add a target</b>.';
@@ -1358,16 +1367,30 @@ async function sysOp(m){
 
 // ---------- diagram tabs ----------
 S.dtab = 'motion';
+// Motion: the replay on the canvas, the inspector beside it. Build: the setup on the canvas.
+// Forces: the setup stays on the canvas (click a body) and its free-body diagram opens beside it.
 function showTab(t){
   S.dtab = t;
   document.querySelectorAll('[data-dtab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.dtab === t)));
-  $('paneMotion').hidden = t !== 'motion'; $('paneBuild').hidden = t !== 'build'; $('paneForces').hidden = t !== 'forces';
-  if (t === 'motion') draw(); if (t === 'forces') renderFBD(); if (t === 'build') renderBuildUI();
+  $('paneMotion').hidden = t !== 'motion'; $('paneBuild').hidden = t === 'motion';
+  $('paneForces').hidden = t !== 'forces'; $('paneSide').hidden = t === 'forces';
+  $('replayBtn').hidden = t !== 'motion';
+  if (t === 'motion') draw(); if (t === 'forces') renderFBD(); if (t !== 'motion') renderBuildUI();
 }
 document.querySelectorAll('[data-dtab]').forEach(b => b.onclick = () => showTab(b.dataset.dtab));
 
 // ---------- build canvas ----------
-S.build = createBuild($('bd'), { onChange: () => { renderBuildUI(); if (S.dtab === 'forces') renderFBD(); }, nameOf: (id) => VARS[id] ? VARS[id].plain : id });
+S.build = createBuild($('bd'), { onChange: () => {
+  const sel = S.build && S.build.selected();
+  if (sel && S.dtab === 'forces' && fbdBodies().some(b => b.id === sel.id)) S.fbd.body = sel.id; // click a body: its free-body diagram opens
+  renderBuildUI(); if (S.dtab === 'forces') renderFBD();
+}, nameOf: (id) => VARS[id] ? VARS[id].plain : id });
+// ---------- library drawer, add-a-given panel ----------
+function setDrawer(open){ $('libDrawer').classList.toggle('open', open); $('libBtn').setAttribute('aria-expanded', String(open)); }
+$('libBtn').onclick = () => setDrawer(!$('libDrawer').classList.contains('open'));
+$('libClose').onclick = () => setDrawer(false);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setDrawer(false); });
+$('addGivenBtn').onclick = () => { const p = $('addPanel'); p.hidden = !p.hidden; $('addGivenBtn').setAttribute('aria-expanded', String(!p.hidden)); };
 function renderBuildUI(){
   $('bpal').innerHTML = `<span class="small"><b>Add:</b></span>${PALETTE.map(k => `<button data-bshape="${k}">${S.build.KINDS[k].label}</button>`).join('')}
     <span class="small" style="margin-left:8px"><b>Templates:</b></span><button data-template="incline">Incline</button><button data-template="pulley">Pulley</button><button data-template="blocks">Two blocks</button><button data-template="wheel">Wheel</button>`;

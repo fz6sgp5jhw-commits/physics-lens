@@ -150,7 +150,8 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id } = 
 
   // ---- interaction: drag shapes, drag the ramp's angle handle
   let drag = null;
-  const pt = (e) => { const r = svg.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
+  // screen → drawing coordinates (works however the SVG is scaled or letterboxed)
+  const pt = (e) => { const m = svg.getScreenCTM(); if (!m) return { x: 0, y: 0 }; const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse()); return { x: p.x, y: p.y }; };
   svg.addEventListener('pointerdown', (e) => {
     const g = e.target.closest('[data-id]'); if (!g) { st.sel = null; render(); onChange(); return; }
     const s = st.shapes.find(x => x.id === g.dataset.id); st.sel = s.id;

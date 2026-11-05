@@ -6,6 +6,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, openApp, setCondition, confirmConditions, addTarget, addGiven, addFunction } from './helpers.js';
+import { gather } from './helpers.js';
 
 let env;
 before(async () => { env = await launch(); });
@@ -114,7 +115,7 @@ test('general system detection: T5 and T6 share T and a, combine them', async ()
     await page.click('#chPick button:has-text("Tension & pulleys")');
     await setCondition(page, 'friction', false); await setCondition(page, 'earth', false); await confirmConditions(page);
     for (const id of ['m1', 'm2', 'g']) await addGiven(page, id, 0, '', 0, { symbol: true });
-    for (const e of ['P2', 'P5', 'P6']) await page.click(`#lib [data-gather="${e}"]`);
+    for (const e of ['P2', 'P5', 'P6']) await gather(page, e);
     await addTarget(page, 'a');
     await page.click('#sheet [data-eq="P2"] [data-solve]');
     await page.waitForFunction(() => !window.__rl.busy && 'W2' in window.__rl.found);

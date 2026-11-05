@@ -6,6 +6,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, openApp, setCondition, confirmConditions, addTarget } from './helpers.js';
+import { gather } from './helpers.js';
 
 let env;
 before(async () => { env = await launch(); });
@@ -49,7 +50,7 @@ async function setup(page){
   await drawForces(page, 1, ['gravity', 'normal', 'contact', 'friction']);
   await page.click('#fbdCheck'); assert.match(await page.innerText('#fbdMsg'), /looks right/i, 'block B');
   await page.click('#fbdWrite');
-  for (const e of ['Q1', 'Q2']) await page.click(`#lib [data-gather="${e}"]`);
+  for (const e of ['Q1', 'Q2']) await gather(page, e);
 }
 
 test('pushed blocks: P = F·m_B/(m_A + m_B), what matters, ranking, barely sliding (gate)', async () => {

@@ -48,15 +48,17 @@
   #bubble .sym{font-family:var(--mono)}
 
   /* layout */
-  main{position:relative;z-index:2;max-width:1640px;margin:0 auto;padding:12px 16px 80px;display:grid;grid-template-columns:330px minmax(0,0.9fr) minmax(0,1.1fr);gap:12px;align-items:start}
-  .col-mid{position:sticky;top:100px}
-  @media (max-width:1279px){main{grid-template-columns:300px minmax(0,1fr)} .col-right{grid-column:1 / -1} .col-mid{position:static}}
-  @media (max-width:820px){main{grid-template-columns:1fr} .appbar{grid-template-columns:1fr} .steps,.appbar .tools{grid-column:1 !important;grid-row:auto !important}}
-  .col{display:flex;flex-direction:column;gap:12px;min-width:0}
-  .win{background:var(--panel);backdrop-filter:blur(8px) saturate(125%);-webkit-backdrop-filter:blur(8px) saturate(125%);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03)}
-  .win > .titlebar{display:flex;align-items:center;gap:8px;padding:9px 12px 8px;border-bottom:1px solid var(--line)}
-  .win > .titlebar h2{margin:0;font:600 12px/1.2 var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .win > .titlebar h2::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;background:var(--cy);box-shadow:0 0 8px var(--cy);vertical-align:2px}
+  /* one workspace: the canvas and the sheet on the left, conditions and the diagrams that write equations on the right */
+  main.ws{position:relative;z-index:2;max-width:1640px;margin:0 auto;padding:10px 16px 60px;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:10px;align-items:start}
+  .ws-left{display:flex;flex-direction:column;gap:8px;min-width:0}
+  .ws-right{display:flex;flex-direction:column;gap:8px;min-width:0;position:sticky;top:94px;max-height:calc(100vh - 104px);overflow-y:auto;scrollbar-width:thin}
+  @media (max-width:1100px){main.ws{grid-template-columns:1fr} .ws-right{position:static;max-height:none}}
+  @media (max-width:820px){.appbar{grid-template-columns:1fr} .steps,.appbar .tools{grid-column:1 !important;grid-row:auto !important}}
+  .win,.card{background:var(--panel);backdrop-filter:blur(8px) saturate(125%);-webkit-backdrop-filter:blur(8px) saturate(125%);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.03)}
+  .card{padding:0}
+  .card .titlebar,.win > .titlebar{display:flex;align-items:center;gap:8px;padding:9px 12px 8px;border-bottom:1px solid var(--line)}
+  .card .titlebar h2,.win > .titlebar h2{margin:0;font:600 12px/1.2 var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .card .titlebar h2::before,.win > .titlebar h2::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:8px;background:var(--cy);box-shadow:0 0 8px var(--cy);vertical-align:2px}
   .body{padding:10px 12px 12px}
   .sunk{background:var(--inset);border:1px solid var(--line);border-radius:8px;padding:10px}
 
@@ -122,7 +124,6 @@
   .ccheck small{display:block;color:var(--muted);font-size:11.5px}
 
   /* 3. library */
-  #library .body{max-height:calc(100vh - 160px);overflow-y:auto}
   .chapter h3{font:600 12px/1.3 var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--cy);margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
   .chapter.other h3{color:var(--muted)}
   .chapter .intro{font-size:13px;color:#c3d1e3;margin-bottom:8px}
@@ -247,6 +248,64 @@
   #fbd .fmsg.bad{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.4)}
   #fbd svg{display:block;width:100%;max-width:420px;height:auto;background:#070b14;border:1px solid var(--line);border-radius:8px;margin:6px auto}
 
+  /* workspace pieces */
+  .prob{padding:8px 10px}
+  .probtop{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:5px}
+  .probtop .topics button{min-height:26px;font-size:12px}
+  .probtop .topics{margin:0;flex:1;min-width:0}
+  .probtop .topics button{flex:0 1 auto;padding:6px 10px}
+  textarea#problem{min-height:0;height:38px;font-size:13px;padding:6px 8px}
+  .strip{padding:7px 10px}
+  .striprow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .striprow .lbl{font:600 11px var(--ui);letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-right:2px}
+  .strip .knowns{display:flex;flex-direction:row;flex-wrap:wrap;gap:5px;margin:0;flex:1 1 0;min-width:200px}
+  .strip .known.found:not(.fn){display:none}
+  .strip .known{display:inline-flex;gap:6px;padding:3px 4px 3px 6px;border-radius:999px;align-items:center}
+  .strip .known .vsym{display:none}
+  .strip .known .kd{display:none}
+  .strip .known .kv{font-size:13px;white-space:nowrap}
+  .strip .known .kact button{min-height:20px;padding:0 6px;font-size:11px;border-radius:999px}
+  .strip .knowns .small.muted{font-size:12px}
+  .strip .axisnote{margin:0 0 0 auto;padding:3px 8px;font-size:11.5px;max-width:300px;line-height:1.3}
+  #addPanel{margin-top:7px}
+  .canvascard{padding:6px 8px 8px}
+  .ctool{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .ctool .dtabs{margin:0}
+  .ctool #dgNote{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .canvascard .canvas-wrap{display:flex;justify-content:center;background:#070b14}
+  .canvascard canvas#dg{width:auto;max-width:100%;max-height:36vh}
+  .canvascard .bsvg{width:100%;height:36vh;max-height:36vh}
+  #sheetWin{padding:7px 10px 9px}
+  .sheethead{display:flex;gap:8px;align-items:center;justify-content:space-between}
+  .sheethead .targets{margin:0;flex:1;min-width:0}
+  .sheethead .modes{margin:0;flex:0 0 auto;flex-wrap:nowrap}
+  .sheethead #addTarget{max-width:220px}
+  #sheetWin .sheet-status{margin:6px 0;padding:5px 9px}
+  #sheet .eq{padding:7px 9px}
+  #sheet .eq .act{margin-top:4px;min-height:26px}
+  #sheet{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+  #sheet .eq .form{font-size:15px}
+  #sheet .eq .found{font:600 13px var(--mono);color:var(--found);margin-top:4px}
+  #sheet .eq.last{border-color:var(--found);box-shadow:0 0 0 1px rgba(255,209,102,.5),0 0 18px rgba(255,209,102,.18)}
+  #sheet .eq.ladder{grid-column:1 / -1}
+  #sheet > #workWin{grid-column:1 / -1;margin-top:2px}
+  #workWin{padding:0}
+  #workWin .sunk{margin:0 10px 10px}
+  .ws-right .card .body{padding:8px 10px 10px}
+  #condCard .titlebar button{min-height:24px;padding:3px 9px;font-size:11.5px}
+  #condCard .cgroup{margin-bottom:7px}
+  .ws-right #inspector{margin-top:6px}
+  .ws-right details.graphs{margin-top:8px}
+  .ws-right details.graphs summary{font-size:12px;margin-bottom:6px}
+  #pathList{font-size:13px}
+  /* library drawer */
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,94vw);z-index:12;background:rgba(9,13,24,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-left:1px solid var(--line-hi);box-shadow:-20px 0 40px rgba(0,0,0,.45);transform:translateX(105%);transition:transform .22s ease;display:flex;flex-direction:column}
+  .drawer.open{transform:none}
+  .drawer .dhead{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line)}
+  .drawer .dhead h2{margin:0;font:600 12px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--cy)}
+  .drawer .dhead .x{margin-left:auto}
+  .drawer .dbodyl{overflow-y:auto;padding:10px 14px 30px}
+
   /* scenarios + what matters */
   table.scen{width:100%;border-collapse:collapse;font:13px var(--mono);margin:4px 0 8px}
   table.scen th{font:600 11px var(--mono);color:var(--muted);text-align:left;padding:4px 5px;border-bottom:1px solid var(--line)}
@@ -321,93 +380,93 @@
   </div>
 </header>
 
-<main>
-  <div class="col">
-    <section class="win">
-      <div class="titlebar"><h2>1. Unit &amp; givens</h2></div>
-      <div class="body">
+<main class="ws">
+  <div class="ws-left">
+    <section class="card prob">
+      <div class="probtop">
         <div class="topics" id="chPick"></div>
-        <div class="subhead">Your problem (type or paste it here to read from)</div>
-        <textarea id="problem" placeholder="e.g. A block slides from rest down a frictionless 25° ramp…"></textarea>
-        <div class="row" id="checkRow" style="margin-top:6px;display:none"><button class="go" id="checkSetup">✔ Check my setup</button><span class="small muted" id="bankTitle"></span></div>
-        <div class="subhead">Knowns</div>
-        <div class="axisnote" id="axisNote"></div>
+        <div class="row" id="checkRow" style="display:none"><button class="go" id="checkSetup">✔ Check my setup</button><span class="small muted" id="bankTitle"></span></div>
+      </div>
+      <textarea id="problem" rows="2" placeholder="Type or paste your problem here, or open the Practice bank. (Soon: drawing the setup writes this for you.)"></textarea>
+    </section>
+
+    <section class="card strip">
+      <div class="striprow">
+        <span class="lbl">Givens</span>
         <div class="knowns" id="knowns"></div>
-        <div id="editorSlot"></div>
-        <div id="scenBox"></div>
-        <div class="subhead">Add a known: what does the problem tell you?</div>
-        <div class="palette" id="palette"></div>
-        <div class="row" style="margin-top:8px"><button id="clearBtn" title="Remove every known, target and equation">Clear all</button></div>
+        <button id="addGivenBtn" aria-expanded="false">+ Add a given</button>
+        <button id="clearBtn" title="Remove every known, target and equation">Clear all</button>
+        <div class="axisnote" id="axisNote"></div>
       </div>
+      <div id="addPanel" hidden><div class="palette" id="palette"></div></div>
+      <div id="editorSlot"></div>
+      <div id="scenBox"></div>
     </section>
-    <section class="win">
-      <div class="titlebar"><h2>2. Conditions</h2></div>
-      <div class="body"><div id="conds"></div><div class="row"><button id="condOk">✓ These conditions are right</button></div></div>
-    </section>
-  </div>
 
-  <div class="col col-mid">
-    <section class="win" id="library">
-      <div class="titlebar"><h2>3. Equation library</h2></div>
-      <div class="body"><div class="focusbar" id="focusbar"></div><div id="lib"></div></div>
-    </section>
-  </div>
-
-  <div class="col col-right">
-    <section class="win">
-      <div class="titlebar"><h2>Diagram</h2></div>
-      <div class="body">
+    <section class="card canvascard" id="diagramCard">
+      <div class="ctool">
         <div class="dtabs" role="tablist"><button data-dtab="motion" aria-pressed="true">Motion</button><button data-dtab="build" aria-pressed="false">Build</button><button data-dtab="forces" aria-pressed="false">Forces</button></div>
-        <div class="dpane" id="paneMotion">
-          <div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div>
-          <div class="dg-controls"><button class="go" id="replayBtn">▶ Replay motion</button><span class="small muted" id="dgNote"></span></div>
-          <div id="sliders"></div>
-          <div id="inspector"></div>
-        </div>
-        <div class="dpane" id="paneBuild" hidden>
-          <div class="bpal" id="bpal"></div>
-          <div class="canvas-wrap"><svg id="bd" class="bsvg"></svg></div>
-          <div class="bprops" id="bprops"></div>
-        </div>
-        <div class="dpane" id="paneForces" hidden>
-          <div id="fbd"></div>
-        </div>
+        <button class="go" id="replayBtn">▶ Replay</button>
+        <span class="small muted" id="dgNote"></span>
+        <button id="libBtn" aria-expanded="false" title="Open the equation library">Library</button>
+      </div>
+      <div class="dpane" id="paneMotion"><div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div></div>
+      <div class="dpane" id="paneBuild" hidden>
+        <div class="bpal" id="bpal"></div>
+        <div class="canvas-wrap"><svg id="bd" class="bsvg"></svg></div>
+        <div class="bprops" id="bprops"></div>
       </div>
     </section>
-    <section class="win" id="sheetWin">
-      <div class="titlebar"><h2>4–5. My equation sheet &amp; target</h2></div>
-      <div class="body">
+
+    <section class="card" id="sheetWin">
+      <div class="sheethead">
         <div class="targets" id="targets"></div>
-        <div class="modes">
-          <button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button>
-          <button id="showBtn" title="Gather what’s needed and walk the shortest path">Show me the path</button>
-        </div>
-        <div class="sheet-status" id="sheetStatus"></div>
-        <div class="eqs" id="sheet"></div>
+        <div class="modes"><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="Gather what’s needed and walk the shortest path">Show me the path</button></div>
       </div>
+      <div class="sheet-status" id="sheetStatus"></div>
+      <div class="eqs" id="sheet"></div>
     </section>
-    <section class="win" id="workWin">
-      <div class="titlebar"><h2 id="workTitle">6. Work</h2></div>
-      <div class="body"><div class="sunk" id="work"></div></div>
-    </section>
-    <section class="win" id="mattersWin">
-      <div class="titlebar"><h2>7. What matters</h2></div>
-      <div class="body"><div class="sunk" id="matters"></div></div>
-    </section>
-    <section class="win" id="path">
-      <div class="titlebar"><h2>Path so far</h2></div>
-      <div class="body"><div class="sunk" id="pathList"></div></div>
-    </section>
-    <section class="win graphs">
-      <div class="titlebar"><h2>Graphs vs time</h2></div>
-      <div class="body">
-        <div class="canvas-wrap"><canvas id="gTheta" width="880" height="200"></canvas></div>
-        <div class="canvas-wrap"><canvas id="gOmega" width="880" height="200"></canvas></div>
-        <div class="canvas-wrap"><canvas id="gAlpha" width="880" height="200"></canvas></div>
-      </div>
+
+    <section class="card" id="workWin">
+      <div class="titlebar"><h2 id="workTitle">Work</h2></div>
+      <div class="sunk" id="work"></div>
     </section>
   </div>
+
+  <aside class="ws-right">
+    <section class="card" id="condCard">
+      <div class="titlebar"><h2>Conditions</h2><button id="condOk">✓ These conditions are right</button></div>
+      <div class="body"><div id="conds"></div></div>
+    </section>
+    <section class="card" id="sideCard">
+      <div class="dpane" id="paneForces" hidden><div class="titlebar"><h2>Free-body diagram</h2></div><div class="body"><div id="fbd"></div></div></div>
+      <div class="dpane" id="paneSide">
+        <div class="titlebar"><h2>Inspect</h2></div>
+        <div class="body"><div id="sliders"></div><div id="inspector"></div>
+          <details class="graphs"><summary>Graphs vs time</summary>
+            <div class="canvas-wrap"><canvas id="gTheta" width="880" height="200"></canvas></div>
+            <div class="canvas-wrap"><canvas id="gOmega" width="880" height="200"></canvas></div>
+            <div class="canvas-wrap"><canvas id="gAlpha" width="880" height="200"></canvas></div>
+          </details>
+        </div>
+      </div>
+    </section>
+    <section class="card" id="mattersWin">
+      <div class="titlebar"><h2>What matters</h2></div>
+      <div class="body"><div id="matters"></div></div>
+    </section>
+    <section class="card" id="path">
+      <div class="titlebar"><h2>Path so far</h2></div>
+      <div class="body"><div id="pathList"></div></div>
+    </section>
+  </aside>
 </main>
+
+<aside id="libDrawer" class="drawer" aria-label="Equation library">
+  <div class="dhead"><h2>Equation library</h2><span class="small muted">Gather what your problem needs</span><button class="x" id="libClose" title="Close">×</button></div>
+  <div class="dbodyl"><div class="focusbar" id="focusbar"></div><div id="lib"></div></div>
+</aside>
+
 
 <div id="bank" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="bankT">
   <div class="win bankwin">

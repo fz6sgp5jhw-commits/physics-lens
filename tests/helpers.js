@@ -138,3 +138,10 @@ export async function addFunction(page, id, coefs){
   for (const [k, c] of coefs.entries()) await page.fill(`#editorSlot [data-coef="${k}"]`, String(c));
   await page.click('#edSave');
 }
+
+// Gather an equation from the library drawer (opens the drawer if it's closed).
+export async function gather(page, e){
+  if (!(await page.evaluate(() => document.getElementById('libDrawer')?.classList.contains('open')))) await page.click('#libBtn');
+  await page.click(`#lib [data-gather="${e}"]`);
+  await page.click('#libClose'); // the drawer covers the right side of the sheet while it's open
+}
