@@ -11,7 +11,9 @@ after(async () => { await env?.close(); });
 test('loads with no console errors, in each unit', async () => {
   const { page, errors } = await openApp(env.browser, env.url, { calm: false });
   try {
-    assert.ok(await page.locator('#dg').isVisible(), 'diagram canvas visible');
+    assert.ok(await page.locator('#bd').isVisible(), 'the setup canvas shows first');
+    await page.click('[data-dtab="motion"]');
+    assert.ok(await page.locator('#dg').isVisible(), 'the motion canvas shows in Motion mode');
     for (const title of ['Tension & pulleys', 'Rotation kinematics', 'Inclines & Newton’s laws']){
       await page.click(`#chPick button:has-text("${title}")`);
       await page.waitForTimeout(150);
@@ -46,6 +48,7 @@ test('no cartoon gags are left on the page', async () => {
 test('diagram hotspots respond in each unit', async () => {
   const { page, errors } = await openApp(env.browser, env.url);
   try {
+    await page.click('[data-dtab="motion"]');
     for (const title of ['Inclines & Newton’s laws', 'Tension & pulleys', 'Rotation kinematics']){
       await page.click(`#chPick button:has-text("${title}")`);
       await page.waitForTimeout(150);

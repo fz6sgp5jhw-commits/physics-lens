@@ -298,6 +298,23 @@
   .ws-right details.graphs{margin-top:8px}
   .ws-right details.graphs summary{font-size:12px;margin-bottom:6px}
   #pathList{font-size:13px}
+  /* the free-body layer on the setup canvas */
+  #forceChips:empty{display:none}
+  #forceChips{margin-top:6px}
+  .fchip{font:13px var(--mono);padding:3px 10px;border-radius:999px;min-height:24px;border-width:1.5px}
+  .fchip:disabled{opacity:1;cursor:default}
+  .fchip.s-found{color:var(--found)}
+  .bsvg .setup.faded{opacity:.28}
+  .bsvg .flabel{font:600 22px var(--mono);pointer-events:none}
+  .bsvg .fdot{fill:#fff;stroke:#05070d;stroke-width:2}
+  .bsvg .fdot.sel{fill:var(--amber)}
+  .bsvg .fhit{cursor:pointer}
+  .bsvg .blabel.prop{pointer-events:auto;cursor:pointer;text-decoration:underline dotted;text-underline-offset:4px}
+  .pop{position:fixed;z-index:25;width:330px;background:var(--panel-solid);border:1px solid var(--line-hi);border-radius:10px;padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:8px}
+  .pop[hidden]{display:none}
+  .pop .row button{min-height:26px;padding:4px 9px;font-size:12px}
+  #matters .statics p.ok b{color:var(--good)} #matters .statics p.bad b{color:var(--bad)}
+
   /* library drawer */
   .drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,94vw);z-index:12;background:rgba(9,13,24,.96);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-left:1px solid var(--line-hi);box-shadow:-20px 0 40px rgba(0,0,0,.45);transform:translateX(105%);transition:transform .22s ease;display:flex;flex-direction:column}
   .drawer.open{transform:none}
@@ -398,6 +415,7 @@
         <button id="clearBtn" title="Remove every known, target and equation">Clear all</button>
         <div class="axisnote" id="axisNote"></div>
       </div>
+      <div class="striprow" id="forceChips"></div>
       <div id="addPanel" hidden><div class="palette" id="palette"></div></div>
       <div id="editorSlot"></div>
       <div id="scenBox"></div>
@@ -405,13 +423,13 @@
 
     <section class="card canvascard" id="diagramCard">
       <div class="ctool">
-        <div class="dtabs" role="tablist"><button data-dtab="motion" aria-pressed="true">Motion</button><button data-dtab="build" aria-pressed="false">Build</button><button data-dtab="forces" aria-pressed="false">Forces</button></div>
+        <div class="dtabs" role="tablist"><button data-dtab="build" aria-pressed="true" title="Draw the setup: shapes and their properties">1 · Setup</button><button data-dtab="forces" aria-pressed="false" title="Draw the forces on the setup">2 · Forces</button><button data-dtab="motion" aria-pressed="false" title="Replay the motion">Motion</button></div>
         <button class="go" id="replayBtn">▶ Replay</button>
         <span class="small muted" id="dgNote"></span>
         <button id="libBtn" aria-expanded="false" title="Open the equation library">Library</button>
       </div>
-      <div class="dpane" id="paneMotion"><div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div></div>
-      <div class="dpane" id="paneBuild" hidden>
+      <div class="dpane" id="paneMotion" hidden><div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div></div>
+      <div class="dpane" id="paneBuild">
         <div class="bpal" id="bpal"></div>
         <div class="canvas-wrap"><svg id="bd" class="bsvg"></svg></div>
         <div class="bprops" id="bprops"></div>

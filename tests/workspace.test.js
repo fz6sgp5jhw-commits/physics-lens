@@ -23,6 +23,7 @@ test('statement, canvas, side diagrams and the latest solved card fit on one 144
     await applyKey(page, PRACTICE[4]);
     await page.click('#showBtn');
     await page.waitForFunction(() => { const S = window.__rl; return S.targets.every(t => S.isKnown(t)) && !S.busy; });
+    await page.click('[data-dtab="motion"]'); // after solving, replay the motion
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(100);
     for (const sel of ['#problem', '#dg', '#condCard', '#sheet .eq.last']){

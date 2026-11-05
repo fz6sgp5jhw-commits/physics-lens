@@ -1,6 +1,6 @@
 // Offline support. Online: always fetch the latest file first (so updates show on the next visit) and keep a copy.
 // Offline (or if the network fails): serve the saved copy.
-const CACHE = 'physics-lens-v3';
+const CACHE = 'physics-lens-v4';
 const FILES = ['./', './index.html', './manifest.webmanifest', './js/app.js', './js/data.js', './js/expr.js', './js/build.js', './js/field.js',
   './icons/icon-192.png', './icons/icon-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
