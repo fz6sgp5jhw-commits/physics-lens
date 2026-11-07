@@ -4,6 +4,8 @@
 // Every arrow (force, velocity, acceleration) can be turned by dragging its tip; it clicks onto the
 // physically named directions (along the slope, perpendicular, straight down…) when it gets close.
 // SVG, no dependencies. Coordinates are in a 880 × 520 viewBox; the floor is at y = FLOOR.
+// The pen tool reads freehand strokes (rules in recognize.js) and snaps them to the standard drawing.
+import { recognize } from './recognize.js';
 
 const W = 880, H = 520, FLOOR = 470, SNAP = 36, SNAP_DEG = 12;
 const NS = 'http://www.w3.org/2000/svg';
@@ -17,13 +19,20 @@ const KINDS = {
   table:  { label: 'Table', props: { friction: false } },
   block:  { label: 'Block', props: { mass: 'm' }, body: true },
   ball:   { label: 'Ball', props: { mass: 'm', radius: 'r' }, body: true },
-  wheel:  { label: 'Wheel', props: { radius: 'r' }, body: true },
+  wheel:  { label: 'Wheel', props: { radius: 'r' }, body: true, spins: true },
+  particle: { label: 'Particle', props: { mass: 'm' }, body: true },
+  rod:    { label: 'Rod', props: {} },
   pulley: { label: 'Pulley', props: {} },
   string: { label: 'String', props: {} },
+  spring: { label: 'Spring', props: {} },
+  pivot:  { label: 'Pivot', props: {} },
 };
-export const PALETTE = ['ramp', 'block', 'ball', 'wheel', 'pulley', 'string', 'floor', 'table'];
+export const PALETTE = ['ramp', 'block', 'ball', 'wheel', 'particle', 'rod', 'table', 'floor', 'pulley', 'string', 'spring', 'pivot'];
 // motion vectors a student can put on a body: velocity and acceleration
 const VECS = { v: { label: 'Velocity', color: '#9be15d' }, a: { label: 'Acceleration', color: '#ff8f70' } };
+// spin arrows a student can put round a wheel or ball: ω and α, counterclockwise (+) or clockwise
+const SPINS = { omega: { sym: 'ω', color: '#9be15d', gap: 14 }, alpha: { sym: 'α', color: '#ff8f70', gap: 30 } };
+const spins = (s) => KINDS[s.kind].spins || s.kind === 'ball';
 
 // Options: onChange(); nameOf(id) → label text; and for the free-body layer (mode 'forces'):
 //   dirsFor(body) → [{ key, x, y }] unit vectors in drawing coordinates (y down) the arrows snap to
@@ -35,8 +44,13 @@ const VECS = { v: { label: 'Velocity', color: '#9be15d' }, a: { label: 'Accelera
 //   onVector(bodyId, 'v'|'a', dirKey|null)                    a velocity or acceleration arrow was drawn or turned
 //   onPropClick(shapeId, prop) when a property label (mass, angle) is clicked in setup mode
 //   snapshot() / restore(x): extra state (the forces) saved with each undo step
-export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dirsFor = () => [], forcesFor = () => [], onArrow = () => {}, onArrowClick = () => {}, onArrowTurn = () => {}, onArrowErase = () => {}, onVector = () => {}, onPropClick = () => {}, snapshot = () => null, restore = () => {} } = {}){
-  const st = { shapes: [], sel: null, seq: 0, theta: 30, mode: 'setup', tool: 'select', preview: null, turn: null, hover: null };
+//   unit() → the current unit (recognition names masses and round bodies by it)
+//   onStroke(result, clientXY, place)  a pen stroke was read: result from recognize(); call place(option) to snap it
+//   wheelButton(shape) → label text when a wheel shows its "a point" button; pointVectors(shape) → [{ key, x, y, len, color, label }]
+//   onWheelButton(shapeId)
+export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dirsFor = () => [], forcesFor = () => [], onArrow = () => {}, onArrowClick = () => {}, onArrowTurn = () => {}, onArrowErase = () => {}, onVector = () => {}, onPropClick = () => {}, snapshot = () => null, restore = () => {},
+  unit = () => '', onStroke = () => {}, wheelButton = () => null, pointVectors = () => null, onWheelButton = () => {} } = {}){
+  const st = { shapes: [], sel: null, seq: 0, theta: 30, mode: 'setup', tool: 'select', preview: null, turn: null, hover: null, stroke: null };
   const hist = [];
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
@@ -66,17 +80,19 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     return out;
   };
   const lift = (b) => b.kind === 'block' ? b.h / 2 : b.r; // centre sits this far above the surface
+  const pivotTop = (p) => ({ x: p.x, y: p.y - 22 });
   // the point a distance u along surface s, lifted so body b rests on it
   function restOn(s, u, b){
     const dx = s.x2 - s.x1, dy = s.y2 - s.y1, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
     const px = s.x1 + ux * u, py = s.y1 + uy * u, nx = uy, ny = -ux, sg = ny < 0 ? 1 : -1;
     return { x: px + sg * nx * lift(b), y: py + sg * ny * lift(b), L };
   }
-  // put a body on the nearest surface if it was dropped close to it
-  function snap(b){
-    if (!isBody(b)) return;
+  // put a body on the nearest surface if it was dropped close to it (a hanging block hangs, a pinned wheel stays pinned)
+  function snap(b, reach = SNAP){
+    if (snapPivot(b) || !isBody(b)) return;
     b.on = null;
-    let best = null, bd = SNAP;
+    if (b.hanging){ b.tilt = 0; return; }
+    let best = null, bd = reach;
     for (const s of surfaces()){
       const dx = s.x2 - s.x1, dy = s.y2 - s.y1, L = Math.hypot(dx, dy), ux = dx / L, uy = dy / L;
       const u = clamp((b.x - s.x1) * ux + (b.y - s.y1) * uy, 0, L);
@@ -92,6 +108,14 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     for (const t of byKind('table')){ const cx = t.x + t.w + 14, cy = t.y - 14, d = Math.hypot(p.x - cx, p.y - cy); if (d < bd){ bd = d; best = { cx, cy }; } }
     for (const r of byKind('ramp')){ const t = rampTop(r), d = Math.hypot(p.x - t.x - 14, p.y - t.y + 14); if (d < bd){ bd = d; best = { cx: t.x + 14, cy: t.y - 14 }; } }
     if (best){ p.x = best.cx; p.y = best.cy; }
+  }
+  // a wheel or rod dropped with its centre near a pivot is pinned there
+  function snapPivot(s){
+    if (!(s.kind === 'wheel' || s.kind === 'rod')) return false;
+    s.pivot = null;
+    const p = byKind('pivot').find(q => Math.hypot(pivotTop(q).x - s.x, pivotTop(q).y - s.y) < SNAP);
+    if (!p) return false;
+    Object.assign(s, pivotTop(p), { pivot: p.id, on: null, tilt: 0 }); return true;
   }
   function snapAll(){ st.shapes.forEach(s => s.kind === 'pulley' ? snapPulley(s) : snap(s)); snapTouching(); }
   // blocks dropped close together on the same flat surface slide up against each other
@@ -150,16 +174,54 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
   function addFromTool(kind){
     checkpoint();
     if ((kind === 'ramp' || kind === 'table') && !byKind('floor').length) st.shapes.push(make('floor'));
-    const o = kind === 'ramp' ? { x: 120, w: 420 } : kind === 'table' ? { x: 80, y: 280, w: 420, h: 18 } : kind === 'floor' ? {} : kind === 'pulley' ? { x: 560, y: 120, r: 18 } : kind === 'wheel' ? { x: 440, y: 240, r: 70 } : { x: 160 + 60 * (st.seq % 8), y: 120 };
+    const o = { ramp: { x: 120, w: 420 }, table: { x: 80, y: 280, w: 420, h: 18 }, floor: {}, pulley: { x: 560, y: 120, r: 18 }, wheel: { x: 440, y: 240, r: 70 },
+      particle: { x: 300, y: 120, r: 8 }, rod: { x: 440, y: 160, w: 200, h: 10 }, spring: { x: 300, y: 300, w: 140 }, pivot: { x: 440, y: 330 } }[kind] || { x: 160 + 60 * (st.seq % 8), y: 120 };
     if (kind === 'floor' && byKind('floor').length) return byKind('floor')[0];
     const s = make(kind, o); st.shapes.push(s);
-    if (isBody(s) && kind !== 'wheel'){
+    if (isBody(s) && !KINDS[kind].spins){
       const surf = surfaces().find(x => x.shape.kind === 'ramp') || surfaces().find(x => x.shape.kind === 'table') || surfaces().find(x => x.shape.kind === 'floor');
       if (surf){ const n = st.shapes.filter(b => isBody(b) && b.on === surf.shape.id).length, L = Math.hypot(surf.x2 - surf.x1, surf.y2 - surf.y1); const c = restOn(surf, L * clamp(0.5 + 0.18 * n, 0.15, 0.85), s); s.x = c.x; s.y = c.y; }
     }
     if (kind === 'string'){ const bs = st.shapes.filter(x => isBody(x) || x.kind === 'pulley'); s.ends = bs.slice(-3).map(x => x.id); }
     st.sel = s.id; snapAll(); render(); onChange(); return s;
   }
+
+  // ---- recognised strokes: put the component in its standard form (an option from recognize())
+  function place(o){
+    checkpoint();
+    if (o.kind === 'vec'){
+      const s = shape(o.body), b = bodyOf(o.body), d = snapDir(b, o.x, o.y);
+      s[o.vec] = { x: d.x, y: d.y, len: clamp(Math.hypot(o.x, o.y), 50, 220), key: d.key }; st.sel = s.id;
+      render(); onChange(); onVector(s.id, o.vec, d.key); return s;
+    }
+    if (o.kind === 'string'){
+      // a second stroke over the same pulley continues the string: [block, pulley] + [pulley, block] → one string
+      const pul = new Set(byKind('pulley').map(p => p.id)), ends = o.ends;
+      const old = byKind('string').find(x => (x.ends || []).length === 2 && x.ends.some(id => pul.has(id) && ends.includes(id)));
+      if (old){
+        let a = old.ends, b = ends;
+        if (a[0] === b[0]) a = [...a].reverse(); else if (a[0] === b[b.length - 1]) [a, b] = [b, a]; else if (a[1] === b[b.length - 1]) b = [...b].reverse();
+        old.ends = [...a, ...b.slice(1)]; st.sel = old.id; render(); onChange(); return old;
+      }
+    }
+    if (o.kind === 'floor' && byKind('floor').length){ render(); onChange(); return byKind('floor')[0]; }
+    if ((o.kind === 'ramp' || o.kind === 'table') && !byKind('floor').length) st.shapes.push(make('floor'));
+    const geo = { ramp: { x: o.x, w: o.w }, table: { x: o.x, y: o.y, w: o.w, h: 18 }, block: { x: o.x, y: o.y, w: clamp(o.w, 30, 220), h: clamp(o.h, 24, 180) },
+      ball: { x: o.x, y: o.y, r: clamp(o.r, 14, 170) }, wheel: { x: o.x, y: o.y, r: clamp(o.r, 14, 170) }, particle: { x: o.x, y: o.y, r: 8 }, pulley: { x: o.x, y: o.y, r: 18 },
+      string: { ends: o.ends } }[o.kind] || {};
+    const s = make(o.kind, geo);
+    if (o.mass) s.props.mass = o.mass;
+    if (o.hanging) s.hanging = true;
+    if (o.kind === 'ramp'){ s.x = clamp(s.x, 10, W - 140); s.w = clamp(s.w, 120, W - s.x - 10); st.theta = clamp(o.theta, 5, maxTheta(s)); }
+    st.shapes.push(s); st.sel = s.id;
+    if (s.kind === 'pulley') snapPulley(s); else snap(s, SNAP * 2.2); // freehand bodies land a little further off
+    snapAll(); render(); onChange(); return s;
+  }
+  const scene = () => ({ unit: unit(), floorY: FLOOR,
+    bodies: st.shapes.filter(isBody).map(b => ({ id: b.id, kind: b.kind, x: b.x, y: b.y, w: b.w, h: b.h, r: b.r, mass: b.props.mass })),
+    pulleys: byKind('pulley').map(p => ({ id: p.id, x: p.x, y: p.y, r: p.r || 18 })),
+    corners: [...byKind('table').map(t => ({ x: t.x + t.w, y: t.y })), ...byKind('ramp').map(rampTop)] });
+  function readStroke(points, client){ onStroke(recognize(points, scene()), client, place); }
 
   // ---- drawing
   const el = (tag, attrs, parent = svg) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); parent.appendChild(e); return e; };
@@ -207,6 +269,18 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
         propLabel(s.x, s.y - 8, s, s.props.mass ? 'mass' : 'radius', g);
         if (sel) handle(g, s.x + s.r * 0.7071, s.y - s.r * 0.7071, 'radius', s.id, 'nesw-resize');
       }
+      if (s.kind === 'particle'){ el('circle', { cx: s.x, cy: s.y, r: s.r, class: 'bbody bdot' }, g); propLabel(s.x, s.y - 16, s, 'mass', g); }
+      if (s.kind === 'rod'){
+        el('rect', { x: s.x - s.w / 2, y: s.y - s.h / 2, width: s.w, height: s.h, class: 'bbody' }, g);
+        if (sel) handle(g, s.x + s.w / 2, s.y, 'len', s.id, 'ew-resize');
+      }
+      if (s.kind === 'spring'){
+        const n = 8, x0 = s.x - s.w / 2, step = s.w / (n + 2);
+        const pts = [`${x0},${s.y}`, `${x0 + step},${s.y}`, ...Array.from({ length: n }, (_, i) => `${x0 + step * (1.5 + i)},${s.y + (i % 2 ? 12 : -12)}`), `${x0 + step * (n + 1)},${s.y}`, `${x0 + s.w},${s.y}`];
+        el('polyline', { points: pts.join(' '), class: 'bspring' }, g); el('rect', { x: x0, y: s.y - 14, width: s.w, height: 28, fill: 'transparent' }, g);
+        if (sel) handle(g, s.x + s.w / 2, s.y, 'len', s.id, 'ew-resize');
+      }
+      if (s.kind === 'pivot'){ const t = pivotTop(s); el('polygon', { points: `${t.x},${t.y} ${s.x - 16},${s.y + 6} ${s.x + 16},${s.y + 6}`, class: 'bpivot' }, g); el('circle', { cx: t.x, cy: t.y, r: 5, class: 'bpivotdot' }, g); }
       if (s.kind === 'pulley'){ el('circle', { cx: s.x, cy: s.y, r: s.r || 18, class: 'bpulley' }, g); }
       if (s.kind === 'string' && s.ends && s.ends.length > 1){
         const pts = s.ends.map(id => shape(id)).filter(Boolean);
@@ -215,8 +289,9 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     }
     // contact markers
     for (const c of contacts()){ const b = shape(c.bodyId); el('circle', { cx: b.x, cy: b.y + (b.kind === 'block' ? b.h / 2 : b.r), r: 4, class: 'bcontact' }, setup); }
-    if (st.mode === 'setup') renderVectors();
+    if (st.mode === 'setup'){ renderVectors(); renderSpins(); }
     if (st.mode === 'forces') renderForces();
+    if (st.stroke) el('polyline', { points: st.stroke.map(p => `${p.x},${p.y}`).join(' '), class: 'bstroke' });
   }
   // arrows
   const L = 105;
@@ -251,6 +326,33 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
       }
     }
   }
+  // ω and α: curved arrows three-quarters round the body; the wheel's "a point" button and the point's vectors
+  function renderSpins(){
+    const layer = el('g', { class: 'spins' });
+    for (const s of st.shapes.filter(spins)){
+      for (const [k, d] of Object.entries(SPINS)){
+        if (!s[k]) continue;
+        const R = s.r + d.gap, cw = !s[k].ccw, end = { x: s.x + (cw ? R : -R), y: s.y };
+        const g = el('g', { 'data-spin': `${s.id}:${k}`, class: 'bspin' }, layer);
+        el('path', { d: `M ${s.x} ${s.y + R} A ${R} ${R} 0 1 ${cw ? 1 : 0} ${end.x} ${end.y}`, fill: 'none', stroke: d.color, 'stroke-width': 4 }, g);
+        el('polygon', { points: `${end.x},${end.y + 14} ${end.x - 8},${end.y} ${end.x + 8},${end.y}`, fill: d.color }, g);
+        el('path', { d: `M ${s.x} ${s.y + R} A ${R} ${R} 0 1 ${cw ? 1 : 0} ${end.x} ${end.y}`, fill: 'none', stroke: 'transparent', 'stroke-width': 16 }, g);
+        label(s.x + (cw ? -1 : 1) * R * 0.75, s.y - R * 0.75 - 6, `${d.sym}${cw ? ' ↻' : ' ↺'}`, 'flabel', g).setAttribute('fill', d.color);
+      }
+      const txt = wheelButton(s);
+      if (txt){
+        // below the wheel, clear of the spin arrows (which start at its lowest point)
+        const bx = clamp(s.x - 80, 4, W - 164), by = clamp(s.y + s.r + 44, 4, H - 32), b = el('g', { class: 'wbtn', 'data-wheelbtn': s.id }, layer);
+        el('rect', { x: bx, y: by, width: 160, height: 28 }, b); label(bx + 80, by + 20, txt, 'wbtxt', b);
+      }
+      const vs = pointVectors(s);
+      if (vs){
+        const P = { x: s.x, y: s.y - s.r }, g = el('g', { class: 'ptvecs' }, layer);
+        for (const v of vs){ const vg = el('g', { 'data-pvec': v.key, 'data-ux': v.x.toFixed(3), 'data-uy': v.y.toFixed(3) }, g); arrowEl(vg, P.x, P.y, v.x, v.y, v.color, null, v.label, v.len); }
+        el('circle', { cx: P.x, cy: P.y, r: 6, class: 'fdot' }, g); label(P.x - 14, P.y - 10, 'P', 'blabel', g);
+      }
+    }
+  }
   function renderForces(){
     const layer = el('g', { class: 'forces' });
     for (const b of bodies()){
@@ -282,7 +384,8 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     const p0 = pt(e), t = e.target;
     // eraser: whatever is under the pointer goes
     if (st.tool === 'erase'){
-      const ar = t.closest('[data-arrow]'), vc = t.closest('[data-vec]'), g = t.closest('[data-id]');
+      const ar = t.closest('[data-arrow]'), vc = t.closest('[data-vec]'), sp = t.closest('[data-spin]'), g = t.closest('[data-id]');
+      if (sp){ checkpoint(); const [id, k] = sp.dataset.spin.split(':'); delete shape(id)[k]; render(); onChange(); return; }
       if (ar){ checkpoint(); const [bid, i] = ar.dataset.arrow.split(':'); onArrowErase(bid, +i); render(); return; }
       if (vc){ checkpoint(); const [id, k] = vc.dataset.vec.split(':'); delete shape(id)[k]; render(); onChange(); return; }
       if (g){ checkpoint(); st.sel = g.dataset.id; api.remove(true); }
@@ -308,6 +411,14 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
       st.sel = s.id; drag = { arrow: bodyOf(s.id) }; svg.setPointerCapture(e.pointerId); render(); onChange(); return;
     }
     // setup mode
+    const wb = t.closest('[data-wheelbtn]');
+    if (wb){ onWheelButton(wb.dataset.wheelbtn); return; }
+    if (st.tool === 'pen'){ drag = { stroke: true, client: { x: e.clientX, y: e.clientY } }; st.stroke = [p0]; st.sel = null; svg.setPointerCapture(e.pointerId); render(); return; }
+    if (st.tool in SPINS){
+      // click a wheel or ball: a counterclockwise arrow; click again to turn it clockwise
+      const s = st.shapes.filter(spins).find(q => Math.hypot(p0.x - q.x, p0.y - q.y) <= q.r + 40); if (!s) return;
+      checkpoint(); s[st.tool] = { ccw: s[st.tool] ? !s[st.tool].ccw : true }; st.sel = s.id; render(); onChange(); return;
+    }
     if (t.dataset && t.dataset.prop && st.tool === 'select'){ onPropClick(t.dataset.shape, t.dataset.prop); return; }
     const vt = t.dataset && t.dataset.vtip, vc = t.closest('[data-vec]');
     if (vt || (vc && st.tool === 'select')){
@@ -333,6 +444,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
   svg.addEventListener('pointermove', (e) => {
     if (!drag) return;
     const p = pt(e);
+    if (drag.stroke){ const q = st.stroke[st.stroke.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) > 2){ st.stroke.push(p); render(); } return; }
     if (drag.com){ moveCom(drag.com, p); render(); return; }
     if (drag.turnForce){
       if (!drag.moved && Math.hypot(p.x - drag.start.x, p.y - drag.start.y) < 5) return;
@@ -360,6 +472,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
       const a = rad(s.tilt || 0), dx = p.x - s.x, dy = p.y - s.y, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a);
       s.w = clamp(2 * Math.abs(lx), 30, 220); s.h = clamp(2 * Math.abs(ly), 24, 180); s.com = null;
     }
+    else if (drag.handle === 'len'){ s.w = clamp(2 * Math.abs(p.x - s.x), 40, 600); }
     else if (drag.handle === 'radius'){ s.r = clamp(Math.hypot(p.x - s.x, p.y - s.y), 14, 170); s.com = null; }
     else if (s.kind !== 'floor'){ s.x = drag.ox + p.x - drag.start.x; s.y = drag.oy + p.y - drag.start.y; s.on = null; }
     snapAll(); render();
@@ -367,6 +480,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
   svg.addEventListener('pointerup', (e) => {
     if (!drag) return;
     const d = drag; drag = null;
+    if (d.stroke){ const pts = st.stroke; st.stroke = null; render(); readStroke(pts, d.client); return; }
     if (d.com){ render(); onChange(); return; }
     if (d.turnForce){
       const tn = st.turn; st.turn = null;
@@ -380,13 +494,17 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
 
   const api = {
     add: (kind) => addFromTool(kind),
-    template, contacts, strings, bodies, touching, render, undo, checkpoint,
+    template, contacts, strings, bodies, touching, render, undo, checkpoint, place, scene,
+    // read a stroke (drawing coordinates) as if it had been drawn with the pen
+    stroke: (points, client = { x: 0, y: 0 }) => readStroke(points, client),
+    // a drawing point on screen (for tests and popovers)
+    toScreen: (x, y) => { const q = new DOMPoint(x, y).matrixTransform(svg.getScreenCTM()); return { x: q.x, y: q.y }; },
     snap: () => { snapAll(); render(); onChange(); },
-    setMode: (m) => { st.mode = m; st.preview = null; st.turn = null; if (m === 'forces' && !(forceTool() || st.tool === 'com' || st.tool === 'erase')) st.tool = 'force'; if (m === 'setup' && (forceTool() || st.tool === 'com')) st.tool = 'select'; render(); },
+    setMode: (m) => { st.mode = m; st.preview = null; st.turn = null; st.stroke = null; if (m === 'forces' && !(forceTool() || st.tool === 'com' || st.tool === 'erase')) st.tool = 'force'; if (m === 'setup' && (forceTool() || st.tool === 'com')) st.tool = 'select'; render(); },
     get mode(){ return st.mode; },
     get tool(){ return st.tool; }, set tool(t){ st.tool = t; render(); },
     // where a shape's centre is on screen (for tests and popovers)
-    screenOf: (id) => { const s = shape(id), m = svg.getScreenCTM(); const q = new DOMPoint(s.x, s.y).matrixTransform(m); return { x: q.x, y: q.y }; },
+    screenOf: (id) => { const s = shape(id); return api.toScreen(s.x, s.y); },
     selected: () => st.shapes.find(s => s.id === st.sel) || null,
     remove: (skipCheckpoint) => { if (!skipCheckpoint) checkpoint(); const gone = st.sel; st.shapes = st.shapes.filter(s => s.id !== gone); st.shapes.forEach(s => { if (s.ends) s.ends = s.ends.filter(id => id !== gone); }); st.sel = null; snapAll(); render(); onChange(); },
     setProp: (key, v) => { const s = api.selected(); if (s){ checkpoint(); s.props[key] = v; render(); onChange(); } },

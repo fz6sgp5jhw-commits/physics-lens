@@ -334,7 +334,7 @@
   #diagramCard .dpane{background:#0d1546;border:3px solid #8796ff;border-top:0;padding:6px}
   .bwrap{display:flex;gap:6px;align-items:stretch}
   .bwrap .canvas-wrap{flex:1;min-width:0}
-  .bpal{display:grid;grid-template-columns:repeat(2,30px);grid-auto-rows:30px;gap:2px;align-content:start;align-items:center;margin:0;padding:4px;
+  .bpal{display:grid;grid-template-columns:repeat(4,30px);grid-auto-rows:30px;gap:2px;align-content:start;align-items:center;margin:0;padding:4px;
     background:var(--dither),#0a0f33;background-clip:padding-box;border:3px solid transparent;border-image:var(--btn-field) 3 / 3px stretch}
   .bpal[hidden]{display:none}
   .bpal .tb{width:30px;height:30px;min-height:0;padding:0;display:grid;place-items:center;border-width:2px;border-image-width:2px;box-shadow:0 2px 0 #050716;font-size:0}
@@ -368,6 +368,19 @@
   .bsvg .bhandle{fill:var(--gold-hi);stroke:#2a1a04;stroke-width:2;cursor:ns-resize}
   .bsvg rect.bhandle{shape-rendering:crispEdges}
   .bsvg .bcontact{fill:var(--good)}
+  .bsvg .bdot{fill:var(--target)}
+  .bsvg .bspring{fill:none;stroke:#9be15d;stroke-width:3;cursor:grab}
+  .bsvg .bpivot{fill:#151d56;stroke:var(--gold-hi);stroke-width:3;cursor:grab}
+  .bsvg .bpivotdot{fill:var(--gold-hi)}
+  .bsvg .bstroke{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:.8;pointer-events:none;shape-rendering:auto}
+  .bsvg .bspin,.bsvg .ptvecs{shape-rendering:auto}
+  .bsvg .wbtn{cursor:pointer}
+  .bsvg .wbtn rect{fill:#151d56;stroke:var(--gold-hi);stroke-width:2.5}
+  .bsvg .wbtn:hover rect{fill:#1f2c80}
+  .bsvg .wbtxt{font:700 16px var(--ui);fill:var(--gold-hi);pointer-events:none}
+  .bsvg[data-tool="pen"]{cursor:crosshair}
+  .ptpanel{display:flex;flex-direction:column;gap:4px;width:100%}
+  .ptpanel .pteq{font:14px/1.4 var(--mono)}
   .bsvg .sel .bbody,.bsvg .sel .bramp{stroke:var(--gold-hi);stroke-width:3.5}
   .bsvg .blabel{font:22px var(--mono);fill:#fff;pointer-events:none}
   .bsvg .blabel.prop{pointer-events:auto;cursor:pointer;text-decoration:underline dotted;text-underline-offset:4px}
@@ -424,6 +437,19 @@
   .drawer .dhead h2{margin:0;font:800 12px var(--ui)}
   .drawer .dhead .x{margin-left:auto}
   .drawer .dbodyl{overflow-y:auto;padding:10px 14px 30px}
+  .dintro{margin:0 0 10px;color:var(--muted)}
+  .comp{display:grid;grid-template-columns:96px 1fr;gap:10px;padding:10px;margin-bottom:8px;background:var(--dither),var(--inset);background-clip:padding-box;border:3px solid transparent;border-image:var(--btn-field) 3 / 3px stretch;font-size:12.5px}
+  .comp .cdraw{width:96px;height:60px;background:#0b1036;font-family:var(--mono);shape-rendering:auto}
+  .comp p{margin:3px 0}
+  .comp dl{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:4px 0}
+  .comp dt{color:var(--muted)}
+  .comp dd{margin:0}
+  .comp .ceq{display:inline-block;margin:0 10px 2px 0;font-family:var(--mono)}
+  .comp .cmore{display:block;color:var(--muted)}
+  .comp .cchk{color:var(--good)}
+  .comp .ctip{color:var(--muted);border-top:1px dashed var(--line-hi);padding-top:4px}
+  .compcard{width:420px;padding:6px;pointer-events:none}
+  .compcard .comp{margin:0}
 
   /* scenarios + what matters */
   table.scen{width:100%;border-collapse:collapse;font:13px var(--mono);margin:4px 0 8px}
@@ -529,6 +555,7 @@
         <div class="dtabs" role="tablist"><button data-dtab="build" aria-pressed="true" title="Draw the setup: shapes and their properties">1 · Setup</button><button data-dtab="forces" aria-pressed="false" title="Draw the forces on the setup">2 · Forces</button><button data-dtab="motion" aria-pressed="false" title="Replay the motion">Motion</button></div>
         <button class="go" id="replayBtn">▶ Replay</button>
         <span class="small muted" id="dgNote"></span>
+        <button id="diagBtn" aria-expanded="false" title="Open the diagram library: every drawing component and what it means">Diagrams</button>
         <button id="libBtn" aria-expanded="false" title="Open the equation library">Library</button>
       </div>
       <div class="dpane" id="paneMotion" hidden><div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div></div>
@@ -590,6 +617,12 @@
   <div class="dbodyl"><div class="focusbar" id="focusbar"></div><div id="lib"></div></div>
 </aside>
 
+
+<aside id="diagDrawer" class="drawer" aria-label="Diagram library">
+  <div class="dhead"><h2>Diagram library</h2><span class="small muted">One standard drawing per part</span><button class="x" id="diagClose" title="Close">×</button></div>
+  <div class="dbodyl"><p class="small dintro">Like the line drawings of chemistry, each part of a mechanics drawing is drawn one standard way, so a drawing can be read. Draw a part with its tool, or sketch it with the pen ✎: a line becomes a ramp or surface, a closed loop a ball or wheel, a box a block, an arrow out of a body a vector.</p><div id="diagLib"></div></div>
+</aside>
+<div id="compCard" class="pop compcard" role="tooltip" hidden></div>
 
 <div id="bank" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="bankT">
   <div class="win bankwin">

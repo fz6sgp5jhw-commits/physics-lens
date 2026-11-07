@@ -9,10 +9,10 @@ A guided problem-solving lens for intro calculus-based mechanics, used in classr
 Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dependencies, no web fonts (system UI font for text, system monospace for equations). All CSS lives in `index.html`.
 - Run: `python3 -m http.server` in the repo root, open http://localhost:8000
 - Hosted: GitHub Pages from `main` (repo `fz6sgp5jhw-commits/physics-lens`). Installable offline app (`manifest.webmanifest`, `sw.js`).
-- Files: `js/data.js` physics content and solvers · `js/expr.js` expression engine · `js/app.js` state, UI, solving, checking · `js/build.js` drawing canvas · `js/field.js` animated background · `tests/` Node test runner + playwright-core (drives installed Chrome; app state is `window.__rl`).
+- Files: `js/data.js` physics content, solvers and the diagram library · `js/expr.js` expression engine · `js/app.js` state, UI, solving, checking · `js/build.js` drawing canvas · `js/recognize.js` freehand-stroke rules · `js/field.js` animated background · `tests/` Node test runner + playwright-core (drives installed Chrome; app state is `window.__rl`).
 
 ## Tests
-- Run: `node --test tests/*.test.js` (70 tests). Show only the summary: `… 2>&1 | grep -E "^✖|ℹ (pass|fail)"`.
+- Run: `node --test tests/*.test.js` (91 tests). Show only the summary: `… 2>&1 | grep -E "^✖|ℹ (pass|fail)"`.
 - All tests pass before every commit. Change a test only when the roadmap phase you are doing changes that behaviour on purpose, and say so in the commit message.
 - Layout check: at 1440×900 after solving, the problem, canvas, conditions and latest solved card are visible without scrolling (`tests/workspace.test.js`).
 
@@ -41,6 +41,6 @@ Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dep
 
 ## Saving context (tokens)
 - One roadmap phase per session; the user runs `/clear` between phases.
-- `app.js` is ~1,900 lines: `grep -n` for the function you need and read that range; don't read whole files without a reason.
+- `app.js` is ~2,300 lines: `grep -n` for the function you need and read that range; don't read whole files without a reason.
 - Filter long command output (tests, git diff --stat). Take screenshots only to check layout or visuals.
 - When a phase is finished, update `ROADMAP.md` (tick boxes, one line on what changed) and, if the design changed, the matching section of `docs/architecture.md`, so the next session doesn't need to rediscover it.
