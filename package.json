@@ -1,10 +1,10 @@
 {
-  "name": "rotation-lab",
+  "name": "physics-lens",
   "private": true,
   "type": "module",
   "description": "Dev-only: test tooling. The app itself has no build step and no dependencies.",
   "scripts": {
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.js",
     "test:solvers": "node --test tests/solvers.test.js",
     "test:browser": "node --test tests/practice.test.js tests/checker.test.js tests/smoke.test.js"
   },
