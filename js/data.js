@@ -1,4 +1,4 @@
-// Rotation Lab — physics data: variables, equations with hand-checked isolation steps, setups.
+// Physics Lens — physics data: variables, equations with hand-checked isolation steps, setups.
 // All values are stored in SI units. Every solver is written out by hand so each step is exact.
 
 import { parse, hasPM, evalNum, MathError, parseUnit, dimOf, dimEq, dimStr } from './expr.js';
@@ -54,10 +54,9 @@ export const VARS = {
 export const V = (id) => `<span class="sym" data-v="${id}">${VARS[id].sym}</span>`;
 const P = (id) => VARS[id].plain;
 const err = (msg) => ({ error: msg });
-const div0 = (id) => err(`${P(id)} is zero, so you can’t divide by it.`);
 
 // real roots of a·x² + b·x + c = 0, positive ones only, smallest first; null if no real roots
-export function posRoots(a, b, c){
+function posRoots(a, b, c){
   if (Math.abs(a) < 1e-12) return Math.abs(b) < 1e-12 ? [] : [-c / b].filter(x => x > 1e-12);
   const D = b * b - 4 * a * c;
   if (D < -1e-12) return null;
@@ -425,7 +424,7 @@ export const CHAPTERS = {
     kin: { p: 'dx', u0: 'v0', u: 'vf', a: 'a', t: 't' }, diagram: 'incline',
     ladder: { rungs: ['dx', 'vf', 'a'], start: { dx: null, vf: 'v0' }, zeroNote: { dx: 'Δx is measured from where it starts, so Δx(0) = 0.' } },
     vars: ['dx', 'v0', 'vf', 'a', 't', 'inc', 'm', 'g', 'W', 'Wpar', 'Wperp', 'N', 'f', 'mu', 'mus', 'F', 'Fp'],
-    axis: '+ is <b>down the slope</b>. Pick the direction for each vector; the lab sets the sign.',
+    axis: '+ is <b>down the slope</b>. Pick the direction for each vector; the app sets the sign.',
     intro: `<p>On a ramp, tilt your axes so one runs <b>along the slope</b> and one runs <b>into it</b>. Gravity then splits into two parts: W∥ pulls the object down the slope, and W⊥ presses it into the ramp, where the normal force N cancels it.</p>
       <p>Only the forces along the slope change the motion. Once you know the acceleration, the constant-acceleration equations describe the slide.</p>`,
     sections: [
@@ -504,7 +503,7 @@ export const CHAPTERS = {
     kin: { p: 'theta', u0: 'w0', u: 'w', a: 'alpha', t: 't' }, diagram: 'wheel',
     ladder: { rungs: ['theta', 'w', 'alpha'], start: { theta: null, w: 'w0' }, zeroNote: { theta: 'θ is the angle turned since t = 0, so θ(0) = 0.' } },
     vars: ['theta', 'w0', 'w', 'alpha', 't'], rimVars: ['r', 's', 'v', 'at', 'ac'],
-    axis: '+ is <b>counterclockwise</b>. Pick the direction for each vector; the lab sets the sign.',
+    axis: '+ is <b>counterclockwise</b>. Pick the direction for each vector; the app sets the sign.',
     intro: `<p>A rigid wheel turns as one piece: every point sweeps the <b>same angle</b> in the same time. Its motion is described by angle θ, angular velocity ω and angular acceleration α.</p>
       <p>These are the rotational twins of position, velocity and acceleration, so the equations have the same shape. The radius r converts to a point’s path: s = rθ, v = rω.</p>`,
     sections: [
@@ -583,7 +582,7 @@ export const PRINT_ORDER = ['mu', 'mus', 'r', 'm', 'm1', 'm2', 'mA', 'mB', 'g', 
 //   note    (v, value) → string shown under the answer
 // sol.f(v) returns { value, note, branch, tree } or { error }.
 const NAME = (id) => VARS[id] ? VARS[id].plain : id;
-export function runSolver(sol, v){
+function runSolver(sol, v){
   if (sol.guard){ const g = sol.guard(v); if (g) return g; }
   const alt = sol.alt && sol.alt.find(x => x.when(v));
   const tree = alt ? alt.tree : sol.tree;
