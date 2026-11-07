@@ -531,6 +531,8 @@ export const CHAPTERS = {
   rotation: {
     title: 'Rotation kinematics', short: 'Rotation',
     kin: { p: 'theta', u0: 'w0', u: 'w', a: 'alpha', t: 't' }, diagram: 'wheel',
+    // kinematics only (no forces or torques yet): the Forces stage is optional; ω or α drawn on a wheel earns its star
+    forcesOptional: true,
     ladder: { rungs: ['theta', 'w', 'alpha'], start: { theta: null, w: 'w0' }, zeroNote: { theta: 'θ is the angle turned since t = 0, so θ(0) = 0.' } },
     vars: ['theta', 'w0', 'w', 'alpha', 't'], rimVars: ['r', 's', 'v', 'at', 'ac', 'atot'],
     // between two moments: worked out from θ(t) (or ω(t) for α_avg), see span() in app.js

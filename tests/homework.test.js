@@ -71,14 +71,16 @@ test('α from a graph: "varies with time" in Setup opens the function box (with 
   } finally { await page.close(); }
 });
 
-test('a drawn flywheel with an ω arrow is its motion diagram: Forces passes and Solve opens', async () => {
+test('a drawn flywheel: Forces is optional in rotation (Solve opens); an ω arrow earns its star', async () => {
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await rotation(page);
     await page.click('[data-template="wheel"]');
     await addGiven(page, 'alpha', 0.7, 'rad/s²', 0);
     await confirmConditions(page);
-    assert.equal(await page.locator('#steps [data-stage="1"].done').count(), 0, 'a bare wheel: no diagram yet');
+    assert.equal(await page.locator('#steps [data-stage="1"].na').count(), 1, 'a bare wheel: Forces is optional, not blocking');
+    await openStage(page, 3);
+    assert.equal(await page.isHidden('#sheetLock'), true, 'Solve is open without a diagram');
     await openStage(page, 0);
     await page.click('[data-tool="omega"]');
     const p = await page.evaluate(() => { const s = window.__rl.build.shapes[0]; return window.__rl.build.toScreen(s.x + s.r + 10, s.y); });

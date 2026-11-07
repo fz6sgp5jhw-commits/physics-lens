@@ -87,6 +87,7 @@ Decisions (2026-11-07): the student still makes each choice, but the problem-typ
 - [x] A wheel or ball with an ω or α arrow is its motion diagram: drawing a wheel no longer locks Solve behind the Forces stage.
 - [x] Gate: both homework problems solved through the UI in that order (Setup row → givens → conditions → targets): aₜ = 0.280, a_rad = 0.784, a = 0.832 m/s²; N = 3.98 rev from α(t) = 1.2t; with a drawn flywheel and an ω arrow, Solve opens.
 - What changed: conditions with an `ask` field in `CHAPTERS` (rotation: varA, rim; incline: varA) appear as a **This problem** row (`#kindRow`, buttons `data-ck`) above the givens; `setKind` changes them without confirming the conditions. The editor says where to find "varies with time" when the function option is missing, and the function box explains reading a straight-line graph. Names: a꜀ "radial (centripetal) acceleration", a "resultant (total) acceleration", N "revolutions turned between two moments (like “in the first 5 s”)". `stageChecks` counts ω/α arrows as a motion diagram. 94 tests (`tests/homework.test.js`, 3 new). No existing test changed. Cache `physics-lens-v11`.
+  Follow-up: a student drew gravity on the flywheel and stayed locked. Rotation kinematics has no forces or torques yet, so `CHAPTERS.rotation.forcesOptional` makes the Forces stage optional there (no star, doesn't block); an ω or α arrow still earns the star. Cache `physics-lens-v12`.
 
 ---
 

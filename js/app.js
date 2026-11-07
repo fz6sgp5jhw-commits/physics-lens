@@ -693,7 +693,8 @@ function stageChecks(){
   const bs = drawnBodies();
   const fbd = bs.some(b => Object.values(S.gen).some(g => g.key === 'fbd:' + b.id));
   const motion = bs.some(b => { const sh = S.build.shapes.find(x => x.id === b.id); return !!(sh && (sh.v || sh.a || sh.omega || sh.alpha)); });
-  return [bs.length > 0 || userGivens() > 0, bs.length ? fbd || motion : null, S.condOk, S.targets.length > 0 && !curTarget()];
+  const forces = !bs.length ? null : chapter().forcesOptional ? (motion || null) : fbd || motion;
+  return [bs.length > 0 || userGivens() > 0, forces, S.condOk, S.targets.length > 0 && !curTarget()];
 }
 const firstOpen = (c) => { const i = c.indexOf(false); return i < 0 ? STAGES.length : i; };
 const reach = (c = stageChecks()) => Math.min(STAGES.length - 1, firstOpen(c) + 1);
@@ -721,7 +722,7 @@ function renderStage(){
 }
 function steps(){
   const c = stageChecks(), f = firstOpen(c), r = reach(c);
-  const state = (i) => c[i] ? 'passed: star earned' : c[i] === null ? 'nothing drawn, so no diagram to check' : i > r ? `locked until ${STAGES[f].name} passes` : 'not passed yet';
+  const state = (i) => c[i] ? 'passed: star earned' : c[i] === null ? (drawnBodies().length ? 'optional here: draw ω or α on the wheel for a star' : 'nothing drawn, so no diagram to check') : i > r ? `locked until ${STAGES[f].name} passes` : 'not passed yet';
   $('steps').innerHTML = STAGES.map((st, i) => `<button data-stage="${i}" class="${c[i] ? 'done' : ''}${c[i] === null ? ' na' : ''}${i === S.stage ? ' now' : ''}${i > r ? ' locked' : ''}" ${i === S.stage ? 'aria-current="step"' : ''} title="${st.name}: ${state(i)}"><b>${i + 1}</b>${st.name}<i class="st" aria-hidden="true"></i></button>`).join('<i class="sep">›</i>')
     + `<button id="sheetTab" class="${S.stage === 3 ? 'now' : ''}" title="Your sheet, from any stage">Sheet · ${S.sheet.length}</button>`;
   $('steps').querySelectorAll('[data-stage]').forEach(b => b.onclick = () => openStage(+b.dataset.stage));
