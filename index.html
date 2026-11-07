@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Physics Lens</title>
-<meta name="theme-color" content="#05070d">
+<meta name="theme-color" content="#070a1f">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icons/icon-192.png">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
@@ -371,6 +371,230 @@
   #solved .ban{font:600 42px/1 var(--ui);letter-spacing:.3em;color:#fff;text-shadow:0 0 18px var(--cy),0 0 42px rgba(79,209,255,.6);animation:solvedIn 1.6s ease both}
   @keyframes solvedIn{0%{opacity:0;letter-spacing:.6em}25%{opacity:1;letter-spacing:.3em}75%{opacity:1}100%{opacity:0}}
 
+
+  /* ================================================================
+     PIXEL NIGHT SKIN — felt-blue panels with notched pixel frames and
+     gold star studs, chunky pressable buttons, a level-map step tracker,
+     an RPG dialog line and spell-card equations. One art pixel = 3px.
+     Visual only: layout, ids and classes are unchanged.
+     ================================================================ */
+  :root{
+    --night:#070a1f; --felt:#151d56; --felt-hi:#1d2878; --felt-lo:#0d1340; --deep:#090d2a;
+    --gold:#e8b64c; --gold-hi:#ffd98a; --gold-lo:#8a5a1e; --moon:#e8edff; --mist:#9aa8e0; --dimb:#5f6aa8;
+    --line:rgba(135,150,255,.22); --line-hi:#4a5bc4;
+    --text:#e8edff; --muted:#9aa8e0; --dim:#5f6aa8; --good:#5ee0a0;
+    --inset:#0a0e2c; --panel:rgba(21,29,86,.9); --panel-solid:#151d56;
+    --dither:repeating-conic-gradient(rgba(255,255,255,.028) 0 25%, transparent 0 50%) 0 0 / 6px 6px;
+    --hard:2px 2px 0 #050716;
+    --r:0px;
+    --frame-thin:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 3 3' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%234757c0'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%234757c0'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%234757c0'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%234757c0'/%3E%3C/svg%3E");
+    --frame-panel:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 6 6' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='2' y='0' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='3' y='0' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='4' y='0' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23e8b64c'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='3' y='1' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='4' y='1' width='1' height='1' fill='%23e8b64c'/%3E%3Crect x='5' y='1' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='0' y='2' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='4' y='2' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='5' y='2' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='0' y='3' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='1' y='3' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='4' y='3' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='5' y='3' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='0' y='4' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23e8b64c'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='3' y='4' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='4' y='4' width='1' height='1' fill='%23e8b64c'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='2' y='5' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='3' y='5' width='1' height='1' fill='%233b4aa8'/%3E%3Crect x='4' y='5' width='1' height='1' fill='%233b4aa8'/%3E%3C/svg%3E");
+    --frame-hero:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 6 6' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='2' y='0' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='3' y='0' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='4' y='0' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23fff1b8'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='3' y='1' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='4' y='1' width='1' height='1' fill='%23fff1b8'/%3E%3Crect x='5' y='1' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='0' y='2' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='4' y='2' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='5' y='2' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='0' y='3' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='1' y='3' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='4' y='3' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='5' y='3' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='0' y='4' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23fff1b8'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='3' y='4' width='1' height='1' fill='%230a0e2c'/%3E%3Crect x='4' y='4' width='1' height='1' fill='%23fff1b8'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='2' y='5' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='3' y='5' width='1' height='1' fill='%23c9973f'/%3E%3Crect x='4' y='5' width='1' height='1' fill='%23c9973f'/%3E%3C/svg%3E");
+    --frame-pink:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 6 6' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='2' y='0' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='3' y='0' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='4' y='0' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23ffd1f3'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%232a0c3a'/%3E%3Crect x='3' y='1' width='1' height='1' fill='%232a0c3a'/%3E%3Crect x='4' y='1' width='1' height='1' fill='%23ffd1f3'/%3E%3Crect x='5' y='1' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='0' y='2' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%232a0c3a'/%3E%3Crect x='4' y='2' width='1' height='1' fill='%232a0c3a'/%3E%3Crect x='5' y='2' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='0' y='3' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='1' y='3' width='1' height='1' fill='%232a0c3a'/%3E%3Crect x='4' y='3' width='1' height='1' fill='%232a0c3a'/%3E%3Crect x='5' y='3' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='0' y='4' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23ffd1f3'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%232a0c3a'/%3E%3Crect x='3' y='4' width='1' height='1' fill='%232a0c3a'/%3E%3Crect x='4' y='4' width='1' height='1' fill='%23ffd1f3'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='2' y='5' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='3' y='5' width='1' height='1' fill='%23ff6bd6'/%3E%3Crect x='4' y='5' width='1' height='1' fill='%23ff6bd6'/%3E%3C/svg%3E");
+    --frame-amber:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 6 6' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='2' y='0' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='3' y='0' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='4' y='0' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23fff1b8'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%232a1e06'/%3E%3Crect x='3' y='1' width='1' height='1' fill='%232a1e06'/%3E%3Crect x='4' y='1' width='1' height='1' fill='%23fff1b8'/%3E%3Crect x='5' y='1' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='0' y='2' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%232a1e06'/%3E%3Crect x='4' y='2' width='1' height='1' fill='%232a1e06'/%3E%3Crect x='5' y='2' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='0' y='3' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='1' y='3' width='1' height='1' fill='%232a1e06'/%3E%3Crect x='4' y='3' width='1' height='1' fill='%232a1e06'/%3E%3Crect x='5' y='3' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='0' y='4' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23fff1b8'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%232a1e06'/%3E%3Crect x='3' y='4' width='1' height='1' fill='%232a1e06'/%3E%3Crect x='4' y='4' width='1' height='1' fill='%23fff1b8'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='2' y='5' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='3' y='5' width='1' height='1' fill='%23ffd166'/%3E%3Crect x='4' y='5' width='1' height='1' fill='%23ffd166'/%3E%3C/svg%3E");
+    --frame-good:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 6 6' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='2' y='0' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='3' y='0' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='4' y='0' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23c8ffe6'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%23062a1c'/%3E%3Crect x='3' y='1' width='1' height='1' fill='%23062a1c'/%3E%3Crect x='4' y='1' width='1' height='1' fill='%23c8ffe6'/%3E%3Crect x='5' y='1' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='0' y='2' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%23062a1c'/%3E%3Crect x='4' y='2' width='1' height='1' fill='%23062a1c'/%3E%3Crect x='5' y='2' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='0' y='3' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='1' y='3' width='1' height='1' fill='%23062a1c'/%3E%3Crect x='4' y='3' width='1' height='1' fill='%23062a1c'/%3E%3Crect x='5' y='3' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='0' y='4' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23c8ffe6'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%23062a1c'/%3E%3Crect x='3' y='4' width='1' height='1' fill='%23062a1c'/%3E%3Crect x='4' y='4' width='1' height='1' fill='%23c8ffe6'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='2' y='5' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='3' y='5' width='1' height='1' fill='%233ddc97'/%3E%3Crect x='4' y='5' width='1' height='1' fill='%233ddc97'/%3E%3C/svg%3E");
+    --frame-bad:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 6 6' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='2' y='0' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='3' y='0' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='4' y='0' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='1' y='1' width='1' height='1' fill='%23ffd0d0'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%232a0808'/%3E%3Crect x='3' y='1' width='1' height='1' fill='%232a0808'/%3E%3Crect x='4' y='1' width='1' height='1' fill='%23ffd0d0'/%3E%3Crect x='5' y='1' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='0' y='2' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%232a0808'/%3E%3Crect x='4' y='2' width='1' height='1' fill='%232a0808'/%3E%3Crect x='5' y='2' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='0' y='3' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='1' y='3' width='1' height='1' fill='%232a0808'/%3E%3Crect x='4' y='3' width='1' height='1' fill='%232a0808'/%3E%3Crect x='5' y='3' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='0' y='4' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='1' y='4' width='1' height='1' fill='%23ffd0d0'/%3E%3Crect x='2' y='4' width='1' height='1' fill='%232a0808'/%3E%3Crect x='3' y='4' width='1' height='1' fill='%232a0808'/%3E%3Crect x='4' y='4' width='1' height='1' fill='%23ffd0d0'/%3E%3Crect x='5' y='4' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='1' y='5' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='2' y='5' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='3' y='5' width='1' height='1' fill='%23ff6b6b'/%3E%3Crect x='4' y='5' width='1' height='1' fill='%23ff6b6b'/%3E%3C/svg%3E");
+    --btn:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 3 3' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%234a5bc4'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%234a5bc4'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%234a5bc4'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%234a5bc4'/%3E%3C/svg%3E");
+    --btn-hi:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 3 3' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%238796ff'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%238796ff'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%238796ff'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%238796ff'/%3E%3C/svg%3E");
+    --btn-on:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 3 3' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%234fd1ff'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%234fd1ff'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%234fd1ff'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%234fd1ff'/%3E%3C/svg%3E");
+    --btn-gold:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 3 3' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%23ffd98a'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%23ffd98a'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%23ffd98a'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%23ffd98a'/%3E%3C/svg%3E");
+    --btn-field:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 3 3' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%232d3a8c'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%232d3a8c'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%232d3a8c'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%232d3a8c'/%3E%3C/svg%3E");
+    --btn-focus:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='9' viewBox='0 0 3 3' shape-rendering='crispEdges'%3E%3Crect x='1' y='0' width='1' height='1' fill='%23e8b64c'/%3E%3Crect x='0' y='1' width='1' height='1' fill='%23e8b64c'/%3E%3Crect x='2' y='1' width='1' height='1' fill='%23e8b64c'/%3E%3Crect x='1' y='2' width='1' height='1' fill='%23e8b64c'/%3E%3C/svg%3E");
+  }
+  html,body{background:var(--night)}
+  body{background:
+      radial-gradient(1100px 700px at 12% -12%, #1f2c86 0%, transparent 62%),
+      radial-gradient(900px 700px at 108% 108%, #2b1658 0%, transparent 60%),
+      radial-gradient(700px 500px at 60% 40%, #0f1650 0%, transparent 70%),
+      var(--night);
+    background-attachment:fixed}
+  #fieldArrows,#fieldTrails{image-rendering:pixelated;image-rendering:crisp-edges}
+  ::selection{background:rgba(232,182,76,.35)}
+  *{border-radius:0 !important}
+  *::-webkit-scrollbar{width:12px;height:12px} *::-webkit-scrollbar-track{background:var(--deep)} *::-webkit-scrollbar-thumb{background:var(--line-hi);border:3px solid var(--deep)}
+  .ws-right{scrollbar-color:var(--line-hi) var(--deep)}
+
+  /* panels: notched pixel frame, felt with a fine dither, hard drop shadow */
+  .appbar,.win,.card,.drawer,.bankwin{
+    background:var(--dither),var(--panel);background-clip:padding-box;
+    border:6px solid transparent;border-image:var(--frame-panel) 6 / 6px stretch;
+    backdrop-filter:none;-webkit-backdrop-filter:none;
+    box-shadow:6px 6px 0 rgba(3,4,16,.55)}
+  .appbar{background:var(--dither),rgba(13,19,64,.94);background-clip:padding-box}
+  #diagramCard{border-image:var(--frame-hero) 6 / 6px stretch;box-shadow:6px 6px 0 rgba(3,4,16,.55),0 0 28px rgba(232,182,76,.12)}
+  .card .titlebar,.win > .titlebar{border-bottom:3px solid var(--deep);box-shadow:0 3px 0 rgba(135,150,255,.12);padding:7px 10px 6px}
+  .card .titlebar h2,.win > .titlebar h2,.drawer .dhead h2,.subhead,.cgroup .clabel,.striprow .lbl{font-weight:800;letter-spacing:.14em;color:var(--gold-hi);text-shadow:var(--hard)}
+  .card .titlebar h2::before,.win > .titlebar h2::before{width:9px;height:9px;margin-right:9px;background:var(--gold-hi);box-shadow:none;vertical-align:0;
+    clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
+  .sunk,#inspector,.known,.lib-eq,.eq,.bitem{background:var(--dither),var(--inset);background-clip:padding-box;border:3px solid transparent;border-image:var(--btn-field) 3 / 3px stretch}
+
+  /* brand: pixel moon and star */
+  .brand h1{font-weight:900;letter-spacing:.16em;text-shadow:3px 3px 0 #050716;color:var(--moon)}
+  .brand h1 span{color:var(--gold-hi)}
+  .brand small{color:var(--mist)}
+
+  /* buttons: chunky, notched, with a pixel step underneath; they sink when pressed */
+  button{border:3px solid transparent;border-image:var(--btn) 3 / 3px stretch;background:var(--felt-hi);background-clip:padding-box;color:var(--moon);
+    font-weight:650;text-shadow:1px 1px 0 #050716;box-shadow:0 3px 0 #050716;transition:transform .06s,background .1s}
+  button:hover:not(:disabled){background:#2a3794;background-clip:padding-box;border-image:var(--btn-hi) 3 / 3px stretch}
+  button:active:not(:disabled){transform:translateY(3px);box-shadow:none}
+  button[aria-pressed="true"]{background:#123a5c;background-clip:padding-box;border-image:var(--btn-on) 3 / 3px stretch;color:#fff;box-shadow:0 3px 0 #050716, inset 0 0 0 2px rgba(79,209,255,.25)}
+  button.go{background:linear-gradient(180deg,#ffd98a 0 50%,#e8b64c 50% 100%);background-clip:padding-box;border-image:var(--btn-gold) 3 / 3px stretch;color:#2a1a04;text-shadow:none;font-weight:800;box-shadow:0 3px 0 var(--gold-lo),0 0 14px rgba(232,182,76,.35)}
+  button.go:hover:not(:disabled){background:linear-gradient(180deg,#ffe7ad 0 50%,#f5c565 50% 100%);background-clip:padding-box}
+  button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+  button:disabled{opacity:.4;box-shadow:none}
+
+  /* fields */
+  input,select,textarea{background:var(--deep);border:3px solid #2d3a8c;color:var(--moon)}
+  input:focus,select:focus,textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(232,182,76,.18)}
+  select option,select optgroup{background:var(--felt-lo)}
+  .ccheck input{width:18px;height:18px;flex:0 0 18px;border:3px solid #4a5bc4;background:var(--deep)}
+  .ccheck input:checked{background:var(--gold);border-color:var(--gold-hi)}
+  .ccheck input:checked::after{border-color:#2a1a04}
+
+  /* level map: the step tracker */
+  .steps{gap:0}
+  .steps span{font:700 12px/1 var(--ui);padding:6px 10px 6px 8px;border:3px solid transparent;border-image:var(--btn-field) 3 / 3px stretch;background:var(--deep);background-clip:padding-box;color:var(--dimb);text-shadow:var(--hard)}
+  .steps span b{font:800 11px var(--mono);color:inherit;opacity:1}
+  .steps span.done{color:var(--good);border-image:var(--btn) 3 / 3px stretch;background:#0f2a3a;background-clip:padding-box}
+  .steps span.done::before{content:'';display:inline-block;width:9px;height:9px;margin-right:6px;background:var(--gold-hi);vertical-align:-1px;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
+  .steps span.now{color:#2a1a04;background:var(--gold);background-clip:padding-box;border-image:var(--btn-gold) 3 / 3px stretch;box-shadow:0 0 16px rgba(232,182,76,.55),0 3px 0 var(--gold-lo);text-shadow:none;animation:nowBob 1.2s steps(2) infinite}
+  @keyframes nowBob{50%{transform:translateY(-3px)}}
+  .steps .sep{font-size:0;width:15px;height:3px;display:inline-block;background:repeating-linear-gradient(90deg,var(--gold-lo) 0 3px,transparent 3px 6px)}
+
+  /* the assistant line reads like a game dialog box */
+  .assistant{border-top:none;margin-top:4px;padding:7px 28px 7px 10px;position:relative;background:var(--dither),var(--deep);background-clip:padding-box;border:3px solid transparent;border-image:var(--btn-focus) 3 / 3px stretch}
+  .assistant::after{content:'';position:absolute;right:10px;bottom:7px;width:9px;height:6px;background:var(--gold-hi);clip-path:polygon(0 0,100% 0,50% 100%);animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .assistant .aicon{flex:0 0 18px;height:18px;margin-top:1px;font-size:0;background:transparent;box-shadow:-5px 3px 0 0 var(--gold-hi);border-radius:50% !important;transform:translateX(5px) rotate(-20deg)}
+  #bubble{color:var(--moon)}
+  #bubble b{color:var(--gold-hi)}
+
+  /* givens, chips, editors */
+  .strip .known{border-image:var(--btn-field) 3 / 3px stretch;background:var(--deep);background-clip:padding-box}
+  .known .vsym{border-width:3px}
+  .axisnote{background:var(--dither),#0c2340;background-clip:padding-box;border:3px solid transparent;border-image:var(--btn-on) 3 / 3px stretch;color:#bfeeff}
+  .editor{background:var(--dither),#101a52;background-clip:padding-box;border:3px solid transparent;border-image:var(--btn-focus) 3 / 3px stretch}
+  .tchip{border:3px solid transparent;border-image:var(--btn) 3 / 3px stretch;background:var(--deep);background-clip:padding-box}
+  .tchip.current{border-image:var(--frame-pink) 6 / 3px stretch;box-shadow:0 0 14px rgba(255,107,214,.35)}
+  .tchip.done{border-image:var(--frame-amber) 6 / 3px stretch}
+  .fchip{border:3px solid transparent;border-image:var(--btn) 3 / 3px stretch}
+  .sheet-status{background:var(--dither),#2a2008;background-clip:padding-box;border:3px solid transparent;border-image:var(--frame-amber) 6 / 3px stretch;color:#ffe9b8}
+  .sheet-empty{border:3px dashed #3b4aa8}
+
+  /* equations are spell cards: they glow when they can be cast */
+  .eq .eqlabel,.tag{border:2px solid currentColor;background:var(--deep);color:var(--gold-hi)}
+  .eq .form,.lib-eq .lform{text-shadow:var(--hard)}
+  .eq.lit,.lib-eq.lit{border-image:var(--frame-pink) 6 / 3px stretch;box-shadow:0 0 0 0 transparent,0 0 18px rgba(255,107,214,.35);background:var(--dither),#1e0f3a;background-clip:padding-box}
+  @keyframes glow{50%{box-shadow:0 0 30px rgba(255,107,214,.6)}}
+  .eq.done,.lib-eq.onsheet{border-image:var(--frame-good) 6 / 3px stretch}
+  #sheet .eq.last{border-image:var(--frame-amber) 6 / 3px stretch;box-shadow:0 0 22px rgba(255,209,102,.3)}
+  .eq.rel,.lib-eq.rel{border-image:var(--frame-amber) 6 / 3px stretch}
+  .chapter h3{color:var(--gold-hi);border-bottom:3px dotted var(--gold-lo);text-shadow:var(--hard);font-weight:800}
+  .focusbar{border:3px solid transparent;border-image:var(--frame-amber) 6 / 3px stretch}
+
+  /* the worked steps and the result plaque */
+  #work .section{color:var(--gold-hi);text-shadow:var(--hard);font-weight:800}
+  #work .why::before{color:var(--gold)}
+  #work .result{border:3px solid transparent;border-image:var(--frame-amber) 6 / 3px stretch;background:var(--dither),#2a2008;background-clip:padding-box;text-shadow:var(--hard);box-shadow:0 0 22px rgba(255,209,102,.25)}
+  #work .check{border:3px solid transparent;border-image:var(--frame-good) 6 / 3px stretch;background:#082418;background-clip:padding-box}
+  #work .feedback{border:3px solid transparent;border-image:var(--btn) 3 / 3px stretch}
+
+  /* canvases: night felt, crisp pixel edges on the drawing */
+  .canvas-wrap,.canvascard .canvas-wrap{background:#0b1036;border:3px solid transparent;border-image:var(--btn-field) 3 / 3px stretch}
+  .bsvg{shape-rendering:crispEdges}
+  .bsvg text{shape-rendering:auto}
+  .bsvg .bbg{fill:#0b1036}
+  .bsvg .bsurf,.bsvg .bleg{stroke:#8796ff}
+  .bsvg .bramp{fill:rgba(74,91,196,.22);stroke:#8796ff;stroke-width:3}
+  .bsvg .bpulley{fill:#151d56;stroke:var(--gold-hi)}
+  .bsvg .bhandle{fill:var(--gold-hi);stroke:#2a1a04;stroke-width:2}
+  .bsvg .sel .bbody,.bsvg .sel .bramp{stroke:var(--gold-hi)}
+  #fbd svg{background:#0b1036;border:3px solid #2d3a8c}
+  #fbd .ftable{border:3px solid #2d3a8c}
+  #fbd .fmsg.ok{border:3px solid transparent;border-image:var(--frame-good) 6 / 3px stretch;background:#082418;background-clip:padding-box}
+  #fbd .fmsg.bad{border:3px solid transparent;border-image:var(--frame-bad) 6 / 3px stretch;background:#240a0a;background-clip:padding-box}
+  #inspector h3{color:var(--gold-hi);text-shadow:var(--hard);font-weight:800}
+  #inspector .ichip{border:3px solid transparent;border-image:var(--btn) 3 / 3px stretch}
+
+  /* drawer, modals, dialogs */
+  .drawer{border-left:none;border-image:var(--frame-hero) 6 / 6px stretch;background:var(--dither),rgba(13,19,64,.97);background-clip:padding-box}
+  .drawer .dhead{border-bottom:3px solid var(--deep)}
+  .modalwrap,#dlg{background:rgba(3,4,16,.66);backdrop-filter:none}
+  .bankwin{border-image:var(--frame-hero) 6 / 6px stretch}
+  #dlg .win{border-image:var(--frame-bad) 6 / 6px stretch;background:var(--dither),#1a0f2a;background-clip:padding-box}
+  #dlg.good .win{border-image:var(--frame-good) 6 / 6px stretch;background:var(--dither),#0c2420;background-clip:padding-box}
+  #dlg .dicon{border:3px solid currentColor;box-shadow:3px 3px 0 #050716}
+  #dlg .dmsg > b:first-child{color:var(--gold-hi);text-shadow:var(--hard)}
+
+  /* the SOLVED banner: gold pixel letters between two stars */
+  #solved .ban{font:900 46px/1 var(--ui);letter-spacing:.32em;color:#ffe6a3;text-shadow:3px 3px 0 #8a5a1e,6px 6px 0 #1b1440,0 0 26px rgba(255,214,120,.7)}
+  #solved .ban::before,#solved .ban::after{content:'';display:inline-block;width:24px;height:24px;margin:0 22px;background:#ffd98a;vertical-align:4px;clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
+
+
+  /* secondary panels get a slimmer frame so the whole workspace still fits on one laptop screen */
+  .prob,.strip,#sheetWin,#workWin,.ws-right .card{border-width:3px;border-image:var(--frame-thin) 3 / 3px stretch;box-shadow:4px 4px 0 rgba(3,4,16,.55)}
+  .steps{flex-wrap:nowrap}
+  .steps span{padding:5px 7px;font-size:11.5px;white-space:nowrap;flex:none}
+  .steps span.done::before{width:7px;height:7px;margin-right:4px}
+  .steps .sep{width:9px}
+  .assistant{padding:5px 26px 5px 9px;margin-top:2px}
+  .appbar{padding:5px 10px}
+
+  /* fit pass: same look, fewer pixels of chrome */
+  .appbar{border-width:3px;border-image:var(--frame-panel) 6 / 3px stretch;padding:4px 10px}
+  .assistant{padding:3px 26px 3px 8px;min-height:24px}
+  .assistant::after{bottom:6px}
+  .sheethead .targets{flex-wrap:nowrap;overflow:hidden}
+  .tchip{padding:3px 7px;font-size:13px;border-width:2px}
+  .sheethead #addTarget{max-width:180px;min-height:26px;padding:2px 4px}
+  .strip .known{padding:0 3px 0 6px;border-width:2px}
+  .strip .known .kact button{min-height:18px;box-shadow:none;border-width:2px}
+  .canvas-wrap,.canvascard .canvas-wrap{border:none;outline:3px solid #2d3a8c;outline-offset:-3px}
+  #sheetWin .sheet-status{margin:5px 0;padding:3px 9px;border-width:2px}
+  #sheet .eq{border-width:2px}
+  .prob{padding:5px 8px} .probtop{margin-bottom:4px} textarea#problem{border-width:2px}
+  .strip{padding:5px 9px}
+  /* calm mode and reduced motion: nothing bobs or blinks */
+  body.calm .steps span.now{transform:none}
+  body.calm .assistant::after{opacity:1}
+
+
+  /* ===== DRAW WINDOW: folder tabs and a two-column tool palette, after the chem app's Draw window ===== */
+  #diagramCard .ctool{margin:0;gap:6px;align-items:flex-end;flex-wrap:nowrap;padding:0 2px;border-bottom:3px solid #8796ff;position:relative}
+  #diagramCard .ctool > button{margin-bottom:5px}
+  #diagramCard .dtabs{gap:0;align-items:flex-end}
+  #diagramCard .dtabs button{border-image:none;border:3px solid;border-color:#8796ff #1b1440 transparent #8796ff;border-bottom:0;
+    background:var(--felt-lo);color:var(--dimb);box-shadow:none;margin:4px -3px 0 0;padding:6px 14px 5px;min-height:0;font:800 12px/1 var(--ui);letter-spacing:.06em;text-transform:uppercase;transform:none;position:relative}
+  #diagramCard .dtabs button:hover:not([aria-pressed="true"]){background:var(--felt);color:var(--moon)}
+  #diagramCard .dtabs button:active{transform:none}
+  #diagramCard .dtabs button[aria-pressed="true"]{margin-top:0;padding:8px 16px 8px;margin-bottom:-3px;z-index:2;background:#0d1546;color:var(--gold-hi);text-shadow:var(--hard);border-color:#ffd98a #1b1440 transparent #ffd98a}
+  #diagramCard .dtabs button[aria-pressed="true"]::before{content:'';display:inline-block;width:9px;height:9px;margin-right:7px;background:#e8edff;box-shadow:inset -2px -2px #8796ff;vertical-align:-1px}
+  #diagramCard .dpane{background:#0d1546;border:3px solid #8796ff;border-top:0;padding:6px}
+  #paneBuild .bwrap{display:flex;gap:6px;align-items:stretch}
+  #paneBuild .bwrap .canvas-wrap{flex:1;min-width:0}
+  .bpal{display:grid !important;grid-template-columns:repeat(2,30px);grid-auto-rows:30px;gap:2px;align-content:start;margin:0;padding:4px;
+    background:var(--dither),#0a0f33;border:3px solid transparent;border-image:var(--btn-field) 3 / 3px stretch;background-clip:padding-box}
+  .bpal[hidden]{display:none !important}
+  .bpal .tb{width:30px;height:30px;min-height:0;padding:0;display:grid;place-items:center;border-width:2px;border-image-width:2px;box-shadow:0 2px 0 #050716;font-size:0}
+  .bpal .tb svg{display:block;pointer-events:none}
+  .bpal .tb[aria-pressed="true"]{background:repeating-conic-gradient(#1f2c80 0 25%,#123a5c 0 50%) 0 0/4px 4px;background-clip:padding-box;box-shadow:inset 2px 2px 0 #050716;transform:translateY(2px)}
+  .bpal .tsep{grid-column:1 / -1;height:3px;align-self:center;background:repeating-linear-gradient(90deg,var(--gold-lo) 0 3px,transparent 3px 6px);font-style:normal}
+  #paneBuild .bprops{margin-top:6px}
+  .bsvg .bhandle{fill:var(--gold-hi);stroke:#2a1a04;stroke-width:2}
+  .bsvg rect.bhandle{shape-rendering:crispEdges}
+  .bsvg .btip{stroke:#090d2a;stroke-width:2;cursor:grab;opacity:.9}
+  .bsvg .btip:hover{opacity:1;stroke:#fff}
+  .bsvg .vhit,.bsvg .fhit{cursor:grab}
+  .bsvg .bhint{font:600 15px var(--mono);fill:var(--gold-hi);pointer-events:none}
+  .bsvg[data-tool="com"] .com{cursor:move}
+  .bsvg .comq{fill:#090d2a;pointer-events:none}
+  .bsvg .fdot{fill:#e8edff;stroke:#090d2a;stroke-width:2}
+  .bsvg .com.sel .fdot{fill:var(--gold-hi)}
+  .bsvg[data-tool="erase"]{cursor:not-allowed}
+  .bsvg[data-tool="erase"] .shape,.bsvg[data-tool="erase"] [data-arrow],.bsvg[data-tool="erase"] [data-vec]{cursor:crosshair}
+  .bsvg[data-tool="vel"],.bsvg[data-tool="acc"],.bsvg[data-tool="force"],.bsvg[data-tool^="f:"]{cursor:crosshair}
+  .bsvg[data-tool="com"]{cursor:cell}
   /* calm mode: the field stands still and nothing animates */
   body.calm *{animation-duration:0s !important;animation-iteration-count:1 !important;transition:none !important}
   body.calm .eq.lit{box-shadow:0 0 0 1px rgba(255,107,214,.6)}
@@ -384,8 +608,8 @@
 <header>
   <div class="appbar">
     <div class="brand">
-      <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12" fill="none" stroke="#4fd1ff" stroke-width="1.5" opacity=".6"/><circle cx="15" cy="15" r="7" fill="none" stroke="#4fd1ff" stroke-width="1.5"/><circle cx="15" cy="15" r="3.2" fill="#ff5d73"/><path d="M15 3v4M15 23v4M3 15h4M23 15h4" stroke="#4fd1ff" stroke-width="1.5"/></svg>
-      <div><h1>Physics <span>Lens</span></h1><small>mechanics workbench · you choose, it keeps the books</small></div>
+      <svg width="33" height="33" viewBox="0 0 11 11" shape-rendering="crispEdges" aria-hidden="true"><path fill="#e8edff" d="M4 1h3v1H4zM3 2h2v1H3zM2 3h2v1H2zM2 4h1v3H2zM2 7h2v1H2zM3 8h2v1H3zM4 9h3v1H4zM7 8h1v1H7z"/><path fill="#c9d4ff" d="M3 3h1v1H3zM3 7h1v1H3z"/><path fill="#ffd98a" d="M8 2h1v3H8zM7 3h3v1H7z"/><path fill="#fff1b8" d="M8 3h1v1H8z"/><path fill="#e8b64c" d="M6 5h1v1H6z"/></svg>
+      <div><h1>Physics <span>Lens</span></h1><small>mechanics workbench · you cast the physics, it keeps the books</small></div>
     </div>
     <div class="tools" style="grid-column:3;grid-row:1">
       <button id="bankBtn" class="go" title="Practice problems: text only, you set them up">Practice bank</button>
@@ -430,8 +654,8 @@
       </div>
       <div class="dpane" id="paneMotion" hidden><div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div></div>
       <div class="dpane" id="paneBuild">
-        <div class="bpal" id="bpal"></div>
-        <div class="canvas-wrap"><svg id="bd" class="bsvg"></svg></div>
+        <div class="bwrap"><div class="bpal" id="bpal" role="toolbar" aria-label="Drawing tools" aria-orientation="vertical"></div>
+        <div class="canvas-wrap"><svg id="bd" class="bsvg"></svg></div></div>
         <div class="bprops" id="bprops"></div>
       </div>
     </section>
