@@ -119,6 +119,9 @@ const showVal = (id) => {
   return `${fmt(val(id))} ${unitOf(id)}`;
 };
 const letter = (i) => '(' + 'abcdefgh'[i] + ')';
+// the part a found value belongs to: the target being worked on when it was found (or the target itself)
+const partOf = (f) => f && S.targets.includes(f.part) ? letter(S.targets.indexOf(f.part)) : '';
+const partTag = (f) => `<span class="kpart">found${partOf(f) ? ' · ' + partOf(f) : ''}</span>`;
 
 function shortest(eqList, from, target){
   if (!target) return null;
@@ -216,8 +219,25 @@ function dialog(title, msg, good = false){
   $('dlg').classList.add('show'); $('dlgOk').focus();
   good ? fanfare() : beep(180, 0.25, 'sawtooth');
 }
-$('dlgOk').onclick = () => $('dlg').classList.remove('show');
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ $('dlg').classList.remove('show'); $('bank').classList.remove('show'); } });
+// a question with Cancel: resolves true for the yes button, false for Cancel or Esc
+let answer = null;
+function ask(title, msg, yes){
+  dialog(title, msg); $('dlgCancel').hidden = false; $('dlgOk').textContent = yes; $('dlgCancel').focus();
+  return new Promise(r => { answer = r; });
+}
+function closeDialog(ok){
+  $('dlg').classList.remove('show'); $('dlgCancel').hidden = true; $('dlgOk').textContent = 'OK';
+  const a = answer; answer = null; if (a) a(ok);
+}
+$('dlgOk').onclick = () => closeDialog(true);
+$('dlgCancel').onclick = () => closeDialog(false);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); } });
+// changing an input makes every answer found so far wrong: ask before clearing them
+function beforeClearing(what){
+  if (!S.path.length) return Promise.resolve(true);
+  const parts = [...new Set(S.path.map(p => p.part).filter(t => S.targets.includes(t)))].map(t => letter(S.targets.indexOf(t)));
+  return ask('Clear your answers?', `<b>THIS CLEARS ${S.path.length} SOLVED STEP${S.path.length > 1 ? 'S' : ''}</b>${what} changes what the answers depend on, so every value found so far${parts.length ? ` (part${parts.length > 1 ? 's' : ''} ${parts.join(', ')})` : ''} would be wrong. They will be cleared. Your givens, conditions and sheet stay.`, 'Clear them');
+}
 
 // ---------- chapter / reset ----------
 function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false, earth: true } : ch === 'pulley' || ch === 'blocks' ? { friction: ch === 'blocks', earth: true } : { rim: false, varA: false }; }
@@ -270,7 +290,7 @@ function renderKnowns(){
     const g = S.givens[id], f = S.found[id];
     const row = document.createElement('div'); row.className = 'known ' + (f ? 'found' : g.from === 'condition' ? 'cond' : ''); row.dataset.v = id;
     let txt, sub, act = '';
-    if (f){ txt = showVal(id); sub = `found in step ${f.step}`; }
+    if (f){ txt = showVal(id) + partTag(f); sub = `found in step ${f.step}${partOf(f) ? `, part ${partOf(f)}` : ''}`; }
     else { txt = describe(id, g); sub = g.from === 'condition' ? `from condition: ${g.why}` : g.from === 'drawing' ? `${nm(id)} (from your drawing)` : nm(id); act = g.from === 'you' || g.from === 'drawing' ? `<button data-edit="${id}" title="Edit">✎</button><button data-del="${id}" title="Remove">×</button>` : ''; }
     row.innerHTML = `<div class="vsym">${VARS[id].sym}</div><div><div class="kv">${VARS[id].sym}${g && g.kind === 'symbol' ? ':' : ' ='} ${txt}</div><div class="kd">${sub}</div></div><div class="kact">${act}</div>`;
     row.title = sub.replace(/<[^>]*>/g, '');
@@ -280,12 +300,12 @@ function renderKnowns(){
   for (const [id, f] of Object.entries(S.funcs)){
     const row = document.createElement('div'); row.className = 'known fn ' + (f.from === 'given' ? '' : 'found'); row.dataset.v = id;
     const act = f.from === 'given' ? `<button data-edit="${id}" title="Edit">✎</button><button data-delfn="${id}" title="Remove">×</button>` : '';
-    row.innerHTML = `<div class="vsym">${VARS[id].sym}(t)</div><div><div class="kv">${VARS[id].sym}(t) = ${polyHTML(f.poly)}</div><div class="kd">${f.from === 'given' ? `${nm(id)}, as a function of time` : `found in step ${f.step}`}</div></div><div class="kact">${act}</div>`;
+    row.innerHTML = `<div class="vsym">${VARS[id].sym}(t)</div><div><div class="kv">${VARS[id].sym}(t) = ${polyHTML(f.poly)}${f.from === 'given' ? '' : partTag(f)}</div><div class="kd">${f.from === 'given' ? `${nm(id)}, as a function of time` : `found in step ${f.step}${partOf(f) ? `, part ${partOf(f)}` : ''}`}</div></div><div class="kact">${act}</div>`;
     box.appendChild(row);
   }
-  box.querySelectorAll('[data-delfn]').forEach(b => b.onclick = () => { delete S.funcs[b.dataset.delfn]; clearDerived(); renderAll(false); });
+  box.querySelectorAll('[data-delfn]').forEach(b => b.onclick = async () => { if (!await beforeClearing('Removing a given')) return; delete S.funcs[b.dataset.delfn]; clearDerived(); renderAll(false); });
   box.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => openEditor(b.dataset.edit));
-  box.querySelectorAll('[data-del]').forEach(b => b.onclick = () => { const id = b.dataset.del, c = S.scen.cols.indexOf(id); if (c >= 0){ S.scen.cols.splice(c, 1); S.scen.rows.forEach(r => r.splice(c, 1)); } delete S.givens[id]; clearDerived(); renderAll(false); });
+  box.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => { if (!await beforeClearing('Removing a given')) return; const id = b.dataset.del, c = S.scen.cols.indexOf(id); if (c >= 0){ S.scen.cols.splice(c, 1); S.scen.rows.forEach(r => r.splice(c, 1)); } delete S.givens[id]; clearDerived(); renderAll(false); });
   const pal = $('palette'); pal.innerHTML = '';
   for (const id of chVars()){
     if (known(id)) continue;
@@ -349,16 +369,20 @@ function renderEditor(){
     S.targets = S.targets.filter(t => t !== id);
     S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
   };
-  $('edSave').onclick = save;
-  $('edVal')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+  const trySave = async () => { if (await beforeClearing('Changing a given')) save(); };
+  $('edSave').onclick = trySave;
+  $('edVal')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') trySave(); });
 }
 
 // ---------- 2. conditions ----------
 function renderConds(){
   const box = $('conds'); box.innerHTML = '';
+  const drawn = drawnConds();
   for (const c of chapter().conditions){
     const el = document.createElement('div'); el.className = 'cgroup';
-    if (c.type === 'choice'){
+    if (c.key in drawn){
+      el.innerHTML = `<div class="clabel">${c.label}</div><div class="settled"><b>${c.options.find(o => o[0] === drawn[c.key])[1]}</b>: settled by your drawing. ${DRAWN_WHY[c.key]}</div>`;
+    } else if (c.type === 'choice'){
       el.innerHTML = `<div class="clabel">${c.label}</div><div class="opts">${c.options.map(([v, w], i) => `<button data-i="${i}" aria-pressed="${!!S.cond[c.key] === v}">${w}</button>`).join('')}</div>`;
       el.querySelectorAll('button').forEach(b => b.onclick = () => setCond(c.key, c.options[+b.dataset.i][0]));
     } else if (c.type === 'locked'){
@@ -373,15 +397,39 @@ function renderConds(){
   $('condOk').setAttribute('aria-pressed', String(S.condOk));
   $('condOk').textContent = S.condOk ? '✓ Conditions set' : '✓ These conditions are right';
 }
-function setCond(key, v){
-  if (S.busy) return;
+async function setCond(key, v){
+  if (S.busy || !!S.cond[key] === !!v && S.condOk) return;
+  if (!await beforeClearing('Changing a condition')) return;
   if (key === 'upAxis' && !!S.cond.upAxis !== !!v) for (const [id, g] of Object.entries(S.givens)) if (g.from === 'you' && VARS[id].dir && g.kind !== 'fn'){ g.dir = 1 - g.dir; if (g.kind !== 'symbol') g.val = -g.val; }
   S.cond[key] = v; S.condOk = true; applyHidden(); clearDerived();
   if (key === 'up' && S.build) for (const b of S.build.bodies()) if (b.frame === 'slope') S.build.setVec(b.id, 'v', v ? 'up-slope' : 'down-slope');
   S.sheet = S.sheet.filter(e => applies(e) || true);
   renderAll(false);
 }
-$('condOk').onclick = () => { S.condOk = true; renderAll(false); say('Conditions locked in. Equations that don’t fit them are now greyed out in the library, and ones you can use right now <b>glow</b>.'); };
+$('condOk').onclick = () => {
+  S.condOk = true; renderAll(false);
+  if (solveOpen()){ openStage(3); say('Conditions locked in. On to <b>Solve</b>: equations that don’t fit them are greyed out in the library, and ones you can use right now <b>glow</b>.'); }
+  else say(`Conditions locked in. <b>Solve</b> unlocks when <b>${STAGES[firstOpen(stageChecks())].name}</b> passes its check.`);
+};
+// what the picture already shows: a rough surface means friction; v drawn along the slope says which way it moves
+const DRAWN_WHY = { friction: 'To change it, select the surface on the drawing and switch its friction.', up: 'To change it, turn the velocity arrow on the drawing.' };
+function drawnConds(){
+  const out = {}; if (!S.build) return out;
+  const cs = S.build.contacts();
+  if (cs.length && chapter().conditions.some(c => c.key === 'friction')) out.friction = cs.some(c => c.friction);
+  if (S.ch === 'incline') for (const b of drawnBodies()) if (b.frame === 'slope'){
+    const k = S.build.shapes.find(x => x.id === b.id)?.v?.key;
+    if (k === 'up-slope' || k === 'down-slope') out.up = k === 'up-slope';
+  }
+  return out;
+}
+// returns the labels of the conditions the drawing just changed
+function syncDrawnConds(){
+  const changed = [];
+  for (const [k, v] of Object.entries(drawnConds())) if (!!S.cond[k] !== v){ S.cond[k] = v; const c = chapter().conditions.find(x => x.key === k); changed.push(`${c.label}: ${c.options.find(o => o[0] === v)[1]}`); }
+  if (changed.length){ applyHidden(); clearDerived(); }
+  return changed;
+}
 
 // ---------- 3. library ----------
 function renderLibrary(){
@@ -440,9 +488,10 @@ function gather(e){
 function renderTargets(){
   const box = $('targets');
   const opts = chVars().filter(id => !known(id) && !S.targets.includes(id));
-  box.innerHTML = `<span class="small"><b>🎯 The question asks for:</b></span>` + S.targets.map((t, i) => `<span class="tchip ${known(t) ? 'done' : t === curTarget() ? 'current' : ''}">${letter(i)} ${symOf(t)}${known(t) ? ` = ${showVal(t)}` : ''}<button data-rmt="${t}" title="Remove target">×</button></span>`).join('')
+  box.innerHTML = `<span class="small"><b>🎯 The question asks for:</b></span>` + S.targets.map((t, i) => `<span class="tchip ${known(t) ? 'done' : t === curTarget() ? 'current' : ''}">${letter(i)} ${symOf(t)}${known(t) ? ` = ${showVal(t)}` : ''}${S.path.some(p => p.part === t) ? `<button data-clr="${t}" title="Clear part ${letter(i)}: remove what it found">↺</button>` : `<button data-rmt="${t}" title="Remove target">×</button>`}</span>`).join('')
     + `<select id="addTarget"><option value="">+ add a target…</option>${opts.map(id => `<option value="${id}">${VARS[id].plain}: ${nm(id)}</option>`).join('')}${ladderTargets()}${rankTargets()}</select>`;
   box.querySelectorAll('[data-rmt]').forEach(b => b.onclick = () => { S.targets = S.targets.filter(t => t !== b.dataset.rmt); renderAll(false); });
+  box.querySelectorAll('[data-clr]').forEach(b => b.onclick = () => clearPart(b.dataset.clr));
   $('addTarget').onchange = (e) => {
     const id = e.target.value; if (!id) return;
     if (id.startsWith('when:')){ // the time when X has a value: target t, and X at that moment becomes a given
@@ -452,6 +501,19 @@ function renderTargets(){
     }
     addTarget(id);
   };
+}
+// clear one part: its steps and every step after it (later parts may use what it found); earlier parts stay
+async function clearPart(t){
+  if (S.busy) return;
+  const from = S.path.findIndex(p => p.part === t); if (from < 0) return;
+  const lost = S.path.slice(from), i = S.targets.indexOf(t);
+  const later = lost.some(p => p.part !== t);
+  if (!await ask(`Clear part ${letter(i)}?`, `<b>CLEAR PART ${letter(i)}${later ? ' AND THE STEPS AFTER IT' : ''}</b>This removes ${lost.map(p => symOf(p.v)).join(', ')}${later ? ', because later steps may use what it found' : ''}. Values found before it stay as knowns.`, 'Clear')) return;
+  S.path = S.path.slice(0, from);
+  for (const [id, f] of Object.entries(S.found)) if (f.step > from) delete S.found[id];
+  for (const [id, f] of Object.entries(S.funcs)) if (f.from !== 'given' && f.step > from) delete S.funcs[id];
+  clearWork(); renderAll(false);
+  say(`Part ${letter(i)} is cleared. Its target is still on your sheet.`);
 }
 function rankTargets(){
   if (S.scen.rows.length < 2) return '';
@@ -497,7 +559,9 @@ function renderSheet(){
   const L = ladder();
   if (L) box.appendChild(ladderCard(L, ks));
   if (!S.sheet.length && !L) box.innerHTML = '<div class="sheet-empty">Your sheet is empty. Open the <b>Library</b> (top right of the canvas) and press <b>+ Gather</b> on the equations you think this problem needs, or draw a free-body diagram in <b>Forces</b>.</div>';
-  for (const e of S.sheet){
+  const stepsOf = (e) => S.path.map((p, i) => i).filter(i => S.path[i].kind === 'eq' && S.path[i].eq === e);
+  const order = S.sheet.map((e, k) => ({ e, at: stepsOf(e)[0] ?? S.path.length + k })).sort((a, b) => a.at - b.at).map(x => x.e);
+  for (const e of order){
     const eq = EQS[e], ok = applies(e), u = unknownsOf(e, ks), s = solvable(e, ks), fu = fnSolvable(e, ks);
     const card = document.createElement('div');
     const rel = S.focus.length && eq.vars.some(v => S.focus.includes(v));
@@ -512,10 +576,12 @@ function renderSheet(){
     const got = S.path.filter(p => p.kind === 'eq' && p.eq === e).map(p => `→ ${symOf(p.v)} = ${isFn(p.v) ? polyHTML(p.poly) : p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`}`);
     const lastP = S.path[S.path.length - 1];
     if (lastP && lastP.kind === 'eq' && lastP.eq === e) card.classList.add('last');
-    card.innerHTML = `<button class="rm" data-rm="1" title="Remove from sheet">×</button><div class="eqhead"><span class="eqlabel">${eq.label}</span><span class="cond">only if ${eq.condition}</span></div>
-      <div class="form">${eq.form}</div>${got.length ? `<div class="found">${got.join('<br>')}</div>` : ''}${got.length && u.length === 0 ? '' : `<div class="act">${act}</div>`}`;
+    const nums = stepsOf(e);
+    card.innerHTML = `<button class="rm" data-rm="1" title="Remove from sheet">×</button><div class="eqhead">${nums.length ? `<span class="stepno">Step ${nums.map(i => i + 1).join(' · ')}</span>` : ''}<span class="eqlabel">${eq.label}</span><span class="cond">only if ${eq.condition}</span></div>
+      <div class="form">${eq.form}</div>${got.length ? `<div class="found">${got.join('<br>')}</div>` : ''}${nums.map(usesHTML).join('')}${got.length && u.length === 0 ? '' : `<div class="act">${act}</div>`}`;
     card.addEventListener('click', (ev) => {
       if (S.busy) return;
+      if (ev.target.closest('[data-solve], [data-check]') && solveLocked()) return;
       if (ev.target.closest('[data-rm]')){ S.sheet = S.sheet.filter(x => x !== e); renderAll(false); return; }
       const sb = ev.target.closest('[data-solve]'); if (sb){ solve(e, sb.dataset.solve); return; }
       if (ev.target.closest('[data-check]')){ check(e); return; }
@@ -545,20 +611,68 @@ function renderSheet(){
   }
 }
 
-// ---------- steps tracker ----------
-function steps(){
-  const s = [
-    ['Unit', true], ['Givens', userGivens() > 0], ['Conditions', S.condOk], ['Gather', S.sheet.length > 0], ['Target', S.targets.length > 0], ['Path', S.targets.length > 0 && !curTarget()],
-  ];
-  const now = s.findIndex(x => !x[1]);
-  $('steps').innerHTML = s.map(([n, d], i) => `<span class="${d ? 'done' : i === now ? 'now' : ''}"><b>${i + 1}</b>${n}</span>`).join('<i class="sep">›</i>');
-  if (now !== S.lastStep){
-    const tips = { 1: 'Read your problem and add each quantity it gives you with the <b>+</b> buttons. Pick a direction for vectors.', 2: 'Now the <b>conditions</b>: friction or not, which way it moves, and any hidden givens like “starts from rest”.', 3: 'Look through the <b>library</b>. Equations that glow have one unknown left. <b>Gather</b> the ones you think you need.', 4: 'What does the question ask for? Add it as a <b>🎯 target</b> on your sheet.', 5: 'Build the path: solve a glowing equation on your sheet. Each answer can light up the next.' };
-    if (tips[now] && S.lastStep !== -1) say(tips[now]);
-    S.lastStep = now;
-  }
+// which earlier steps a solved step used: the inputs of its equation that were found, not given
+function usesHTML(i){
+  const p = S.path[i], x = isFn(p.v) ? p.v.slice(3) : p.v;
+  const used = EQS[p.eq].vars.filter(w => w !== x).map(w => [w, S.path.findIndex((q, k) => k < i && (q.v === w || q.v === 'fn:' + w))]).filter(([, k]) => k >= 0);
+  return `<div class="uses">Step ${i + 1} uses ${used.length ? used.map(([w, k]) => `step ${k + 1}, which found ${VARS[w].sym}`).join('; ') : 'only givens'}.</div>`;
 }
 
+// ---------- the four stages: Setup → Forces / motion diagram → Conditions → Solve ----------
+// Each stage earns a star when its check passes. You can open any stage up to one past the first stage that
+// hasn't passed (a peek ahead); stages further on stay locked. The sheet can always be read, but solving
+// waits until Solve is unlocked.
+const STAGES = [
+  { name: 'Setup', tip: 'Draw the setup (or load a template), and add each quantity the problem gives you.' },
+  { name: 'Forces', tip: 'Draw the forces on each body and write ΣF = ma onto your sheet, or draw its motion arrows (v, a).' },
+  { name: 'Conditions', tip: 'Set what the picture can’t show: hidden givens like “starts from rest”, your axis, constant or changing acceleration.' },
+  { name: 'Solve', tip: 'Pick what the question asks for, gather equations, and solve the glowing ones one step at a time.' },
+];
+S.stage = 0;
+const drawnBodies = () => S.build ? fbdBodies() : [];
+// true = passed, false = not yet, null = nothing drawn, so no diagram to check (it doesn't block)
+function stageChecks(){
+  const bs = drawnBodies();
+  const fbd = bs.some(b => Object.values(S.gen).some(g => g.key === 'fbd:' + b.id));
+  const motion = bs.some(b => { const sh = S.build.shapes.find(x => x.id === b.id); return !!(sh && (sh.v || sh.a)); });
+  return [bs.length > 0 || userGivens() > 0, bs.length ? fbd || motion : null, S.condOk, S.targets.length > 0 && !curTarget()];
+}
+const firstOpen = (c) => { const i = c.indexOf(false); return i < 0 ? STAGES.length : i; };
+const reach = (c = stageChecks()) => Math.min(STAGES.length - 1, firstOpen(c) + 1);
+const solveOpen = () => reach() >= 3;
+const lockText = () => { const f = firstOpen(stageChecks()); return `Solving unlocks when <b>${STAGES[f].name}</b> passes its check. ${STAGES[f].tip}`; };
+function solveLocked(){ if (solveOpen()) return false; say(lockText()); return true; }
+// open a stage's panels beside the canvas (Solve can always be opened to read the sheet)
+function openStage(i, quiet = false){
+  const c = stageChecks();
+  if (i > reach(c) && i !== 3){ if (!quiet) say(`<b>${STAGES[i].name}</b> unlocks when <b>${STAGES[firstOpen(c)].name}</b> passes its check. ${STAGES[firstOpen(c)].tip}`); return false; }
+  S.stage = i;
+  if (i === 0 && S.dtab === 'forces') showTab('build');
+  if (i === 1 && S.dtab !== 'forces') showTab('forces');
+  renderStage(); return true;
+}
+function renderStage(){
+  const i = S.stage, locked = i === 3 && !solveOpen();
+  document.querySelectorAll('.ws-right [data-stage]').forEach(el => el.classList.toggle('off', !el.dataset.stage.split(' ').includes(String(i))));
+  $('paneForces').hidden = i !== 1; $('paneSide').hidden = i === 1;
+  $('sheetWin').classList.toggle('locked', locked);
+  $('sheetLock').hidden = !locked; if (locked) $('sheetLock').innerHTML = `🔒 You can read your sheet. ${lockText()}`;
+  const bs = drawnBodies().length, g = Object.values(S.givens).some(x => x.from !== 'condition') || Object.keys(S.funcs).length;
+  $('setupGuide').innerHTML = `<ul class="sguide"><li class="${bs ? 'ok' : ''}">${bs ? '✓' : '○'} Draw the setup with the tools beside the canvas, or load a template.</li><li class="${g ? 'ok' : ''}">${g ? '✓' : '○'} Give each quantity a value, or keep it as a symbol: click its label on the drawing, or + Add a given.</li></ul>`;
+  steps();
+}
+function steps(){
+  const c = stageChecks(), f = firstOpen(c), r = reach(c);
+  const state = (i) => c[i] ? 'passed: star earned' : c[i] === null ? 'nothing drawn, so no diagram to check' : i > r ? `locked until ${STAGES[f].name} passes` : 'not passed yet';
+  $('steps').innerHTML = STAGES.map((st, i) => `<button data-stage="${i}" class="${c[i] ? 'done' : ''}${c[i] === null ? ' na' : ''}${i === S.stage ? ' now' : ''}${i > r ? ' locked' : ''}" ${i === S.stage ? 'aria-current="step"' : ''} title="${st.name}: ${state(i)}"><b>${i + 1}</b>${st.name}<i class="st" aria-hidden="true"></i></button>`).join('<i class="sep">›</i>')
+    + `<button id="sheetTab" class="${S.stage === 3 ? 'now' : ''}" title="Your sheet, from any stage">Sheet · ${S.sheet.length}</button>`;
+  $('steps').querySelectorAll('[data-stage]').forEach(b => b.onclick = () => openStage(+b.dataset.stage));
+  $('sheetTab').onclick = () => openStage(3);
+  if (f !== S.lastStep){
+    if (f < STAGES.length && S.lastStep !== -1 && f > S.lastStep) say(`${c[S.lastStep] ? `⭐ ${STAGES[S.lastStep].name} passed. ` : ''}Next: <b>${STAGES[f].name}</b>. ${STAGES[f].tip}`);
+    S.lastStep = f;
+  }
+}
 function paintSyms(){
   document.querySelectorAll('.sym').forEach(el => { const id = el.dataset.v; el.className = 'sym s-' + stateOf(id) + (S.hover === id ? ' hl' : ''); });
   document.querySelectorAll('.known').forEach(r => r.classList.toggle('hl', r.dataset.v === S.hover));
@@ -630,9 +744,13 @@ async function workLine(html, why){
 }
 const targetNote = (v) => `🎯 That’s target ${letter(S.targets.indexOf(v))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}`;
 // the step is done: keep its work for the Path panel, update everything, celebrate the last target
+// the part it belongs to: the target it found, or else the target being worked on
 function finishStep(entry, cur){
-  S.path.push({ ...entry, html: $('work').innerHTML, title: $('workTitle').textContent });
+  const part = S.targets.includes(entry.v) ? entry.v : cur, x = isFn(entry.v) ? entry.v.slice(3) : entry.v, rec = isFn(entry.v) ? S.funcs[x] : S.found[x];
+  if (rec) rec.part = part;
+  S.path.push({ ...entry, part, html: $('work').innerHTML, title: $('workTitle').textContent });
   beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
+  document.querySelector('#sheet .eq.last')?.scrollIntoView({ block: 'nearest' });
   if (entry.v === cur && !curTarget()) celebrate();
 }
 // one step of the path, redone with plain numbers (v: scalars, fns: id → numeric coefficients)
@@ -662,6 +780,7 @@ function routeStep(p, v, fns){
 const MOVE_LABEL = { sys: 'system', deriv: 'd/dt', integ: '∫dt', eval: 'put in t', solveT: 'solve for t', start: 't = 0' };
 // a ladder move: differentiate, integrate, evaluate, solve for t, or read the start value. All exact (symbols allowed).
 async function ladderOp(m){
+  if (solveLocked()) return;
   const L = chapter().ladder, step = S.path.length + 1, cur = curTarget();
   const x = isFn(m.v) ? m.v.slice(3) : m.v, from = m.from, P = S.funcs[from].poly;
   const sy = (id) => VARS[id].sym, fnS = (id) => `${V(id)}(${V('t')})`;
@@ -767,6 +886,7 @@ async function solveSym(eqId, target){
   finishStep({ kind: 'eq', eq: eqId, v: tgt, fn: asFn, gen: !!eq.generated, useFn, poly, expr: asFn ? null : R, val: value }, cur);
 }
 async function solve(eqId, target){
+  if (solveLocked()) return;
   if (EQS[eqId].generated || isFn(target)) return solveSym(eqId, target);
   const eq = EQS[eqId], sol = eq.solve[target], v = vals();
   let res = sol.f(v); if (typeof res === 'number') res = { value: res };
@@ -830,6 +950,7 @@ function check(eqId){
 }
 
 $('hintBtn').onclick = () => {
+  if (solveLocked()) return;
   const cur = curTarget();
   if (!userGivens()){ say('Start with the givens: add the quantities your problem gives you.'); return; }
   if (!S.condOk){ say('Set the conditions first. They decide which equations even apply.'); return; }
@@ -847,7 +968,7 @@ $('hintBtn').onclick = () => {
   say(`Your sheet is missing a link. Look for an equation that connects <b>${EQS[miss.eq].vars.map(x => VARS[x].sym).join(', ')}</b>, in the library section “${sec.title}”.`);
 };
 $('showBtn').onclick = async () => {
-  if (S.busy) return;
+  if (S.busy || solveLocked()) return;
   if (!S.condOk || !S.targets.length){ say('Set the conditions and add a 🎯 target first, then I’ll walk the shortest path.'); return; }
   while (curTarget()){
     const goal = baseOf(curTarget());
@@ -874,8 +995,8 @@ $('bankBtn').onclick = () => {
   list.innerHTML = Object.entries(CHAPTERS).map(([cid, ch]) => `<div class="subhead">${ch.title}</div>` + PRACTICE.map((p, i) => p.ch !== cid ? '' : `<div class="bitem"><div><b>${p.title}</b><div class="btxt">${p.text}</div></div><button class="go" data-load="${i}">Load</button></div>`).join('')).join('');
   list.querySelectorAll('[data-load]').forEach(b => b.onclick = () => {
     const p = PRACTICE[+b.dataset.load];
-    switchChapter(p.ch); S.bank = p; $('problem').value = p.text; $('bank').classList.remove('show'); S.lastStep = -1; renderAll(); S.lastStep = 1;
-    say(`Loaded “${p.title}”. Read it, add each given with the <b>+</b> buttons, set the conditions, then press <b>✔ Check my setup</b>.`);
+    switchChapter(p.ch); S.bank = p; $('problem').value = p.text; $('bank').classList.remove('show'); S.lastStep = -1; S.stage = 0; renderAll();
+    say(`Loaded “${p.title}”. Read it, draw it or add each given with <b>+ Add a given</b>, set the conditions, then press <b>✔ Check my setup</b>.`);
   });
   $('bank').classList.add('show');
 };
@@ -1296,7 +1417,7 @@ function stepPulse(){ if (calm()) return; const r = $('workWin').getBoundingClie
 // ---------- toggles ----------
 $('calmBtn').onclick = () => { const on = !calm(); document.body.classList.toggle('calm', on); $('calmBtn').setAttribute('aria-pressed', String(on)); field.setCalm(on); try { localStorage.setItem('rl-calm', on ? '1' : '0'); } catch {} draw(); };
 $('soundBtn').onclick = () => { S.sound = !S.sound; $('soundBtn').setAttribute('aria-pressed', String(S.sound)); beep(660, 0.08); };
-$('clearBtn').onclick = () => { if (S.busy) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); S.fbd = { body: null, forces: {} }; renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
+$('clearBtn').onclick = async () => { if (S.busy || !await beforeClearing('Clear all')) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); S.fbd = { body: null, forces: {} }; renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
 
 // ---------- general system detection: two sheet equations with the same two unknowns ----------
 // Any equation can be written as Z = 0: generated ones carry Z; for library ones it comes from a solver's template.
@@ -1323,6 +1444,7 @@ function findSystem(ks){
   return null;
 }
 function combine(sys, keep = null){
+  if (solveLocked()) return null;
   const { a, b, pair } = sys, Za = zeroForm(a), Zb = zeroForm(b);
   const existing = Object.keys(S.gen).find(id => S.gen[id].key === `${a}+${b}` && (!keep || S.gen[id].vars.includes(keep)));
   if (existing) return existing;
@@ -1355,19 +1477,20 @@ function showTab(t){
   S.dtab = t;
   document.querySelectorAll('[data-dtab]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.dtab === t)));
   $('paneMotion').hidden = t !== 'motion'; $('paneBuild').hidden = t === 'motion';
-  $('paneForces').hidden = t !== 'forces'; $('paneSide').hidden = t === 'forces';
   $('replayBtn').hidden = t !== 'motion';
   S.build.setMode(t === 'forces' ? 'forces' : 'setup');
   if (t === 'motion') draw(); if (t === 'forces') renderFBD(); if (t !== 'motion') renderBuildUI();
 }
-document.querySelectorAll('[data-dtab]').forEach(b => b.onclick = () => showTab(b.dataset.dtab));
+document.querySelectorAll('[data-dtab]').forEach(b => b.onclick = () => { const t = b.dataset.dtab; if (t === 'motion') showTab(t); else openStage(t === 'forces' ? 1 : 0); });
 
 // ---------- build canvas ----------
 S.build = createBuild($('bd'), {
   onChange: () => {
     const sel = S.build && S.build.selected();
     if (sel && S.dtab === 'forces' && fbdBodies().some(b => b.id === sel.id)) S.fbd.body = sel.id; // click a body: its free-body diagram opens
-    if (syncDrawingGivens()) renderAll(false); else { renderBuildUI(); if (S.dtab === 'forces') renderFBD(); }
+    const conds = syncDrawnConds();
+    if (syncDrawingGivens() || conds.length) renderAll(false); else { renderBuildUI(); renderStage(); if (S.dtab === 'forces') renderFBD(); }
+    if (conds.length) say(`Your drawing settles ${conds.map(x => `<b>${x}</b>`).join(' and ')}. Conditions only asks what the picture can’t show.`);
   },
   // labels on the drawing: the symbol, and its value once it has one
   nameOf: (id) => { if (!VARS[id]) return id; const g = S.givens[id]; return g && g.kind !== 'symbol' ? `${VARS[id].plain} = ${fmt(g.mag)}${g.unit && g.unit !== 'no unit' ? (g.unit === '°' ? '°' : ' ' + g.unit) : ''}` : VARS[id].plain; },
@@ -1389,9 +1512,8 @@ S.build = createBuild($('bd'), {
   onArrowErase: (bodyId, i) => { const b = fbdBodies().find(x => x.id === bodyId); if (b){ forcesOf(b).splice(i, 1); afterForces(); } },
   // the velocity arrow says which way it moves: on a slope it sets the "Moving" condition
   onVector: (bodyId, k, dir) => {
-    const b = fbdBodies().find(x => x.id === bodyId); if (!b || k !== 'v' || b.frame !== 'slope') return;
-    if (dir === 'up-slope' || dir === 'down-slope'){ const up = dir === 'up-slope'; if (!!S.cond.up !== up && !S.busy){ S.cond.up = up; applyHidden(); clearDerived(); renderAll(false); say(`Your velocity arrow points <b>${up ? 'up' : 'down'} the slope</b>, so the condition “Moving” now says the same.`); } }
-    else if (dir) say('A sliding block’s velocity points along the slope. Drag the tip of <b>v</b> until it clicks onto the slope.');
+    const b = fbdBodies().find(x => x.id === bodyId); if (!b || k !== 'v' || b.frame !== 'slope') return; // the "Moving" condition follows in onChange
+    if (dir && dir !== 'up-slope' && dir !== 'down-slope') say('A sliding block’s velocity points along the slope. Drag the tip of <b>v</b> until it clicks onto the slope.');
   },
   snapshot: () => JSON.parse(JSON.stringify(S.fbd.forces)),
   restore: (x) => { if (x) S.fbd.forces = x; if (S.dtab === 'forces'){ renderFBD(); renderForceChips(); } },
@@ -1688,17 +1810,18 @@ function renderFBD(){
   box.querySelectorAll('[data-fdel]').forEach(btn => btn.onclick = () => { S.build.checkpoint(); fs.splice(+btn.dataset.fdel, 1); afterForces(); });
   const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; };
   $('fbdCheck').onclick = () => { const bad = fbdCheck(b); msg(bad.length ? bad.map(x => '✗ ' + x).join('<br>') : '✓ This free-body diagram looks right: every force has a source, and each one points the way it must.', !bad.length); };
-  $('fbdWrite').onclick = () => {
+  $('fbdWrite').onclick = async () => {
     const bad = fbdCheck(b);
     if (bad.length){ msg('Fix the diagram first:<br>' + bad.map(x => '✗ ' + x).join('<br>'), false); return; }
     const eqs = fbdEquations(b);
     try { for (const q of eqs){ const d = X.dimOf(X.parse(q.zsub), DIMS); q.unitText = X.dimStr(d); } }
     catch (e){ if (!(e instanceof X.MathError)) throw e; msg(`✗ The units don’t add up: ${e.message}. Is every arrow a force?`, false); return; }
+    if (!await beforeClearing('Rewriting ΣF = ma')) return;
     dropGenerated(g => g.key === 'fbd:' + b.id);
     const ids = eqs.map(q => addGenerated({ ...q, vars: [...new Set([...q.zsub.matchAll(/\{(\w+)\}/g)].map(m => m[1]))], key: 'fbd:' + b.id, meaning: 'Written from your free-body diagram.' }));
     clearDerived(); renderAll(false);
     msg(`✓ Wrote ${ids.map(id => `<b>${EQS[id].label}</b>`).join(' and ')} onto your sheet.`, true);
-    say(`Your free-body diagram gave ${ids.length} equation${ids.length > 1 ? 's' : ''}: ${ids.map(id => EQS[id].form).join(' and ')}. They’re on your sheet.`);
+    say(`Your free-body diagram gave ${ids.length} equation${ids.length > 1 ? 's' : ''}: ${ids.map(id => EQS[id].form).join(' and ')}. They’re on your sheet. ${fbdBodies().length > 1 ? 'Draw the next body, or go' : 'Go'} on to <b>3 · Conditions</b>.`);
   };
 }
 
@@ -1825,11 +1948,30 @@ function renderMatters(){
 }
 
 // ---------- assemble ----------
+// θ → ω = dθ/dt → α = dω/dt (or x → v → a), with what you know on each rung; ∫dt back up needs a start value
+function calcHTML(){
+  const L = chapter().ladder; if (!L || !(S.cond.varA || Object.keys(S.funcs).length)) return '';
+  const sy = (id) => VARS[id].sym, [p, v, a] = L.rungs;
+  const tag = (st, txt) => `<small class="s-${st}">${txt}</small>`;
+  const rung = (id, head) => {
+    const f = S.funcs[id], st = L.start[id], tags = [];
+    if (f) tags.push(tag(f.from === 'given' ? 'given' : 'found', `${sy(id)}(t) ${f.from === 'given' ? 'given' : 'found'}`));
+    if (known(id)) tags.push(tag(stateOf(id), `${sy(id)} = ${showVal(id)}${isMoment(id) ? ' at one moment' : ''}`));
+    if (st && known(st)) tags.push(tag(stateOf(st), `start: ${sy(st)} = ${showVal(st)}`));
+    if (S.targets.includes(id) || S.targets.includes('fn:' + id)) tags.push(tag('target', '🎯 target'));
+    return `<div class="rung"><b>${head}</b>${tags.join('') || '<small>nothing known yet</small>'}</div>`;
+  };
+  const starts = L.rungs.slice(0, 2).map(id => L.start[id] ? `${sy(id)}(0) = ${sy(L.start[id])}${known(L.start[id]) ? '' : ' (not known yet)'}` : `${sy(id)}(0) = 0, measured from the start`).join('; ');
+  return `<div class="ch">Varies with time: how these are linked</div>
+    <div class="rungs">${rung(p, sy(p))}<span class="link">d/dt →</span>${rung(v, `${sy(v)} = d${sy(p)}/dt`)}<span class="link">d/dt →</span>${rung(a, `${sy(a)} = d${sy(v)}/dt`)}</div>
+    <div class="back">← Going back up with ∫dt needs a start value: ${starts}.</div>`;
+}
 function renderAll(full = true){
   if (full) renderUnit();
   $('checkRow').style.display = S.bank ? 'flex' : 'none';
   if (S.givens.inc && S.givens.inc.kind !== 'symbol' && S.givens.inc.val >= 5 && S.givens.inc.val <= 75 && Math.abs(S.build.theta - S.givens.inc.val) > 1e-9) S.build.theta = S.givens.inc.val;
-  renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSheet(); renderPath(); renderMatters(); steps(); paintSyms(); renderSliders();
+  renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
+  $('calcCond').innerHTML = $('calcSolve').innerHTML = calcHTML();
   $('axisNote').innerHTML = S.ch === 'incline' && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice). Pick the direction for each vector; the app sets the sign.' : chapter().axis;
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();
   draw();
@@ -1839,9 +1981,9 @@ async function boot(){
   $('calmBtn').setAttribute('aria-pressed', String(calm()));
   field.setCalm(calm());
   S.cond = defaultsFor(S.ch); applyHidden(); clearWork(); resetInspector();
-  S.lastStep = -1; renderAll(); S.lastStep = 1;
+  S.lastStep = -1; renderAll();
   showTab('build');
-  say('Set up your own problem: <b>1</b> add the givens, <b>2</b> set the conditions, <b>3</b> gather equations, <b>4</b> pick the target, <b>5</b> build the path. Or open the <b>Practice bank</b>. (The background is a live electric field: your cursor is a small test charge.)');
+  say('Work through four stages: <b>1 Setup</b> (draw it, add the givens), <b>2 Forces</b> (the free-body or motion diagram), <b>3 Conditions</b>, <b>4 Solve</b>. Each passed check earns a ⭐. Or open the <b>Practice bank</b>. (The background is a live electric field: your cursor is a small test charge.)');
   if ('serviceWorker' in navigator && location.protocol === 'https:'){ try { navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch {} }
 }
 boot();

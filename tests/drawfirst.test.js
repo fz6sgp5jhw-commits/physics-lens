@@ -3,7 +3,7 @@
 // Example: m and θ given, at rest: find the friction force and whether it moves.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { launch, openApp, setCondition, confirmConditions, addTarget } from './helpers.js';
+import { launch, openApp, setCondition, confirmConditions, addTarget, roughen } from './helpers.js';
 
 let env;
 before(async () => { env = await launch(); });
@@ -25,6 +25,8 @@ async function editChip(page, id, value){
   await page.click('#editorSlot [data-kind="value"]');
   await page.fill('#edVal', String(value));
   await page.click('#edSave');
+  // after solving, changing a given asks before it clears the answers
+  if (await page.locator('#dlg.show #dlgCancel:not([hidden])').count()) await page.click('#dlgOk');
 }
 
 test('draw the ramp and block: θ and m appear; draw W, N, f on the faded setup; they join the collection', async () => {
@@ -42,7 +44,8 @@ test('draw the ramp and block: θ and m appear; draw W, N, f on the faded setup;
     assert.equal(await page.evaluate(() => document.querySelector('#bd .setup').classList.contains('faded')), true);
     await drawForce(page, 'gravity', 'down');
     await drawForce(page, 'normal', 'perp-out');
-    await setCondition(page, 'friction', true);
+    await roughen(page, 'ramp'); // a rough ramp: the drawing settles the friction condition
+    assert.equal(await page.evaluate(() => window.__rl.cond.friction), true);
     await drawForce(page, 'friction', 'up-slope');
     const forces = await page.evaluate(() => { const S = window.__rl, b = S.build.bodies()[0]; return S.fbd.forces[b.id].map(f => `${f.kind}:${f.dir}`); });
     assert.deepEqual(forces, ['gravity:down', 'normal:perp-out', 'friction:up-slope']);
@@ -57,7 +60,7 @@ test('at rest: f = mg sin θ, and "does it move?" is answered (numbers, then sym
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await page.click('[data-template="incline"]');
-    await setCondition(page, 'friction', true);
+    await roughen(page, 'ramp');
     await setCondition(page, 'still', true);
     await confirmConditions(page);
     await page.click('[data-dtab="forces"]');

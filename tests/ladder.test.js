@@ -27,13 +27,15 @@ test('motor shaft: ω(t) by d/dt, then the time when ω = 0 (gate)', async () =>
   try {
     await rotation(page);
     await setCondition(page, 'varA', true);
-    await confirmConditions(page);
+    await addFunction(page, 'theta', [0, 250, -20.3, -1.44]);
+    assert.equal(await fnText(page, 'theta'), '250t − 20.3t² − 1.44t³');
+    await confirmConditions(page); // Conditions opens once Setup has a given
     // the constant-α equations no longer apply
     const greyed = await page.evaluate(() => ['E1', 'E2', 'E3', 'E4', 'E5'].map(e => document.querySelector(`#lib [data-eq="${e}"]`)?.classList.contains('na')));
     assert.deepEqual(greyed, [true, true, true, true, true], 'constant-α equations should be greyed out');
-
-    await addFunction(page, 'theta', [0, 250, -20.3, -1.44]);
-    assert.equal(await fnText(page, 'theta'), '250t − 20.3t² − 1.44t³');
+    // the calculus ladder sits at the top of Solve: θ → ω = dθ/dt → α = dω/dt, with θ(t) on its rung
+    const calc = await page.innerText('#calcSolve');
+    assert.match(calc, /ω = dθ\/dt/); assert.match(calc, /α = dω\/dt/); assert.match(calc, /θ\(t\) given/); assert.match(calc, /start value/);
     await addTarget(page, 'fn:w');
     await addTimeWhen(page, 'w', 0);
     await page.click('#showBtn');
@@ -57,8 +59,8 @@ test('∫dt needs the start value, and keeps symbols as coefficients', async () 
   try {
     await rotation(page);
     await setCondition(page, 'varA', true);
-    await confirmConditions(page);
     await addFunction(page, 'alpha', [4, 0, -0.6]); // α(t) = 4 − 0.6t²
+    await confirmConditions(page);
     await addTarget(page, 'fn:w');
     // no ω₀ yet: the ladder can't integrate, so ω(t) is unreachable
     assert.match(await page.innerText('#sheetStatus'), /can’t reach|Even the whole library/);
@@ -80,8 +82,8 @@ test('evaluate a function at a known time', async () => {
   try {
     await rotation(page);
     await setCondition(page, 'varA', true);
-    await confirmConditions(page);
     await addFunction(page, 'theta', [0, 250, -20.3, -1.44]);
+    await confirmConditions(page);
     await page.evaluate(() => [...document.querySelectorAll('#palette button')].find(b => b.title === 'Add elapsed time').click());
     await page.fill('#edVal', '2'); await page.click('#edSave');
     await addTarget(page, 'alpha'); // α at t = 2 s: α(t) = −40.6 − 8.64t → −57.88

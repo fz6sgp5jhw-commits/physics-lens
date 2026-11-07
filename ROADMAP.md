@@ -34,14 +34,16 @@ Goal: a smaller, tidier codebase with no change in what the student sees or can 
 **Start with:** `Do phase 2 in ROADMAP.md. Ask me the open question first.`
 
 Problems seen in class: the Conditions panel is too far down to find. In a rotation problem where ω is a function of time, the derivative relationships weren't visible. Calculated values from one part of a problem weren't easy to carry into the next. The sheet is hard to reach and isn't in a logical order.
-- [ ] **Open question (ask before building):** should each stage unlock only after the previous one passes its check, like levels, or can the student move freely while stars show progress?
-- [ ] Four stages that match how the student works: **Setup → Forces / motion diagram → Conditions → Solve**. The step tracker shows these four, and each earns a star when its check passes.
-- [ ] Only the current stage's panel is open beside the canvas: the free-body checklist in Forces, conditions in Conditions, and the sheet and path in Solve. Conditions are never below the fold.
-- [ ] When a quantity varies with time, show its calculus relationships at the top of the Conditions and Solve stages: θ → ω = dθ/dt → α = dω/dt, and x → v → a, with ∫ needing a start value. Show which rung each given sits on.
-- [ ] Multi-part problems: every value found in part (a) stays as a known for (b), (c)…, and is labelled as found, with its part. Clearing a part asks first.
-- [ ] Sheet: one tap from anywhere (a pinned tab or panel). Cards appear in solving order and are numbered as steps; each says which earlier step it uses.
-- [ ] Settled by the drawing: v drawn up or down the slope sets "Moving", and a rough surface sets friction. Conditions only asks what the picture can't show.
-- [ ] Update `tests/workspace.test.js` for the new layout on purpose, and add a test for carrying values between parts.
+- [x] **Open question (ask before building):** should each stage unlock only after the previous one passes its check, like levels, or can the student move freely while stars show progress?
+  - Answer (2026-11-07): **hybrid**. Any passed stage can be reopened, and the student can peek one stage past the first one that hasn't passed; further stages stay locked. The sheet can always be read, but solving waits until Solve unlocks.
+- [x] Four stages that match how the student works: **Setup → Forces / motion diagram → Conditions → Solve**. The step tracker shows these four, and each earns a star when its check passes.
+- [x] Only the current stage's panel is open beside the canvas: the free-body checklist in Forces, conditions in Conditions, and the sheet and path in Solve. Conditions are never below the fold.
+- [x] When a quantity varies with time, show its calculus relationships at the top of the Conditions and Solve stages: θ → ω = dθ/dt → α = dω/dt, and x → v → a, with ∫ needing a start value. Show which rung each given sits on.
+- [x] Multi-part problems: every value found in part (a) stays as a known for (b), (c)…, and is labelled as found, with its part. Clearing a part asks first.
+- [x] Sheet: one tap from anywhere (a pinned tab or panel). Cards appear in solving order and are numbered as steps; each says which earlier step it uses.
+- [x] Settled by the drawing: v drawn up or down the slope sets "Moving", and a rough surface sets friction. Conditions only asks what the picture can't show.
+- [x] Update `tests/workspace.test.js` for the new layout on purpose, and add a test for carrying values between parts.
+- What changed: the tracker is four stage buttons with stars plus a pinned **Sheet · n** tab. Checks: Setup = something drawn or a given you added; Forces = a checked ΣF written from a free-body diagram, or a v/a arrow (a motion diagram), and it's skipped (no star, doesn't block) when nothing is drawn; Conditions = confirmed; Solve = every target found. The sheet, work, What matters and Path moved beside the canvas (right column, 460px) and open only in Solve. Found values carry `part` (the target they belong to) and show "found · (a)" in the givens strip; ↺ on a solved target clears that part and the steps after it, after asking; changing a given, a condition or ΣF after solving also asks first. Surface friction and a v arrow along the slope settle "Surface" and "Moving" (shown, not asked). The calculus ladder strip (`#calcCond`, `#calcSolve`) shows when a quantity varies with time. 64 tests (3 new in `workspace.test.js`; other browser tests reordered to set up before confirming conditions, and to roughen the drawn surface instead of setting friction). Cache `physics-lens-v8`.
 
 ---
 

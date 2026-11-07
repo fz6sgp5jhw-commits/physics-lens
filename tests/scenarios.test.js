@@ -5,7 +5,7 @@
 //   scenario 3 flagged as barely sliding.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { launch, openApp, setCondition, confirmConditions, addTarget } from './helpers.js';
+import { launch, openApp, confirmConditions, addTarget, roughen } from './helpers.js';
 import { gather } from './helpers.js';
 
 let env;
@@ -32,8 +32,6 @@ async function drawForces(page, bodyIndex, forces){
 
 async function setup(page){
   await page.click('#chPick button:has-text("Pushed blocks")');
-  await setCondition(page, 'friction', true);
-  await confirmConditions(page);
   // the four givens that change from case to case go in the scenario table
   for (const id of COLS){ await openEditorFor(page, id); await page.click('#editorSlot [data-kind="scenario"]'); await page.click('#edSave'); }
   for (let r = 0; r < ROWS.length; r++){
@@ -43,6 +41,8 @@ async function setup(page){
   await page.locator('#scen [data-cell="3,3"]').dispatchEvent('change');
   // build: two touching blocks on a floor; forces on each
   await page.click('[data-dtab="build"]'); await page.click('[data-template="blocks"]');
+  await roughen(page, 'floor'); // a rough floor: the drawing settles friction
+  await confirmConditions(page);
   await page.click('[data-dtab="forces"]');
   await drawForces(page, 0, ['gravity', 'normal', 'push', 'contact', 'friction']);
   await page.click('#fbdCheck'); assert.match(await page.innerText('#fbdMsg'), /looks right/i, 'block A');
@@ -84,8 +84,8 @@ test('the free-body checker wants the contact pair: same symbol, opposite direct
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await page.click('#chPick button:has-text("Pushed blocks")');
-    await setCondition(page, 'friction', false); await confirmConditions(page);
-    await page.click('[data-dtab="build"]'); await page.click('[data-template="blocks"]');
+    await page.click('[data-dtab="build"]'); await page.click('[data-template="blocks"]'); // a frictionless floor
+    await confirmConditions(page);
     await page.click('[data-dtab="forces"]');
     await drawForces(page, 0, ['gravity', 'normal', 'push']);
     await page.click('#fbdCheck');

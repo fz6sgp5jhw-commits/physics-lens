@@ -84,9 +84,17 @@ export async function setCondition(page, key, want){
   }, { key, want });
 }
 
-export async function confirmConditions(page){ await page.click('#condOk'); }
+// Make a drawn surface rough (its "rough surface" property): the drawing then settles the friction condition.
+export async function roughen(page, kind){
+  await page.evaluate((kind) => { const S = window.__rl, s = S.build.shapes.find(x => x.kind === kind); s.props.friction = true; S.build.snap(); }, kind);
+}
 
-export async function addTarget(page, id){ await page.selectOption('#addTarget', id); }
+// Open one of the four stages (0 Setup, 1 Forces, 2 Conditions, 3 Solve) from the step tracker.
+export async function openStage(page, i){ await page.click(`#steps [data-stage="${i}"]`); }
+
+export async function confirmConditions(page){ await openStage(page, 2); await page.click('#condOk'); }
+
+export async function addTarget(page, id){ await openStage(page, 3); await page.selectOption('#addTarget', id); }
 
 // Hidden givens: which condition supplies a zero-valued given in each unit.
 export const HIDDEN = {

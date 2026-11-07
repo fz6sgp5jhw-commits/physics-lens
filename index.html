@@ -64,13 +64,20 @@
   /* the step tracker is a level map */
   .steps{grid-column:2;grid-row:1;display:flex;flex-wrap:nowrap;align-items:center;justify-content:center}
   .steps .sep{display:inline-block;width:9px;height:3px;padding:0 1px;font-size:0;background:repeating-linear-gradient(90deg,var(--gold-lo) 0 3px,transparent 3px 6px)}
-  .steps span{flex:none;font:700 11.5px/1 var(--ui);white-space:nowrap;padding:5px 7px;color:var(--dim);text-shadow:var(--hard);
+  /* four stages: a star each when its check passes; the open stage is gold; a stage past the next one is locked */
+  .steps button{flex:none;font:700 11.5px/1 var(--ui);white-space:nowrap;min-height:0;padding:5px 8px;color:var(--dim);text-shadow:var(--hard);box-shadow:none;
     background:var(--deep);background-clip:padding-box;border:3px solid transparent;border-image:var(--btn-field) 3 / 3px stretch}
-  .steps span b{font:800 11px var(--mono);margin-right:5px}
-  .steps span.done{color:var(--good);border-image:var(--btn) 3 / 3px stretch;background:#0f2a3a;background-clip:padding-box}
-  .steps span.done::before{content:'';display:inline-block;width:7px;height:7px;margin-right:4px;background:var(--gold-hi);vertical-align:-1px;clip-path:var(--star)}
-  .steps span.now{color:#2a1a04;font-weight:600;text-shadow:none;background:var(--gold);background-clip:padding-box;border-image:var(--btn-gold) 3 / 3px stretch;
+  .steps button b{font:800 11px var(--mono);margin-right:5px}
+  .steps .st{display:inline-block;width:9px;height:9px;margin-left:6px;background:var(--line-hi);vertical-align:-1px;clip-path:var(--star)}
+  .steps button.done{color:var(--good);border-image:var(--btn) 3 / 3px stretch;background:#0f2a3a;background-clip:padding-box}
+  .steps button.done .st{background:var(--gold-hi)}
+  .steps button.na .st{opacity:.25}
+  .steps button.locked{opacity:.45;cursor:not-allowed}
+  .steps button.now{color:#2a1a04;font-weight:600;text-shadow:none;background:var(--gold);background-clip:padding-box;border-image:var(--btn-gold) 3 / 3px stretch;
     box-shadow:0 0 16px rgba(232,182,76,.55),0 3px 0 var(--gold-lo);animation:nowBob 1.2s steps(2) infinite}
+  .steps button.now .st{background:#2a1a04;opacity:.35} .steps button.now.done .st{background:#8a5a1e;opacity:1}
+  .steps #sheetTab{margin-left:12px;color:var(--text)}
+  .steps #sheetTab.now{color:#2a1a04}
   @keyframes nowBob{50%{transform:translateY(-3px)}}
   /* the assistant line reads like a game dialog box */
   .assistant{grid-column:1 / -1;display:flex;gap:10px;align-items:flex-start;position:relative;min-height:24px;margin-top:2px;padding:3px 26px 3px 8px;
@@ -84,7 +91,7 @@
   #bubble .sym{font-family:var(--mono)}
 
   /* layout: one workspace, the canvas and the sheet on the left, the diagrams that write equations on the right */
-  main.ws{position:relative;z-index:2;max-width:1640px;margin:0 auto;padding:10px 16px 60px;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:10px;align-items:start}
+  main.ws{position:relative;z-index:2;max-width:1640px;margin:0 auto;padding:10px 16px 60px;display:grid;grid-template-columns:minmax(0,1fr) 460px;gap:10px;align-items:start}
   .ws-left{display:flex;flex-direction:column;gap:8px;min-width:0}
   .ws-right{display:flex;flex-direction:column;gap:8px;min-width:0;position:sticky;top:94px;max-height:calc(100vh - 104px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line-hi) var(--deep)}
   @media (max-width:1100px){main.ws{grid-template-columns:1fr} .ws-right{position:static;max-height:none}}
@@ -155,7 +162,9 @@
   .known .kact button{min-height:24px;padding:2px 7px;font-size:12px}
   .strip .knowns{flex-direction:row;flex-wrap:wrap;margin:0;flex:1 1 0;min-width:200px}
   .strip .known{display:inline-flex;gap:6px;padding:0 3px 0 6px;background:var(--deep);background-clip:padding-box;border-width:2px}
-  .strip .known.found:not(.fn),.strip .known .vsym,.strip .known .kd{display:none}
+  .strip .known .vsym,.strip .known .kd{display:none}
+  .strip .known.found .kv{color:var(--found)}
+  .known .kpart{font:600 10.5px/1 var(--ui);color:var(--found);margin-left:6px;padding:2px 4px;border:1px solid rgba(255,209,102,.5)}
   .strip .known .kv{font-size:13px;white-space:nowrap}
   .strip .known .kact button{min-height:18px;padding:0 6px;font-size:11px;border-width:2px;box-shadow:none}
   .strip .knowns .small.muted{font-size:12px}
@@ -209,10 +218,10 @@
 
   /* sheet and targets */
   #sheetWin{padding:7px 10px 9px}
-  .sheethead{display:flex;gap:8px;align-items:center;justify-content:space-between}
+  .sheethead{display:flex;flex-wrap:wrap;gap:6px 8px;align-items:center;justify-content:space-between}
   .targets{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
-  .sheethead .targets{margin:0;flex:1;min-width:0;flex-wrap:nowrap;overflow:hidden}
-  .tchip{display:inline-flex;gap:6px;align-items:center;font:13px/1 var(--mono);padding:3px 7px;background:var(--deep);background-clip:padding-box;border:2px solid transparent;border-image:var(--btn) 3 / 3px stretch}
+  .sheethead .targets{margin:0;flex:1 1 100%;min-width:0}
+  .tchip{white-space:nowrap;display:inline-flex;gap:6px;align-items:center;font:13px/1 var(--mono);padding:3px 7px;background:var(--deep);background-clip:padding-box;border:2px solid transparent;border-image:var(--btn) 3 / 3px stretch}
   .tchip.current{border-image:var(--frame-pink) 6 / 3px stretch;box-shadow:0 0 14px rgba(255,107,214,.35)}
   .tchip.done{color:var(--found);border-image:var(--frame-amber) 6 / 3px stretch}
   .tchip button{min-height:0;padding:1px 6px;font-size:11px}
@@ -222,7 +231,7 @@
   #sheetWin .sheet-status{margin:5px 0;padding:3px 9px;border-width:2px}
   .sheet-empty{font-size:13px;color:var(--muted);padding:10px;border:3px dashed #3b4aa8}
   .eqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:8px}
-  #sheet{grid-template-columns:repeat(auto-fill,minmax(210px,1fr))}
+  #sheet{grid-template-columns:1fr}
   .eq{padding:9px 10px;position:relative;cursor:pointer}
   #sheet .eq{padding:7px 9px;border-width:2px}
   .eq .eqhead{display:flex;align-items:center;gap:6px;font-size:12px}
@@ -270,6 +279,28 @@
   #work .check{margin-top:4px;padding:7px 10px;background:#082418;background-clip:padding-box;border:3px solid transparent;border-image:var(--frame-good) 6 / 3px stretch}
   #work .feedback{margin-top:10px;padding:7px 10px;font-size:13px;border:3px solid transparent;border-image:var(--btn) 3 / 3px stretch}
   #work .empty{color:var(--muted);font-size:13px}
+
+  /* stage panels: only the open stage's panels show beside the canvas */
+  .ws-right [data-stage].off{display:none}
+  .locknote{font-size:12.5px;margin:0 0 6px;padding:5px 9px;color:#ffe9b8;background:#2a2008;border:2px dashed var(--gold-lo)}
+  #sheetWin.locked .act button,#sheetWin.locked .modes button,#sheetWin.locked #addTarget{opacity:.4;pointer-events:none}
+  .sguide{list-style:none;margin:0 0 6px;padding:0;font-size:13px}
+  .sguide li{margin:2px 0;color:var(--muted)} .sguide li.ok{color:var(--good)}
+  .settled{font-size:12.5px;margin:0 0 6px;padding:5px 8px;color:#c3d1e3;border:2px dashed #3b4aa8}
+  .settled b{color:var(--gold-hi)}
+  /* the calculus ladder: how a quantity that varies with time links to its rates */
+  .calc:empty{display:none}
+  .calc{margin:0 0 8px;padding:6px 8px;background:var(--deep);border:2px solid #2d3a8c}
+  .calc .ch{font:800 11px var(--ui);color:var(--gold-hi);margin-bottom:4px}
+  .calc .rungs{display:flex;align-items:flex-start;gap:4px}
+  .calc .rung{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;text-align:center}
+  .calc .rung > b{font:600 15px/1.3 var(--mono)}
+  .calc .rung small{font:11px/1.3 var(--ui);color:var(--muted)}
+  .calc .rung small.s-given{color:var(--given)} .calc .rung small.s-found{color:var(--found)} .calc .rung small.s-target{color:var(--target)}
+  .calc .link{flex:none;align-self:center;font:11px var(--mono);color:var(--gold)}
+  .calc .back{font:11.5px/1.4 var(--ui);color:var(--muted);margin-top:4px}
+  #sheet .eq .stepno{font:800 11px/1 var(--mono);padding:3px 6px;color:#2a1a04;background:var(--gold-hi)}
+  #sheet .eq .uses{font-size:11.5px;color:var(--muted);margin-top:3px}
 
   /* path */
   #path ol{margin:0;padding-left:22px;font:13.5px/1.6 var(--mono)}
@@ -439,7 +470,7 @@
 
   /* calm mode and reduced motion: the field stands still and nothing bobs, blinks or glides */
   body.calm *,body.calm *::before,body.calm *::after{animation-duration:0s !important;animation-iteration-count:1 !important;transition:none !important}
-  body.calm .steps span.now{transform:none}
+  body.calm .steps button.now{transform:none}
   body.calm .assistant::after{opacity:1}
   body.calm .eq.lit{box-shadow:0 0 0 1px rgba(255,107,214,.6)}
   @media (prefers-reduced-motion: reduce){ *,*::before,*::after{animation-duration:0s !important;transition:none !important} }
@@ -503,32 +534,18 @@
         <div class="bprops" id="bprops"></div>
       </div>
     </section>
-
-    <section class="card" id="sheetWin">
-      <div class="sheethead">
-        <div class="targets" id="targets"></div>
-        <div class="modes"><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="Gather what’s needed and walk the shortest path">Show me the path</button></div>
-      </div>
-      <div class="sheet-status" id="sheetStatus"></div>
-      <div class="eqs" id="sheet"></div>
-    </section>
-
-    <section class="card" id="workWin">
-      <div class="titlebar"><h2 id="workTitle">Work</h2></div>
-      <div class="sunk" id="work"></div>
-    </section>
   </div>
 
   <aside class="ws-right">
-    <section class="card" id="condCard">
+    <section class="card" id="condCard" data-stage="2">
       <div class="titlebar"><h2>Conditions</h2><button id="condOk">✓ These conditions are right</button></div>
-      <div class="body"><div id="conds"></div></div>
+      <div class="body"><div class="calc" id="calcCond"></div><div id="conds"></div></div>
     </section>
-    <section class="card" id="sideCard">
+    <section class="card" id="sideCard" data-stage="0 1">
       <div class="dpane" id="paneForces" hidden><div class="titlebar"><h2>Free-body diagram</h2></div><div class="body"><div id="fbd"></div></div></div>
       <div class="dpane" id="paneSide">
         <div class="titlebar"><h2>Inspect</h2></div>
-        <div class="body"><div id="sliders"></div><div id="inspector"></div>
+        <div class="body"><div id="setupGuide"></div><div id="sliders"></div><div id="inspector"></div>
           <details class="graphs"><summary>Graphs vs time</summary>
             <div class="canvas-wrap"><canvas id="gTheta" width="880" height="200"></canvas></div>
             <div class="canvas-wrap"><canvas id="gOmega" width="880" height="200"></canvas></div>
@@ -537,11 +554,26 @@
         </div>
       </div>
     </section>
-    <section class="card" id="mattersWin">
+    <section class="card" id="sheetWin" data-stage="3">
+      <div class="calc" id="calcSolve"></div>
+      <div class="locknote" id="sheetLock" hidden></div>
+      <div class="sheethead">
+        <div class="targets" id="targets"></div>
+        <div class="modes"><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="Gather what’s needed and walk the shortest path">Show me the path</button></div>
+      </div>
+      <div class="sheet-status" id="sheetStatus"></div>
+      <div class="eqs" id="sheet"></div>
+    </section>
+
+    <section class="card" id="workWin" data-stage="3">
+      <div class="titlebar"><h2 id="workTitle">Work</h2></div>
+      <div class="sunk" id="work"></div>
+    </section>
+    <section class="card" id="mattersWin" data-stage="3">
       <div class="titlebar"><h2>What matters</h2></div>
       <div class="body"><div id="matters"></div></div>
     </section>
-    <section class="card" id="path">
+    <section class="card" id="path" data-stage="3">
       <div class="titlebar"><h2>Path so far</h2></div>
       <div class="body"><div id="pathList"></div></div>
     </section>
@@ -565,7 +597,7 @@
   <div class="win">
     <div class="titlebar"><h2 id="dlgTitle">Error</h2></div>
     <div class="dbody"><div class="dicon" id="dicon" aria-hidden="true">!</div><div class="dmsg" id="dlgMsg"></div></div>
-    <div class="dfoot"><button id="dlgOk" class="go">OK</button></div>
+    <div class="dfoot"><button id="dlgCancel" hidden>Cancel</button><button id="dlgOk" class="go">OK</button></div>
   </div>
 </div>
 <div id="solved" aria-hidden="true"><div class="ban">SOLVED</div></div>

@@ -25,9 +25,9 @@ async function rampSetup(page){
   await setCondition(page, 'varA', true);
   await setCondition(page, 'rest', true);
   await setCondition(page, 'earth', false);
-  await confirmConditions(page);
   for (const id of ['m', 'inc', 'g']) await addGiven(page, id, 0, '', 0, { symbol: true });
   await addFunction(page, 'Fp', ['', 'k', '', '']); // F(t) = k·t, k a new symbol in N/s
+  await confirmConditions(page); // Conditions opens once Setup has givens
   // build: the incline template puts a block on a ramp
   await page.click('[data-dtab="build"]');
   await page.click('[data-template="incline"]');
@@ -94,8 +94,7 @@ test('ramp pushed by F = kt: a(t), t*, v(t), N(t) (gate)', async () => {
 test('free-body checker: missing gravity, missing normal, stray friction, wrong direction', async () => {
   const { page, errors } = await openApp(env.browser, env.url);
   try {
-    await setCondition(page, 'friction', false); await confirmConditions(page);
-    await page.click('[data-dtab="build"]'); await page.click('[data-template="incline"]');
+    await page.click('[data-dtab="build"]'); await page.click('[data-template="incline"]'); // a frictionless ramp
     await page.click('[data-dtab="forces"]');
     await page.click('[data-addforce="normal"]');
     await page.selectOption('[data-fdir="0"]', 'down');
@@ -113,8 +112,9 @@ test('general system detection: T5 and T6 share T and a, combine them', async ()
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await page.click('#chPick button:has-text("Tension & pulleys")');
-    await setCondition(page, 'friction', false); await setCondition(page, 'earth', false); await confirmConditions(page);
+    await setCondition(page, 'friction', false); await setCondition(page, 'earth', false);
     for (const id of ['m1', 'm2', 'g']) await addGiven(page, id, 0, '', 0, { symbol: true });
+    await confirmConditions(page);
     for (const e of ['P2', 'P5', 'P6']) await gather(page, e);
     await addTarget(page, 'a');
     await page.click('#sheet [data-eq="P2"] [data-solve]');
