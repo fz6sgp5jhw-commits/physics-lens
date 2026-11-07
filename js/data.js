@@ -49,6 +49,13 @@ export const VARS = {
   v:     { sym: 'v', plain: 'v', name: 'speed of the point (at the end)', unit: 'm/s', units: { 'm/s': 1 } },
   at:    { sym: 'a<sub>t</sub>', plain: 'aₜ', name: 'tangential acceleration of the point', unit: 'm/s²', units: { 'm/s²': 1 } },
   ac:    { sym: 'a<sub>c</sub>', plain: 'a꜀', name: 'centripetal acceleration (at the end)', unit: 'm/s²', units: { 'm/s²': 1 } },
+  atot:  { sym: 'a', plain: 'a', name: 'total acceleration of the point (size)', unit: 'm/s²', units: { 'm/s²': 1 } },
+  // between two moments the student picks (Phase 3): worked out from functions of time
+  dth:   { sym: 'Δθ', plain: 'Δθ', name: 'angle turned between the two moments', unit: 'rad', units: { rad: 1, rev: TAU, '°': Math.PI / 180 }, dir: ['counterclockwise', 'clockwise'] },
+  dtrav: { sym: 'θ<sub>trav</sub>', plain: 'θ_trav', name: 'total angle travelled between the two moments (both ways counted)', unit: 'rad', units: { rad: 1, rev: TAU } },
+  nrev:  { sym: 'N', plain: 'N', name: 'revolutions between the two moments', unit: 'rev', units: { rev: 1 } },
+  wavg:  { sym: 'ω<sub>avg</sub>', plain: 'ω_avg', name: 'average angular velocity between the two moments', unit: 'rad/s', units: { 'rad/s': 1, rpm: TAU / 60 }, dir: ['counterclockwise', 'clockwise'] },
+  aavg:  { sym: 'α<sub>avg</sub>', plain: 'α_avg', name: 'average angular acceleration between the two moments', unit: 'rad/s²', units: { 'rad/s²': 1 }, dir: ['counterclockwise', 'clockwise'] },
 };
 
 export const V = (id) => `<span class="sym" data-v="${id}">${VARS[id].sym}</span>`;
@@ -413,6 +420,29 @@ export const EQS = {
              return { branch: 1, note: `The root gives ±${fmt(mag)}. Centripetal acceleration points to the centre whichever way the wheel turns, so it can’t tell you the direction. The positive root (counterclockwise) is kept. If it spins clockwise, ω is the negative of this.` }; } },
     },
   },
+  E10: {
+    label: 'R10', vars: ['ac', 'v', 'r'], form: `${V('ac')} = ${V('v')}²/${V('r')}`,
+    meaning: 'The same centripetal acceleration, written with the point’s speed.', condition: 'circular path of radius r', calc: 'Put ω = v/r into a꜀ = ω²r: a꜀ = (v/r)²r = v²/r.',
+    solve: {
+      ac: { steps: [], sub: '{v}² / {r}' },
+      r: { steps: [{ eq: `${V('r')} = ${V('v')}² / ${V('ac')}`, why: 'multiply both sides by r, then divide by a꜀' }], sub: '{v}² / {ac}' },
+      v: { steps: [{ eq: `${V('v')}² = ${V('ac')}${V('r')}`, why: 'multiply both sides by r' }, { eq: `${V('v')} = ±√(${V('ac')}${V('r')})`, why: 'take the square root' }],
+           sub: '±√({ac}{r})',
+           pick: () => ({ branch: 1, note: 'a꜀ gives the speed, not the direction, so the positive root is kept. If the point moves clockwise, v is the negative of this.' }) },
+    },
+  },
+  E11: {
+    label: 'R11', vars: ['atot', 'at', 'ac'], form: `${V('atot')} = √(${V('at')}² + ${V('ac')}²)`,
+    meaning: 'The point’s total acceleration: aₜ along its path and a꜀ toward the centre are at right angles, so they add like the sides of a right triangle.', condition: 'aₜ ⊥ a꜀', calc: 'Pythagoras on the two perpendicular components.',
+    solve: {
+      atot: { steps: [], sub: '√({at}² + {ac}²)' },
+      at: { steps: [{ eq: `${V('at')}² = ${V('atot')}² − ${V('ac')}²`, why: 'square both sides, subtract a꜀²' }, { eq: `${V('at')} = ±√(${V('atot')}² − ${V('ac')}²)`, why: 'take the square root' }],
+            sub: '±√({atot}² − {ac}²)',
+            pick: () => ({ branch: 1, note: 'The total acceleration is a size, so it can’t say whether the spin speeds up or slows down. The positive root is kept; if the spin is slowing, aₜ is the negative of this.' }) },
+      ac: { steps: [{ eq: `${V('ac')}² = ${V('atot')}² − ${V('at')}²`, why: 'square both sides, subtract aₜ²' }, { eq: `${V('ac')} = √(${V('atot')}² − ${V('at')}²)`, why: 'take the square root: a꜀ points to the centre, so it is a positive size' }],
+            sub: '√({atot}² − {at}²)' },
+    },
+  },
 };
 // rename labels of the kinematics families: K1..K5, R1..R5
 for (const n of [1, 2, 3, 4, 5]){ EQS['X' + n].label = 'K' + n; EQS['E' + n].label = 'R' + n; }
@@ -502,13 +532,15 @@ export const CHAPTERS = {
     title: 'Rotation kinematics', short: 'Rotation',
     kin: { p: 'theta', u0: 'w0', u: 'w', a: 'alpha', t: 't' }, diagram: 'wheel',
     ladder: { rungs: ['theta', 'w', 'alpha'], start: { theta: null, w: 'w0' }, zeroNote: { theta: 'θ is the angle turned since t = 0, so θ(0) = 0.' } },
-    vars: ['theta', 'w0', 'w', 'alpha', 't'], rimVars: ['r', 's', 'v', 'at', 'ac'],
+    vars: ['theta', 'w0', 'w', 'alpha', 't'], rimVars: ['r', 's', 'v', 'at', 'ac', 'atot'],
+    // between two moments: worked out from θ(t) (or ω(t) for α_avg), see span() in app.js
+    spanVars: { dth: 'theta', nrev: 'theta', dtrav: 'theta', wavg: 'theta', aavg: 'w' },
     axis: '+ is <b>counterclockwise</b>. Pick the direction for each vector; the app sets the sign.',
     intro: `<p>A rigid wheel turns as one piece: every point sweeps the <b>same angle</b> in the same time. Its motion is described by angle θ, angular velocity ω and angular acceleration α.</p>
       <p>These are the rotational twins of position, velocity and acceleration, so the equations have the same shape. The radius r converts to a point’s path: s = rθ, v = rω.</p>`,
     sections: [
       { title: 'Angular kinematics (constant α)', note: 'Five quantities: θ, ω₀, ω, α, t. Each equation leaves one of them out. If α varies with time, use the motion ladder on your sheet instead.', eqs: ['E1', 'E2', 'E3', 'E4', 'E5'] },
-      { title: 'A point at radius r', note: 'Turn on “Track a point” in the conditions to use these.', eqs: ['E6', 'E7', 'E8', 'E9'], applies: c => c.rim, needs: 'track a point at radius r' },
+      { title: 'A point at radius r', note: 'Turn on “Track a point” in the conditions to use these. The point’s acceleration has two parts at right angles: aₜ = rα along its path (the spin speeding up or slowing down) and a꜀ = ω²r toward the centre.', eqs: ['E6', 'E7', 'E8', 'E9', 'E10', 'E11'], applies: c => c.rim, needs: 'track a point at radius r' },
     ],
     conditions: [
       { key: 'varA', type: 'choice', label: 'Angular acceleration', options: [[false, 'Constant'], [true, 'Varies with time']] },
@@ -567,11 +599,12 @@ export const DIMS = Object.fromEntries(Object.entries(VARS).map(([id, d]) => [id
 export const SAMPLE = {
   dx: 4, v0: 3, vf: 5, a: 2, t: 2, m: 3, g: 9.81, inc: 30, W: 29.4, Wpar: 14.7, Wperp: 25.5, N: 25.5, f: 5, mu: 0.15, F: 10,
   Fp: 10, mus: 0.5, mA: 2, mB: 1, P: 4, NA: 19.6, NB: 9.8, fA: 2, fB: 1, m1: 4, m2: 2, W1: 39.2, W2: 19.6, N1: 39.2, Tn: 12,
-  theta: 8, w0: 2, w: 6, alpha: 1.5, r: 0.5, s: 4, v: 3, at: 0.75, ac: 18,
+  theta: 8, w0: 2, w: 6, alpha: 1.5, r: 0.5, s: 4, v: 3, at: 0.75, ac: 18, atot: 18.02,
+  dth: 8, dtrav: 8, nrev: 1.27, wavg: 4, aavg: 1.5,
 };
 // Order symbols are written in a product: coefficient-like first (μk m g), then the rest.
 export const PRINT_ORDER = ['mu', 'mus', 'r', 'm', 'm1', 'm2', 'mA', 'mB', 'g', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'NA', 'NB', 'f', 'fA', 'fB', 'F', 'Fp', 'P', 'Tn', 'inc',
-  'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'v', 'a', 'alpha', 'at', 'ac', 't'];
+  'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'v', 'a', 'alpha', 'at', 'ac', 'atot', 'dth', 'dtrav', 'nrev', 'wavg', 'aavg', 't'];
 
 // ---------- every solver's numbers come from its `sub` template ----------
 // A solver is { steps, sub, guard?, pick?, alt?, note? }:

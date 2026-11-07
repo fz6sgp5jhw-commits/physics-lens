@@ -43,7 +43,7 @@ test('numbers and symbols mix', () => {
 test('units: every template is consistent and has the unit of what it solves for', () => {
   let n = 0;
   for (const [id, eq] of Object.entries(EQS)) for (const [x, sol] of Object.entries(eq.solve)){ assert.ok(X.dimEq(X.dimOf(sol.tree, DIMS), DIMS[x]), `${id} → ${x}`); n++; }
-  assert.equal(n, 128); // every solver in the library (122 + 6 for the pushed-blocks friction laws)
+  assert.equal(n, 134); // every solver in the library (122 + 6 for the pushed-blocks friction laws + 6 for a꜀ = v²/r and the total acceleration)
   assert.throws(() => X.dimOf(X.parse('{v0} + {a}'), DIMS), /units don’t match: m\/s \+ m\/s²/);
   assert.throws(() => X.dimOf(X.parse('sin {t}'), DIMS), /sin needs an angle/);
 });
@@ -99,4 +99,19 @@ test('polynomials in t: d/dt, ∫dt with a start value, solving for t', () => {
   assert.equal(c.method, 'numeric');
   for (const r of c.roots) assert.ok(Math.abs(X.polyNum(theta, r.x) - 100) < 1e-6);
   assert.throws(() => X.polySolve([sym.w0, X.number(0), X.number(0), sym.alpha], X.number(0)), /only linear and quadratic/);
+});
+
+test('one-box function entry: parseFn reads a polynomial in t and gives each constant one power of t', () => {
+  const o = { plain: (id) => id.replace(/^c_/, ''), html: (id) => id, order: [], fmt: (x) => String(+x.toPrecision(4)) };
+  const read = (src) => { const r = X.parseFn(src); return [X.polyText(r.poly, o), r.consts]; };
+  assert.deepEqual(read('γ − βt²'), ['γ − βt²', { γ: 0, β: 2 }]);
+  assert.deepEqual(read('gamma - beta t^2'), ['γ − βt²', { γ: 0, β: 2 }]);
+  assert.deepEqual(read('250t - 20.3t^2 - 1.44t^3'), ['250t − 20.3t² − 1.44t³', {}]);
+  assert.deepEqual(read('t(3 − t)'), ['3t − t²', {}]);
+  assert.deepEqual(read('t²/2 + 3'), ['3 + 0.5t²', {}]);
+  assert.deepEqual(read('k t'), ['kt', { k: 1 }]);
+  assert.deepEqual(read('k_1 t'), ['k1t', { k1: 1 }]);
+  for (const [src, msg] of [['βt + βt²', /two different powers/], ['β²t²', /stand on its own/], ['t/β', /stand on its own/], ['γβt', /stand on its own/],
+    ['1/t', /polynomial in t/], ['0', /zero everywhere/], ['t +', /complete expression/], ['3t$', /can’t read/], ['', /Type the function/]])
+    assert.throws(() => X.parseFn(src), msg, src);
 });

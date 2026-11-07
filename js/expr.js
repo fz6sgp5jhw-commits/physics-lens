@@ -625,3 +625,49 @@ export function limit(r, id, to){
   if (kn === kd) return { value: tidyRoots(ratio) };
   return { inf: evalRat(ratio, SAMPLE) < 0 ? -1 : 1 };
 }
+
+// ---------------------------------------------------------------- a function of time typed in one box
+// "γ − βt²", "250t - 20.3t^2 - 1.44t^3", "kt": numbers, t, and one-letter constants (Latin or Greek, with an
+// optional subscript like k_1 or k2). Returns { poly, consts: { name: power of t it multiplies } }, where each
+// constant is the symbol 'c_<name>'. Every constant must multiply exactly one power of t, to the first power,
+// on its own, so that it has one clear unit. Throws MathError with a plain explanation otherwise.
+const GREEK = { alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', eta: 'η', kappa: 'κ', lambda: 'λ', mu: 'μ', sigma: 'σ', tau: 'τ', phi: 'φ', omega: 'ω' };
+const NAME_RE = /^([A-Za-zα-ωΑ-Ω])(_?[0-9]+|_[A-Za-z0-9]+)?/;
+export function parseFn(src){
+  let s = String(src).trim().replace(/[−–]/g, '-').replace(/[×·*]/g, ' ').replace(/\^\s*([2-5])/g, (_, d) => '²³⁴⁵'[d - 2]).replace(/,/g, '.');
+  s = s.replace(new RegExp(`(?<![A-Za-z])(pi|${Object.keys(GREEK).join('|')})(?![A-Za-z])`, 'g'), (w) => w === 'pi' ? 'π' : GREEK[w]);
+  if (!s) throw new MathError('Type the function, like 12 − 3t² or γ − βt².');
+  let tpl = '', i = 0;
+  const names = new Set();
+  while (i < s.length){
+    const c = s[i], m = NAME_RE.exec(s.slice(i));
+    if (c === 'π'){ tpl += `(${Math.PI})`; i++; }
+    else if (m){
+      const name = m[0].replace('_', '');
+      if (m[1] === 't' && !m[2]) tpl += '{t}';
+      else { if (name === 't') throw new MathError('t is the time, so it can’t be a constant’s name.'); names.add(name); tpl += `{c_${name}}`; }
+      i += m[0].length;
+    }
+    else if (/[0-9.+\-/()\s²³⁴⁵]/.test(c)){ tpl += c === '-' ? '−' : c; i++; }
+    else throw new MathError(`I can’t read “${c}”. Use numbers, t, one-letter constants (like k or β), + − / ( ) and powers like t² or t^2.`);
+  }
+  let tree;
+  try { tree = parse(tpl.replace(/\(\s*−/g, '(0 −')); } catch { throw new MathError('That isn’t a complete expression. Check for a missing number or bracket.'); }
+  const env = { t: symbol('t') };
+  for (const n of names) env['c_' + n] = symbol('c_' + n);
+  const poly = ratToPolyIn(toRat(tree, env), 't');
+  if (!poly) throw new MathError('It has to be a polynomial in t: powers t, t², t³ … added together, with no t under a fraction bar or a root.');
+  if (poly.length > 6) throw new MathError('Powers up to t⁵ only.');
+  if (!poly.length) throw new MathError('It’s zero everywhere. Type at least one nonzero term.');
+  const consts = {};
+  poly.forEach((c, k) => {
+    for (const id of symbolsOf(c)){
+      const name = id.slice(2);
+      if (name in consts) throw new MathError(`${name} multiplies two different powers of t, so it would need two different units. Use a separate letter for each term.`);
+      consts[name] = k;
+    }
+    const lone = !c.d.length && c.n.every(m => Object.keys(m.e).length <= 1 && Object.values(m.e).every(e => e === 1));
+    if (!lone) throw new MathError('Each constant has to stand on its own in its term (like βt², not β²t² or γβt or t/β), so it gets one clear unit.');
+  });
+  return { poly, consts };
+}

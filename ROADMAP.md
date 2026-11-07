@@ -51,14 +51,15 @@ Problems seen in class: the Conditions panel is too far down to find. In a rotat
 **Start with:** `Do phase 3 in ROADMAP.md.`
 
 Problems seen in class: defining ω(t) was hard. Given θ(t), finding the revolutions between the time ω = 0 and the time θ = 0 wasn't possible. There was no visible way to get tangential acceleration.
-- [ ] Easier function entry: type ω(t) = γ − βt² in one box, with symbols allowed, then a preview of the parsed function. The same box works for θ(t) and α(t).
-- [ ] Targets **between two moments**: Δθ between "when ω = 0" and "when θ = 0" (or any two events or times), and **revolutions** = Δθ / 2π. If ω changes sign in between, the angle travelled is not just Δθ: say so and offer both.
-- [ ] Average angular velocity and **average angular acceleration**: ω_avg = Δθ/Δt and α_avg = Δω/Δt over a chosen interval, alongside the instantaneous α(t) = dω/dt.
-- [ ] Points on a rotating body: v = rω, **tangential acceleration a_t = rα**, centripetal a_c = ω²r = v²/r, and total acceleration. They are added as library equations and also reached from the drawing (phase 4).
-- [ ] Gate tests, written first with hand-worked numbers:
+- [x] Easier function entry: type ω(t) = γ − βt² in one box, with symbols allowed, then a preview of the parsed function. The same box works for θ(t) and α(t).
+- [x] Targets **between two moments**: Δθ between "when ω = 0" and "when θ = 0" (or any two events or times), and **revolutions** = Δθ / 2π. If ω changes sign in between, the angle travelled is not just Δθ: say so and offer both.
+- [x] Average angular velocity and **average angular acceleration**: ω_avg = Δθ/Δt and α_avg = Δω/Δt over a chosen interval, alongside the instantaneous α(t) = dω/dt.
+- [x] Points on a rotating body: v = rω, **tangential acceleration a_t = rα**, centripetal a_c = ω²r = v²/r, and total acceleration. They are added as library equations and also reached from the drawing (phase 4).
+- [x] Gate tests, written first with hand-worked numbers:
   - the fan blade ω(t) = γ − βt²: when ω = 0, α(t), average α over an interval, and the revolutions between two times;
   - θ(t) given: the revolutions between "ω = 0" and "θ = 0";
   - a_t and a_c for a point at radius r.
+- What changed: a function of time is typed in one box (`#edFn`, read by `X.parseFn` in `expr.js`) with a live preview (`#edFnPreview`) of the polynomial and each new constant's unit; a constant must multiply one power of t on its own (so it has one unit). New targets **between two moments** (`dth` Δθ, `nrev` revolutions, `dtrav` angle travelled both ways, `wavg` ω_avg, `aavg` α_avg) use the "Between two moments" card on the sheet (`#spanCard`): each moment is a time or "when θ/ω/α = …" (the first time after the previous moment); the `span` move solves both times (rejected roots listed), then works the quantity out exactly, symbols allowed; if ω changes sign in between it says so and gives both the net Δθ and the angle travelled. Point quantities are offered as targets even before "Track a point" is on (choosing one turns it on); new library equations R10 a꜀ = v²/r and R11 a = √(aₜ² + a꜀²). Averages are only between two moments with functions of time (constant-α problems use the ladder by ticking "varies with time"). 70 tests (`tests/rotation.test.js` new, 5 gates; parser unit test; solver count 128 → 134; round-trip states include the total acceleration; the `addFunction` helper types into the one box). Cache `physics-lens-v9`.
 
 ---
 

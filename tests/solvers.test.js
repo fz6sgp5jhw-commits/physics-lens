@@ -26,7 +26,7 @@ function pulleyState({ m1, m2, g = 9.81, mu = 0, friction, v0, t }){
 }
 function rotationState({ w0, alpha, t, r }){
   const w = w0 + alpha * t, theta = w0 * t + 0.5 * alpha * t * t;
-  return { ch: 'rotation', cond: { rim: true }, s: { w0, alpha, t, w, theta, r, s: r * theta, v: r * w, at: r * alpha, ac: w * w * r } };
+  return { ch: 'rotation', cond: { rim: true }, s: { w0, alpha, t, w, theta, r, s: r * theta, v: r * w, at: r * alpha, ac: w * w * r, atot: Math.hypot(r * alpha, w * w * r) } };
 }
 
 export const STATES = {

@@ -9,7 +9,7 @@ const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, c => ESC[c]);
 const field = createField($('fieldArrows'), $('fieldTrails'));
 const S = window.__rl = {
-  ch: 'incline', cond: {}, condOk: false, givens: {}, found: {}, funcs: {}, gen: {}, custom: [], samples: {}, targets: [], sheet: [], path: [],
+  ch: 'incline', cond: {}, condOk: false, givens: {}, found: {}, funcs: {}, gen: {}, custom: [], samples: {}, span: null, targets: [], sheet: [], path: [],
   bank: null, editing: null, focus: [], hot: [], hover: null, busy: false, sound: false, anim: false, inspectName: null, lastStep: 0,
   // how symbolic answers are printed (also used by the tests)
   field,
@@ -78,7 +78,8 @@ const val = (id) => {
 const vals = () => { const o = {}; for (const id of chVars()) if (known(id)) o[id] = val(id); if (S.ch === 'incline') o.__u0sign = (S.cond.up ? -1 : 1) * (S.cond.upAxis ? -1 : 1); return o; };
 const curTarget = () => S.targets.find(t => !known(t)) || null;
 const stateOf = (id) => id in S.givens ? 'given' : id in S.found ? 'found' : S.targets.includes(id) ? 'target' : 'unknown';
-const knownSet = () => new Set([...chVars().filter(known), ...Object.keys(S.funcs).map(x => 'fn:' + x), ...chVars().filter(x => known(x) && isMoment(x)).map(x => 'm:' + x)]);
+const spanIds = () => Object.keys(chapter().spanVars || {});
+const knownSet = () => new Set([...chVars().filter(known), ...spanIds().filter(known), ...Object.keys(S.funcs).map(x => 'fn:' + x), ...chVars().filter(x => known(x) && isMoment(x)).map(x => 'm:' + x)]);
 const unknownsOf = (e, ks) => EQS[e].vars.filter(v => !ks.has(v));
 const solvable = (e, ks) => { const u = unknownsOf(e, ks); return u.length === 1 && EQS[e].solve[u[0]] ? u[0] : null; };
 const plain = (id) => VARS[id].plain;
@@ -174,6 +175,10 @@ function moves(eqList, ks){
     if (ks.has(x) && !ks.has('t')) out.push({ kind: 'solveT', from: x, v: 't', moment: true });
     const st = L.start[x]; if (st && !ks.has(st)) out.push({ kind: 'start', from: x, v: st });
   }
+  // between two moments: only for quantities the question asks for, once both moments are set
+  const SV = chapter().spanVars;
+  if (SV && spanReady() && spanNeeds().every(f))
+    for (const [x, need] of Object.entries(SV)) if (S.targets.includes(x) && !ks.has(x) && f(need)) out.push({ kind: 'span', from: need, v: x });
   return out;
 }
 
@@ -245,7 +250,7 @@ function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false
 function switchChapter(ch){ S.ch = ch; S.cond = defaultsFor(ch); resetAll(false); if (S.build) syncDrawingGivens(); }
 function resetAll(keepText = true){
   dropGenerated(() => true); S.custom = []; S.samples = {}; if (S.scen) S.scen = { cols: [], rows: [] };
-  S.givens = {}; S.found = {}; S.funcs = {}; S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null;
+  S.givens = {}; S.found = {}; S.funcs = {}; S.span = newSpan(); S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null;
   if (!keepText){ $('problem').value = ''; S.bank = null; }
   S.cond = { ...defaultsFor(S.ch), ...Object.fromEntries(Object.entries(S.cond).filter(([k]) => k in defaultsFor(S.ch))) };
   applyHidden(); clearWork(); resetInspector();
@@ -314,7 +319,7 @@ function renderKnowns(){
   }
   renderEditor();
 }
-function openEditor(id, moment = false){ if (S.busy) return; const g = S.givens[id], fg = !g && S.funcs[id] && S.funcs[id].from === 'given' ? S.funcs[id] : null; S.editing = { id, moment, coefs: fg ? fg.coefs : ['', '', '', ''], kind: fg ? 'fn' : g && g.kind === 'symbol' ? 'symbol' : 'value', mag: g && g.mag !== null ? g.mag : '', unit: g ? g.unit : (Object.keys(VARS[id].units)[0]), dir: g ? g.dir : 0 }; renderEditor(); setTimeout(() => $('edVal')?.focus(), 0); }
+function openEditor(id, moment = false){ if (S.busy) return; const g = S.givens[id], fg = !g && !moment && S.funcs[id] && S.funcs[id].from === 'given' ? S.funcs[id] : null; S.editing = { id, moment, fnText: fg ? fg.text : '', kind: fg ? 'fn' : g && g.kind === 'symbol' ? 'symbol' : 'value', mag: g && g.mag !== null ? g.mag : '', unit: g ? g.unit : (Object.keys(VARS[id].units)[0]), dir: g ? g.dir : 0 }; renderEditor(); setTimeout(() => $('edVal')?.focus(), 0); }
 const FORCE_IDS = ['Fp', 'N', 'N1', 'f', 'Tn'];
 const canFn = (id) => !!(S.cond.varA && ((chapter().ladder && chapter().ladder.rungs.includes(id)) || FORCE_IDS.includes(id)));
 function renderEditor(){
@@ -325,8 +330,9 @@ function renderEditor(){
     ${S.editing.moment ? `<div class="erow small">Its value <b>at the moment the question asks about</b>. The app finds the time t when it has this value.</div>` : ''}
     <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button><button data-kind="scenario" aria-pressed="${kind === 'scenario'}" title="Different values in different cases">Scenario table</button>${canFn(id) ? `<button data-kind="fn" aria-pressed="${kind === 'fn'}">Function of t</button>` : ''}</div>
     ${kind === 'fn'
-      ? `<div class="erow fnrow"><b>${d.sym}(t) =</b> ${[0, 1, 2, 3].map(k => `${k ? '+' : ''} <span class="coef"><input data-coef="${k}" type="text" inputmode="decimal" value="${esc(S.editing.coefs[k])}" placeholder="0"><small>${unitPer(id, k)}</small></span>${k ? ` t${SUPN[k]}` : ''}`).join(' ')}</div>
-         <div class="erow small">Type each coefficient with its sign (+ is ${dr(id) ? dr(id)[0] : 'positive'}), or a letter for a constant you don’t know (like <b>k</b>). Leave a box empty for 0. Each one has its own unit, shown under it.</div>`
+      ? `<div class="erow fnrow"><label for="edFn"><b>${d.sym}(t) =</b></label> <input id="edFn" type="text" spellcheck="false" autocomplete="off" value="${esc(S.editing.fnText)}" placeholder="${FN_EXAMPLE[id] || '4 − 0.5t²'}"></div>
+         <div class="erow small">Write it as you would on paper: numbers, <b>t</b>, powers like t² or t^2, and a letter for a constant you don’t know (like <b>k</b>, <b>β</b>, or type <b>beta</b>). + is ${dr(id) ? dr(id)[0] : 'positive'}.</div>
+         <div id="edFnPreview" class="fnprev" aria-live="polite"></div>`
       : kind === 'scenario'
       ? `<div class="erow small">Its value changes from case to case: it becomes a column of the scenario table under the givens, and the problem is solved with <b>${d.sym}</b> as a symbol.</div>`
       : kind === 'symbol'
@@ -334,20 +340,17 @@ function renderEditor(){
       : `<div class="erow"><input id="edVal" type="text" inputmode="decimal" value="${esc(mag)}" placeholder="size"><select id="edUnit">${Object.keys(d.units).map(u => `<option ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`}
     ${dr(id) && kind !== 'fn' ? `<div class="erow dirs">Direction: ${dr(id).map((w, i) => `<button data-dir="${i}" aria-pressed="${i === dir}">${w} (${i ? '−' : '+'})</button>`).join('')}</div>` : ''}
     <div class="erow"><button class="go" id="edSave">Add known</button><button id="edCancel">Cancel</button>${S.targets.includes(id) ? '<span class="small warn">This is one of your targets: adding it as a known removes it.</span>' : ''}</div></div>`;
-  const keep = () => { if ($('edVal')){ S.editing.mag = $('edVal').value; S.editing.unit = $('edUnit').value; } slot.querySelectorAll('[data-coef]').forEach(i => { S.editing.coefs[+i.dataset.coef] = i.value; }); };
+  const keep = () => { if ($('edVal')){ S.editing.mag = $('edVal').value; S.editing.unit = $('edUnit').value; } if ($('edFn')) S.editing.fnText = $('edFn').value; };
   slot.querySelectorAll('[data-dir]').forEach(b => b.onclick = () => { keep(); S.editing.dir = +b.dataset.dir; renderEditor(); });
   slot.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { keep(); S.editing.kind = b.dataset.kind; renderEditor(); });
   $('edCancel').onclick = () => { S.editing = null; renderEditor(); };
   const save = () => {
     if (S.editing.kind === 'fn'){
       keep();
-      const cs = S.editing.coefs.map(c => String(c).trim().replace(',', '.').replace('−', '-'));
-      const isName = (c) => /^[A-Za-z][A-Za-z0-9]*$/.test(c);
-      if (cs.some(c => c !== '' && !isName(c) && !isFinite(Number(c)))){ dialog('Not a number', `<b>SYNTAX ERROR</b>Each coefficient must be a number like <b>-20.3</b>, a letter for a constant like <b>k</b>, or empty for 0.`); return; }
-      if (cs.every(c => c === '' || (!isName(c) && Number(c) === 0))){ dialog('All zero', `<b>NOTHING THERE</b>All the coefficients are zero. Type at least one.`); return; }
-      const poly = cs.map((c, k) => c === '' ? X.number(0) : isName(c) ? X.symbol(registerCustom(c, unitPer(id, k), id, k)) : X.number(Number(c)));
-      while (poly.length && X.R.isZero(poly[poly.length - 1])) poly.pop();
-      S.funcs[id] = { from: 'given', poly, coefs: S.editing.coefs.slice() };
+      let fn;
+      try { fn = X.parseFn(S.editing.fnText); } catch (e){ if (!(e instanceof X.MathError)) throw e; dialog('Can’t read that', `<b>SYNTAX ERROR</b>${esc(e.message)}`); return; }
+      for (const [name, k] of Object.entries(fn.consts)) registerCustom(name, unitPer(id, k), id, k);
+      S.funcs[id] = { from: 'given', poly: fn.poly, text: S.editing.fnText };
       S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
       return;
     }
@@ -372,6 +375,30 @@ function renderEditor(){
   const trySave = async () => { if (await beforeClearing('Changing a given')) save(); };
   $('edSave').onclick = trySave;
   $('edVal')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') trySave(); });
+  const fnBox = $('edFn');
+  if (fnBox){
+    fnBox.addEventListener('input', () => { S.editing.fnText = fnBox.value; fnPreview(id); });
+    fnBox.addEventListener('keydown', (e) => { if (e.key === 'Enter') trySave(); });
+    fnPreview(id);
+  }
+}
+// what the one-box function entry read: the polynomial, and the unit each new constant gets
+const FN_EXAMPLE = { theta: '250t − 20.3t² − 1.44t³', w: 'γ − βt²', alpha: '4 − 0.6t²', vf: '3 + 2t', dx: '5t − t²', Fp: 'kt' };
+function fnPreview(id){
+  const box = $('edFnPreview'), txt = S.editing.fnText.trim();
+  if (!box) return;
+  if (!txt){ box.innerHTML = '<span class="muted">The app shows here how it reads what you type.</span>'; return; }
+  try {
+    const fn = X.parseFn(txt);
+    const sym = (c) => VARS[c] ? V(c) : `<span class="sym">${esc(c.slice(2))}</span>`;
+    const opts = { ...S.printOpts, html: sym, spaced: (c) => !!VARS[c] && S.printOpts.spaced(c) };
+    const units = Object.entries(fn.consts).map(([name, k]) => `<b>${esc(name)}</b> is a constant in ${esc(unitPer(id, k))}`);
+    box.innerHTML = `Reads as <b>${VARS[id].sym}(t) = ${X.polyHTML(fn.poly, opts)}</b>${units.length ? `<br>${units.join(' · ')}` : ''}`;
+    box.classList.remove('bad');
+  } catch (e){
+    if (!(e instanceof X.MathError)) throw e;
+    box.textContent = e.message; box.classList.add('bad');
+  }
 }
 
 // ---------- 2. conditions ----------
@@ -489,7 +516,7 @@ function renderTargets(){
   const box = $('targets');
   const opts = chVars().filter(id => !known(id) && !S.targets.includes(id));
   box.innerHTML = `<span class="small"><b>🎯 The question asks for:</b></span>` + S.targets.map((t, i) => `<span class="tchip ${known(t) ? 'done' : t === curTarget() ? 'current' : ''}">${letter(i)} ${symOf(t)}${known(t) ? ` = ${showVal(t)}` : ''}${S.path.some(p => p.part === t) ? `<button data-clr="${t}" title="Clear part ${letter(i)}: remove what it found">↺</button>` : `<button data-rmt="${t}" title="Remove target">×</button>`}</span>`).join('')
-    + `<select id="addTarget"><option value="">+ add a target…</option>${opts.map(id => `<option value="${id}">${VARS[id].plain}: ${nm(id)}</option>`).join('')}${ladderTargets()}${rankTargets()}</select>`;
+    + `<select id="addTarget"><option value="">+ add a target…</option>${opts.map(id => `<option value="${id}">${VARS[id].plain}: ${nm(id)}</option>`).join('')}${ladderTargets()}${spanTargets()}${pointTargets()}${rankTargets()}</select>`;
   box.querySelectorAll('[data-rmt]').forEach(b => b.onclick = () => { S.targets = S.targets.filter(t => t !== b.dataset.rmt); renderAll(false); });
   box.querySelectorAll('[data-clr]').forEach(b => b.onclick = () => clearPart(b.dataset.clr));
   $('addTarget').onchange = (e) => {
@@ -499,7 +526,13 @@ function renderTargets(){
       renderAll(false); openEditor(x, true); say(`🎯 Target: the <b>time</b> when ${VARS[x].sym} has the value you type. That value is a given: it’s what ${VARS[x].sym} is at that moment.`);
       return;
     }
+    if (id.startsWith('pt:')){ // a point on the body: start tracking one, then target it
+      S.cond.rim = true; addTarget(id.slice(3));
+      say(`🎯 Now tracking a point at distance <b>r</b> from the axis (see Conditions). Add r as a given if the problem gives it. Its acceleration has two parts at right angles: aₜ = rα along its path and a꜀ = ω²r toward the centre.`);
+      return;
+    }
     addTarget(id);
+    if (spanIds().includes(id) && !spanReady()) say(`🎯 Target: <b>${VARS[id].sym}</b>, ${nm(id)}. Pick the two moments under <b>Between two moments</b> on your sheet.`);
   };
 }
 // clear one part: its steps and every step after it (later parts may use what it found); earlier parts stay
@@ -525,6 +558,16 @@ function ladderTargets(){
   return `<optgroup label="Functions of time">${[...L.rungs, ...FORCE_IDS.filter(id => chVars().includes(id))].filter(x => !known('fn:' + x) && !S.targets.includes('fn:' + x)).map(x => `<option value="fn:${x}">${VARS[x].plain}(t): ${nm(x)} as a function of time</option>`).join('')}</optgroup>`
     + (known('t') ? '' : `<optgroup label="⏱ The time when …">${L.rungs.filter(x => !known(x)).map(x => `<option value="when:${x}">t when ${VARS[x].plain} = …</option>`).join('')}</optgroup>`);
 }
+// the quantities between two moments (with functions of time), and a point on the body even before it's tracked
+function spanTargets(){
+  if (!ladder() || !chapter().spanVars) return '';
+  const opts = spanIds().filter(x => !known(x) && !S.targets.includes(x));
+  return opts.length ? `<optgroup label="⏮⏭ Between two moments">${opts.map(x => `<option value="${x}">${VARS[x].plain}: ${nm(x)}</option>`).join('')}</optgroup>` : '';
+}
+function pointTargets(){
+  const R = chapter().rimVars; if (!R || S.cond.rim) return '';
+  return `<optgroup label="A point on the body">${R.filter(x => x !== 'r').map(x => `<option value="pt:${x}">${VARS[x].plain}: ${nm(x)}</option>`).join('')}</optgroup>`;
+}
 function addTarget(id){
   if (S.targets.includes(id) || known(id)) return;
   S.targets.push(id); renderAll(false);
@@ -533,6 +576,7 @@ function addTarget(id){
 const MOVE_TXT = {
   deriv: (m) => `d/dt ↓ ${symOf(m.v)}`, integ: (m) => `∫dt ↑ ${symOf(m.v)}`, eval: (m) => `Put in t → ${symOf(m.v)}`,
   solveT: (m) => `Solve ${VARS[m.from].sym}(t) = ${showVal(m.from)} for t`, start: (m) => `Set t = 0 → ${symOf(m.v)}`,
+  span: (m) => `work out ${symOf(m.v)} between your two moments`,
 };
 function ladderCard(L, ks){
   const card = document.createElement('div');
@@ -540,7 +584,7 @@ function ladderCard(L, ks){
   const lastP = S.path[S.path.length - 1];
   card.className = 'eq ladder ' + (mv.length ? 'lit' : 'dim') + (lastP && lastP.kind !== 'eq' ? ' last' : '');
   const rung = (x, i) => {
-    const here = mv.filter(m => m.from === x);
+    const here = mv.filter(m => m.from === x && m.kind !== 'span');
     const val = S.funcs[x] ? polyHTML(S.funcs[x].poly) : '<span class="muted">?</span>';
     return `<div class="rung"><span class="rname">${VARS[x].sym}(t)</span> = <span class="rval">${val}</span><span class="small muted"> ${unitPer(x, 0)}</span>
       <div class="ract">${here.map(m => `<button class="go" data-move="${mv.indexOf(m)}">${MOVE_TXT[m.kind](m)} ▶</button>`).join('')}</div></div>${i < L.rungs.length - 1 ? `<div class="rlink small muted">↓ d/dt · ↑ ∫dt${L.start[x] ? '' : ''}</div>` : ''}`;
@@ -769,6 +813,7 @@ function routeStep(p, v, fns){
   else if (p.kind === 'integ') fns[x] = [p.start ? v[p.start] : 0, ...fns[p.from].map((c, k) => c / (k + 1))];
   else if (p.kind === 'eval') v[x] = poly(fns[p.from], v.t);
   else if (p.kind === 'start') v[x] = fns[p.from][0] || 0;
+  else if (p.kind === 'span') v[x] = X.numValue(spanMath(x, Object.fromEntries(Object.entries(fns).map(([k, cs]) => [k, X.polyFromNumbers(cs)]))).value);
   else if (p.kind === 'solveT'){
     const cs = fns[p.from].map((c, k) => k ? c : c - v[p.from]);
     const sol = X.polySolve(X.polyFromNumbers(cs), X.number(0));
@@ -777,9 +822,10 @@ function routeStep(p, v, fns){
     v.t = pos[0];
   }
 }
-const MOVE_LABEL = { sys: 'system', deriv: 'd/dt', integ: '∫dt', eval: 'put in t', solveT: 'solve for t', start: 't = 0' };
+const MOVE_LABEL = { sys: 'system', deriv: 'd/dt', integ: '∫dt', eval: 'put in t', solveT: 'solve for t', start: 't = 0', span: 'between moments' };
 // a ladder move: differentiate, integrate, evaluate, solve for t, or read the start value. All exact (symbols allowed).
 async function ladderOp(m){
+  if (m.kind === 'span') return spanOp(m);
   if (solveLocked()) return;
   const L = chapter().ladder, step = S.path.length + 1, cur = curTarget();
   const x = isFn(m.v) ? m.v.slice(3) : m.v, from = m.from, P = S.funcs[from].poly;
@@ -813,14 +859,7 @@ async function ladderOp(m){
       const sol = X.polySolve(P, want), q = sol.q;
       lines.push([`${fnS(from)} = ${showVal(from)}`, `the moment the question asks about`]);
       lines.push([`${polyHTML(q)} = 0`, 'move everything to one side']);
-      const unit = 's';
-      const show = (r) => X.isNumeric(r.r) ? `${fm(r.x)} ${unit}` : X.toHTML(r.r, S.printOpts);
-      if (sol.method === 'linear') lines.push([`${V('t')} = ${show(sol.roots[0])}`, 'it’s linear in t: isolate t']);
-      else if (sol.method === 'quadratic'){
-        const [c, b, a] = q.map(r => X.isNumeric(r) ? fm(X.numValue(r)) : `(${X.toHTML(r, S.printOpts)})`);
-        lines.push([`${V('t')} = [−b ± √(b² − 4ac)] / (2a)`, `quadratic formula with a = ${a}, b = ${b}, c = ${c}`]);
-        lines.push([`${V('t')} = ${sol.roots.map(show).join(' or ')}`, 'two roots']);
-      } else lines.push([`${V('t')} = ${sol.roots.map(show).join(' or ')}`, `degree ${q.length - 1}: the real roots, found numerically`]);
+      lines.push(...rootLines(sol, V('t')));
       const sorted = [...sol.roots].sort((a, b) => a.x - b.x), pos = sorted.filter(r => r.x > 1e-12);
       if (!pos.length) throw new X.MathError(`No positive time works: ${sy(from)} never reaches that value after the clock starts.`);
       const keep = pos[0];
@@ -839,6 +878,153 @@ async function ladderOp(m){
   else S.found[x] = { val, expr: X.isNumeric(expr) ? null : expr, step };
   workBlock('feedback', m.v === cur ? targetNote(m.v) : `Found ${symOf(m.v)}.`);
   finishStep({ kind: m.kind, from, start: m.start, v: m.v, val, expr, poly }, cur);
+}
+// the real roots of a polynomial equation in t, written out: linear, quadratic formula, or found numerically
+function rootLines(sol, tH){
+  const fm = (x) => fmt(x).replace(/^-/, '−'), q = sol.q;
+  const show = (r) => X.isNumeric(r.r) ? `${fm(r.x)} s` : X.toHTML(r.r, S.printOpts);
+  if (sol.method === 'linear') return [[`${tH} = ${show(sol.roots[0])}`, 'it’s linear in t: isolate t']];
+  if (sol.method === 'quadratic'){
+    const [c, b, a] = q.map(r => X.isNumeric(r) ? fm(X.numValue(r)) : `(${X.toHTML(r, S.printOpts)})`);
+    return [[`${tH} = [−b ± √(b² − 4ac)] / (2a)`, `quadratic formula with a = ${a}, b = ${b}, c = ${c}`], [`${tH} = ${sol.roots.map(show).join(' or ')}`, 'two roots']];
+  }
+  return [[`${tH} = ${sol.roots.map(show).join(' or ')}`, `degree ${q.length - 1}: the real roots, found numerically`]];
+}
+
+// ---------- between two moments (Phase 3) ----------
+// Each moment is a time (x = 't') or the first time after the previous moment that θ, ω or α has a value.
+// Sizes are typed without a sign; the direction (dir) carries it, as everywhere else.
+const newSpan = () => ({ A: { x: 't', mag: '0', dir: 0 }, B: { x: 't', mag: '', dir: 0 } });
+const evNum = (e) => { const m = Number(String(e.mag).trim().replace(',', '.')); return String(e.mag).trim() !== '' && isFinite(m) && m >= 0 ? (e.dir ? -1 : 1) * m : null; };
+const spanReady = () => !!S.span && evNum(S.span.A) !== null && evNum(S.span.B) !== null;
+const spanNeeds = () => [S.span.A, S.span.B].map(e => e.x).filter(x => x !== 't');
+const evUnit = (x) => x === 't' ? 's' : unitOf(x);
+const evText = (e) => { const v = evNum(e); return `${e.x === 't' ? 't' : VARS[e.x].sym} = ${v === null ? '…' : fmt(v).replace(/^-/, '−')} ${evUnit(e.x)}`; };
+// The math, written once: P maps rung ids to polynomials (exact, symbols allowed). Returns { value, lines, note }.
+// Used for the work panel (spanOp) and, with plain numbers, for “check with numbers” (routeStep).
+function spanMath(x, P){
+  const lines = [], notes = [], at = (r) => X.evalRat(r, SAMPLE), fm = (v) => fmt(v).replace(/^-/, '−');
+  const sub = { A: 'A', B: 'B' }, tH = (k) => `${V('t')}<sub>${sub[k]}</sub>`;
+  const times = {};
+  for (const k of ['A', 'B']){
+    const e = S.span[k], v = evNum(e), after = k === 'A' ? 0 : times.A.x;
+    if (e.x === 't'){
+      if (k === 'B' && v <= after + 1e-12) throw new X.MathError('The second moment has to come after the first.');
+      times[k] = { r: X.number(v), x: v };
+      lines.push([`${tH(k)} = ${fm(v)} s`, `the ${k === 'A' ? 'first' : 'second'} moment is a time you chose`]);
+      continue;
+    }
+    const sol = X.polySolve(P[e.x], X.number(v));
+    lines.push([`${V(e.x)}(${tH(k)}) = ${fm(v)} ${evUnit(e.x)}`, `the ${k === 'A' ? 'first' : 'second'} moment: when ${VARS[e.x].sym} = ${fm(v)}${k === 'B' ? `, after ${tH('A')}` : ''}`]);
+    lines.push([`${polyHTML(sol.q)} = 0`, `put in ${VARS[e.x].sym}(t) and move everything to one side`]);
+    lines.push(...rootLines(sol, tH(k)));
+    const sorted = [...sol.roots].sort((a, b) => a.x - b.x), keep = sorted.find(r => r.x > after + 1e-9);
+    if (!keep) throw new X.MathError(`${VARS[e.x].sym} never equals ${fm(v)} ${evUnit(e.x)} ${k === 'A' ? 'after the clock starts' : 'after the first moment'}.`);
+    const why = (r) => Math.abs(r.x) <= 1e-9 ? 't = 0 s is where it starts, not a later moment' : r.x < 0 ? `${fm(r.x)} s is rejected: it’s before the clock started (t < 0)` : r.x <= after + 1e-9 ? `${fm(r.x)} s is rejected: it’s before the first moment` : `${fm(r.x)} s is a later time it has this value again`;
+    const rej = sorted.filter(r => r !== keep);
+    if (rej.length) notes.push(`${k === 'A' ? 'First' : 'Second'} moment: keep ${tH(k).replace(/<[^>]+>/g, '')} = ${fm(keep.x)} s, the first time after ${k === 'A' ? 't = 0' : 'the first moment'}. ${rej.map(why).join('; ')}.`);
+    times[k] = keep;
+  }
+  const { A, B } = times, dt = X.R.add(B.r, X.R.neg(A.r));
+  const valAt = (id, k) => X.polyAt(P[id], times[k].r);
+  const show = (r) => X.isNumeric(r) ? fm(X.numValue(r)) : `(${X.toHTML(r, S.printOpts)})`;
+  let value;
+  if (x === 'aavg'){
+    const wA = valAt('w', 'A'), wB = valAt('w', 'B');
+    lines.push([`${V('aavg')} = Δ${V('w')} / Δ${V('t')} = [${V('w')}(${tH('B')}) − ${V('w')}(${tH('A')})] / (${tH('B')} − ${tH('A')})`, 'average angular acceleration: the change in ω divided by the time it took']);
+    value = X.R.mul(X.R.add(wB, X.R.neg(wA)), X.R.inv(dt));
+    lines.push([`${V('aavg')} = [${show(wB)} − ${show(wA)}] / [${show(B.r)} − ${show(A.r)}]`, 'put in ω at each moment (from ω(t)) and the two times']);
+    notes.push('The average is not α at any one moment: α(t) = dω/dt changes over the interval.');
+  } else {
+    const thA = valAt('theta', 'A'), thB = valAt('theta', 'B'), dth = X.R.add(thB, X.R.neg(thA));
+    lines.push([`Δ${V('theta')} = ${V('theta')}(${tH('B')}) − ${V('theta')}(${tH('A')})`, 'the angle turned between the moments: where it ends minus where it starts']);
+    lines.push([`Δ${V('theta')} = ${show(thB)} − ${show(thA)}`, 'put each time into θ(t)']);
+    // does it turn back in between? ω = dθ/dt changes sign at a root of ω(t) inside the interval
+    const w = P.w || X.polyD(P.theta);
+    let turns = [];
+    try { turns = X.polySolve(w, X.number(0)).roots.filter(r => r.x > A.x + 1e-9 && r.x < B.x - 1e-9).sort((a, b) => a.x - b.x); }
+    catch (e){ if (!(e instanceof X.MathError)) throw e; if (x === 'dtrav') throw new X.MathError('To add up the angle travelled, the app needs the times when ω = 0, and with these symbols it can’t solve for them exactly.'); }
+    let trav = null;
+    if (turns.length){
+      const pts = [A, ...turns, B].map(tt => X.polyAt(P.theta, tt.r));
+      trav = pts.slice(1).reduce((acc, q, i) => { const d = X.R.add(q, X.R.neg(pts[i])); return X.R.add(acc, at(d) < 0 ? X.R.neg(d) : d); }, X.number(0));
+    }
+    const turnTxt = turns.map(r => `${fm(r.x)} s`).join(' and ');
+    if (x === 'dtrav'){
+      if (!turns.length){ value = at(dth) < 0 ? X.R.neg(dth) : dth; lines.push([`${V('dtrav')} = |Δ${V('theta')}|`, 'ω keeps one sign between the moments, so it never turns back: the angle travelled is the size of Δθ']); }
+      else {
+        value = trav;
+        lines.push([`${V('w')}(t) = 0 at t = ${turnTxt}`, `ω(t) = ${P.w ? '' : 'dθ/dt = '}${polyHTML(w)} changes direction there`]);
+        lines.push([`${V('dtrav')} = ${[A, ...turns, B].slice(1).map((_, i) => `|${V('theta')}(t<sub>${i + 1}</sub>) − ${V('theta')}(t<sub>${i}</sub>)|`).join(' + ')}`, 'add the size of each stretch where it turns one way']);
+        notes.push(`It changes direction at t = ${turnTxt}, so the net angle Δθ = ${X.isNumeric(dth) ? fm(X.numValue(dth)) + ' rad' : X.toHTML(dth, S.printOpts)} is smaller than the angle travelled.`);
+      }
+    } else {
+      value = dth;
+      if (x !== 'dth') lines.push([`Δ${V('theta')} = ${show(dth)}${X.isNumeric(dth) ? ' rad' : ''}`, 'subtract']);
+      if (x === 'nrev'){
+        lines.push([`${V('nrev')} = Δ${V('theta')} / 2π`, 'one revolution is 2π rad']);
+        lines.push([`${V('nrev')} = ${show(dth)} / 2π`, 'put in Δθ']); value = X.scale(dth, 1 / (2 * Math.PI));
+      }
+      if (x === 'wavg'){
+        lines.push([`${V('wavg')} = Δ${V('theta')} / (${tH('B')} − ${tH('A')})`, 'average angular velocity: angle turned divided by the time it took']);
+        lines.push([`${V('wavg')} = ${show(dth)} / [${show(B.r)} − ${show(A.r)}]`, 'put in Δθ and the two times']); value = X.R.mul(dth, X.R.inv(dt));
+      }
+      if (turns.length){
+        const tv = X.isNumeric(trav) ? X.numValue(trav) : null;
+        notes.push(`⚠ ω changes direction at t = ${turnTxt}: it turns back, so this counts the <b>net</b> angle${x === 'wavg' ? '' : ` (Δθ = ${X.isNumeric(dth) ? fm(X.numValue(dth)) + ' rad' : X.toHTML(dth, S.printOpts)})`}. The angle travelled both ways is ${tv === null ? X.toHTML(trav, S.printOpts) : `${fm(tv)} rad = ${fm(tv / (2 * Math.PI))} rev`}. Add the target θ_trav if the question means that.`);
+      }
+    }
+  }
+  return { value, lines, note: notes.join(' ') };
+}
+async function spanOp(m){
+  if (solveLocked()) return;
+  const step = S.path.length + 1, cur = curTarget(), x = m.v;
+  const P = Object.fromEntries(Object.entries(S.funcs).map(([k, f]) => [k, f.poly]));
+  let r;
+  try { r = spanMath(x, P); } catch (e){ if (!(e instanceof X.MathError)) throw e; dialog('Math says no', `<b>CAN’T DO THAT</b>${e.message}`); return; }
+  S.busy = true;
+  const expr = r.value, val = X.evalRat(expr, SAMPLE);
+  startWork(`Work · step ${step}: between two moments → ${plainOf(x)}`, 'BETWEEN TWO MOMENTS');
+  for (const [h, why] of r.lines) await workLine(h, why);
+  workBlock('result', `${VARS[x].sym} = ${X.isNumeric(expr) ? `${fmt(val)} ${unitOf(x)}` : X.toHTML(expr, S.printOpts)}`);
+  if (r.note) workBlock('note', r.note);
+  S.found[x] = { val, expr: X.isNumeric(expr) ? null : expr, step };
+  workBlock('feedback', x === cur ? targetNote(x) : `Found ${symOf(x)}.`);
+  finishStep({ kind: 'span', from: m.from, v: x, val, expr }, cur);
+}
+// the card on the sheet where the student picks the two moments
+function renderSpan(){
+  const box = $('spanCard'), on = !!chapter().spanVars && S.targets.some(t => spanIds().includes(t));
+  box.hidden = !on; if (!on) return;
+  const L = chapter().ladder, sp = S.span;
+  const row = (k) => { const e = sp[k];
+    return `<div class="spanrow"><span class="spanlbl">${k === 'A' ? 'From' : 'to'}</span><select id="span${k}x" aria-label="${k === 'A' ? 'First' : 'Second'} moment">${['t', ...L.rungs].map(x => `<option value="${x}" ${e.x === x ? 'selected' : ''}>${x === 't' ? 't =' : `when ${VARS[x].plain} =`}</option>`).join('')}</select>`
+      + `<input id="span${k}v" type="text" inputmode="decimal" value="${esc(e.mag)}" placeholder="size" aria-label="Value"><span class="small muted">${evUnit(e.x)}</span>`
+      + (e.x !== 't' && dr(e.x) ? `<select id="span${k}d" aria-label="Direction">${dr(e.x).map((w, i) => `<option value="${i}" ${e.dir === i ? 'selected' : ''}>${w}</option>`).join('')}</select>` : '') + '</div>'; };
+  const moves = spanReady() ? spanIds().filter(x => S.targets.includes(x) && !known(x)) : [];
+  const ks = knownSet(), avail = new Set(moves.filter(x => known('fn:' + chapter().spanVars[x]) && spanNeeds().every(n => ks.has('fn:' + n))));
+  box.innerHTML = `<div class="eqhead"><span class="eqlabel">⏮⏭</span><b>Between two moments</b></div>${row('A')}${row('B')}
+    <div class="small">${spanReady() ? `From <b>${evText(sp.A)}</b> to ${sp.B.x === 't' ? '' : 'the first time after it that '}<b>${evText(sp.B)}</b>.` : 'Pick both moments: a time, or when θ, ω or α has a value (like “when ω = 0”).'}</div>
+    ${moves.length ? `<div class="act">${moves.map(x => avail.has(x) ? `<button class="go" data-span="${x}">Find ${VARS[x].sym} ▶</button>` : `<span class="small muted">${VARS[x].sym} needs ${[chapter().spanVars[x], ...spanNeeds()].filter((n, i, a) => a.indexOf(n) === i && !ks.has('fn:' + n)).map(n => VARS[n].sym + '(t)').join(' and ')} first (use the ladder).</span>`).join(' ')}</div>` : ''}`;
+  const commit = async (k, patch) => {
+    if (S.path.some(p => p.kind === 'span') && !await beforeClearing('Changing a moment')){ renderSpan(); return; }
+    if (S.path.some(p => p.kind === 'span')) clearDerived();
+    Object.assign(S.span[k], patch); renderAll(false);
+  };
+  for (const k of ['A', 'B']){
+    $(`span${k}x`).onchange = (e) => commit(k, { x: e.target.value, dir: 0 });
+    $(`span${k}v`).oninput = (e) => { if (!S.path.some(p => p.kind === 'span')) S.span[k].mag = e.target.value; }; // kept while typing, applied on change
+    $(`span${k}v`).onchange = (e) => {
+      const t = e.target.value.trim().replace(',', '.'), v = Number(t);
+      if (t !== '' && !isFinite(v)){ dialog('Not a number', '<b>SYNTAX ERROR</b>Type the size as a number, like <b>0</b> or <b>2.5</b>.'); return; }
+      if (v < 0){ if (S.span[k].x === 't'){ dialog('Before the start?', '<b>TIME CAN’T BE NEGATIVE HERE</b>The clock starts at t = 0, so pick a time of 0 or later.'); return; }
+        say('I flipped the direction for you: sizes are always positive, and the direction picker carries the sign.'); commit(k, { mag: String(-v), dir: 1 - S.span[k].dir }); return; }
+      commit(k, { mag: t });
+    };
+    const d = $(`span${k}d`); if (d) d.onchange = (e) => commit(k, { dir: +e.target.value });
+  }
+  box.querySelectorAll('[data-span]').forEach(b => b.onclick = () => { if (!S.busy) spanOp({ kind: 'span', v: b.dataset.span, from: chapter().spanVars[b.dataset.span] }); });
 }
 // Solve any equation with symbols, functions of time and numbers:
 // generated equations (Z = 0, linear in the unknown) and library equations whose inputs include functions of t.
@@ -1843,6 +2029,7 @@ function renderSliders(){
 // Each column is a given entered as a symbol; each row is one case. The problem is solved once with symbols,
 // then the answer is evaluated row by row, so every case comes from the same derivation.
 S.scen = { cols: [], rows: [] };
+S.span = newSpan();
 function scenValues(r){ // id → SI value for one row (symbols are sizes, so positive)
   const o = {};
   S.scen.cols.forEach((id, c) => { const x = Number(String(S.scen.rows[r][c]).replace(',', '.').replace('−', '-')); if (isFinite(x) && String(S.scen.rows[r][c]).trim() !== '') o[id] = Math.abs(x); });
@@ -1970,7 +2157,7 @@ function renderAll(full = true){
   if (full) renderUnit();
   $('checkRow').style.display = S.bank ? 'flex' : 'none';
   if (S.givens.inc && S.givens.inc.kind !== 'symbol' && S.givens.inc.val >= 5 && S.givens.inc.val <= 75 && Math.abs(S.build.theta - S.givens.inc.val) > 1e-9) S.build.theta = S.givens.inc.val;
-  renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
+  renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSpan(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
   $('calcCond').innerHTML = $('calcSolve').innerHTML = calcHTML();
   $('axisNote').innerHTML = S.ch === 'incline' && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice). Pick the direction for each vector; the app sets the sign.' : chapter().axis;
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();

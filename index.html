@@ -178,9 +178,9 @@
   .editor input{width:96px;font:14px var(--mono)}
   .editor .dirs button,.editor .kinds button{min-height:26px;padding:4px 9px;font-size:12px}
   .editor .fnrow{gap:4px;font:14px var(--mono)}
-  .editor .coef{display:inline-flex;flex-direction:column;align-items:center;gap:2px}
-  .editor .coef input{width:66px}
-  .editor .coef small{font:10.5px var(--mono);color:var(--muted)}
+  .editor #edFn{flex:1;min-width:0;font:15px var(--mono)}
+  .editor .fnprev{font:13px var(--mono);padding:6px 8px;background:rgba(0,0,0,.25);line-height:1.6}
+  .editor .fnprev.bad{color:var(--bad);font-family:inherit}
 
   /* conditions */
   .cgroup{margin-bottom:7px}
@@ -299,6 +299,10 @@
   .calc .rung small.s-given{color:var(--given)} .calc .rung small.s-found{color:var(--found)} .calc .rung small.s-target{color:var(--target)}
   .calc .link{flex:none;align-self:center;font:11px var(--mono);color:var(--gold)}
   .calc .back{font:11.5px/1.4 var(--ui);color:var(--muted);margin-top:4px}
+  .spancard .spanrow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:4px 0}
+  .spancard .spanlbl{width:40px;font-size:13px}
+  .spancard input{width:70px}
+  .spancard .act{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
   #sheet .eq .stepno{font:800 11px/1 var(--mono);padding:3px 6px;color:#2a1a04;background:var(--gold-hi)}
   #sheet .eq .uses{font-size:11.5px;color:var(--muted);margin-top:3px}
 
@@ -561,6 +565,7 @@
         <div class="targets" id="targets"></div>
         <div class="modes"><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="Gather what’s needed and walk the shortest path">Show me the path</button></div>
       </div>
+      <div class="eq spancard" id="spanCard" hidden></div>
       <div class="sheet-status" id="sheetStatus"></div>
       <div class="eqs" id="sheet"></div>
     </section>

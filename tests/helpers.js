@@ -134,7 +134,12 @@ export async function checkSetup(page){
 }
 
 // Enter a function of time through the editor: coefficients of t⁰, t¹, t², t³ (signed numbers, or a new symbol's name like 'k').
-export async function addFunction(page, id, coefs){
+// a function of time, typed in the one-box editor: a string like 'γ − βt²', or coefficients [c0, c1, c2 …] of tᵏ
+const SUPS = ['', '', '²', '³', '⁴', '⁵'];
+export const fnFromCoefs = (cs) => cs.map((c, k) => [c, k]).filter(([c]) => c !== '' && c !== 0 && c !== '0')
+  .map(([c, k], i) => { const neg = String(c).startsWith('-'), mag = String(c).replace(/^-/, ''), t = k ? 't' + SUPS[k] : '';
+    return `${neg ? (i ? ' − ' : '−') : i ? ' + ' : ''}${mag === '1' && k ? '' : mag}${/[A-Za-z]$/.test(mag) && t ? ' ' : ''}${t}`; }).join('');
+export async function addFunction(page, id, fn){
   await page.evaluate(async ({ id }) => {
     const { VARS, CHAPTERS } = await import('./js/data.js');
     const ch = CHAPTERS[window.__rl.ch], name = (ch.names && ch.names[id]) || VARS[id].name;
@@ -143,7 +148,7 @@ export async function addFunction(page, id, coefs){
     b.click();
   }, { id });
   await page.click('#editorSlot [data-kind="fn"]');
-  for (const [k, c] of coefs.entries()) await page.fill(`#editorSlot [data-coef="${k}"]`, String(c));
+  await page.fill('#edFn', Array.isArray(fn) ? fnFromCoefs(fn) : fn);
   await page.click('#edSave');
 }
 
