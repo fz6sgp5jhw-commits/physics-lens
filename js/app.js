@@ -375,6 +375,7 @@ function setCond(key, v){
   if (S.busy) return;
   if (key === 'upAxis' && !!S.cond.upAxis !== !!v) for (const [id, g] of Object.entries(S.givens)) if (g.from === 'you' && VARS[id].dir && g.kind !== 'fn'){ g.dir = 1 - g.dir; if (g.kind !== 'symbol') g.val = -g.val; }
   S.cond[key] = v; S.condOk = true; applyHidden(); clearDerived();
+  if (key === 'up' && S.build) for (const b of S.build.bodies()) if (b.frame === 'slope') S.build.setVec(b.id, 'v', v ? 'up-slope' : 'down-slope');
   S.sheet = S.sheet.filter(e => applies(e) || true);
   renderAll(false);
 }
@@ -548,7 +549,7 @@ function steps(){
     ['Unit', true], ['Givens', userGivens() > 0], ['Conditions', S.condOk], ['Gather', S.sheet.length > 0], ['Target', S.targets.length > 0], ['Path', S.targets.length > 0 && !curTarget()],
   ];
   const now = s.findIndex(x => !x[1]);
-  $('steps').innerHTML = s.map(([n, d], i) => `<span class="${d ? 'done' : i === now ? 'now' : ''}"><b>${i + 1}</b>${n}${d ? ' ✓' : ''}</span>`).join('<i class="sep">›</i>');
+  $('steps').innerHTML = s.map(([n, d], i) => `<span class="${d ? 'done' : i === now ? 'now' : ''}"><b>${i + 1}</b>${n}</span>`).join('<i class="sep">›</i>');
   if (now !== S.lastStep){
     const tips = { 1: 'Read your problem and add each quantity it gives you with the <b>+</b> buttons. Pick a direction for vectors.', 2: 'Now the <b>conditions</b>: friction or not, which way it moves, and any hidden givens like “starts from rest”.', 3: 'Look through the <b>library</b>. Equations that glow have one unknown left. <b>Gather</b> the ones you think you need.', 4: 'What does the question ask for? Add it as a <b>🎯 target</b> on your sheet.', 5: 'Build the path: solve a glowing equation on your sheet. Each answer can light up the next.' };
     if (tips[now] && S.lastStep !== -1) say(tips[now]);
@@ -1003,21 +1004,22 @@ function pointMark(ctx, x, y, name, color = '#fff'){
   hot({ kind: 'point', name, x, y, r: 26 });
 }
 function grid(ctx, Wd, Hd){
-  ctx.fillStyle = '#070b14'; ctx.fillRect(0, 0, Wd, Hd);
-  ctx.strokeStyle = 'rgba(122,190,255,.07)'; ctx.lineWidth = 1;
-  for (let x = 0; x < Wd; x += 40){ ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, Hd); ctx.stroke(); }
-  for (let y = 0; y < Hd; y += 40){ ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(Wd, y); ctx.stroke(); }
+  ctx.fillStyle = '#0b1036'; ctx.fillRect(0, 0, Wd, Hd);
+  // a pixel dot grid: small crosses at every 40 px, like graph paper drawn in starlight
+  ctx.fillStyle = 'rgba(135,150,255,.16)';
+  for (let x = 0; x <= Wd; x += 40) for (let y = 0; y <= Hd; y += 40){ ctx.fillRect(x - 1, y - 4, 3, 9); ctx.fillRect(x - 4, y - 1, 9, 3); }
 }
 // the moving body: a glowing block (ghost copies are drawn fainter)
 function body(ctx, x, y, w, h, rot = 0, alpha = 1){
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.globalAlpha *= alpha;
   ctx.shadowColor = 'rgba(255,107,214,.8)'; ctx.shadowBlur = 18 * alpha;
   ctx.fillStyle = 'rgba(255,107,214,.22)'; ctx.strokeStyle = '#ff6bd6'; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-w / 2, -h / 2, w, h, 6) : ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h); ctx.fill(); ctx.stroke();
   ctx.restore();
 }
 function fbdBox(ctx, x, y, w, h, title){
-  ctx.fillStyle = 'rgba(8,12,22,.92)'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = 'rgba(255,209,102,.7)'; ctx.lineWidth = 1.5; ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = 'rgba(9,13,42,.94)'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#c9973f'; ctx.lineWidth = 3; ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+  ctx.fillStyle = '#fff1b8'; for (const [cx, cy] of [[x + 3, y + 3], [x + w - 6, y + 3], [x + 3, y + h - 6], [x + w - 6, y + h - 6]]) ctx.fillRect(cx, cy, 3, 3);
   ctx.font = `19px ${MONO}`; ctx.fillStyle = '#ffd166'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(title, x + 10, y + 8); ctx.textBaseline = 'middle';
 }
 function caption(ctx, txt, Hd){ ctx.font = `19px ${MONO}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillText(txt, 20, Hd - 20); }
@@ -1232,7 +1234,7 @@ function drawWheel(ctx, v, k, T, now, tau, Wd, Hd){
 // ---------- graphs ----------
 function drawGraph(id, fn, T, labelTxt, color, tau, sub, shade){
   const cv = $(id), ctx = cv.getContext('2d'), Wd = cv.width, Hd = cv.height, L = 90, Rm = 24, Tp = 30, B = 42;
-  ctx.fillStyle = '#070b14'; ctx.fillRect(0, 0, Wd, Hd);
+  ctx.fillStyle = '#0b1036'; ctx.fillRect(0, 0, Wd, Hd);
   const N = 120, xs = Array.from({ length: N + 1 }, (_, i) => i * T / N), ys = xs.map(fn);
   let lo = Math.min(0, ...ys), hi = Math.max(0, ...ys); if (hi - lo < 1e-9){ hi += 1; lo -= 1; }
   const X = t => L + (t / T) * (Wd - L - Rm), Y = y => Tp + (1 - (y - lo) / (hi - lo)) * (Hd - Tp - B);
@@ -1390,9 +1392,29 @@ S.build = createBuild($('bd'), {
   // labels on the drawing: the symbol, and its value once it has one
   nameOf: (id) => { if (!VARS[id]) return id; const g = S.givens[id]; return g && g.kind !== 'symbol' ? `${VARS[id].plain} = ${fmt(g.mag)}${g.unit && g.unit !== 'no unit' ? (g.unit === '°' ? '°' : ' ' + g.unit) : ''}` : VARS[id].plain; },
   dirsFor: (b) => dirVectors(b),
-  forcesFor: (b) => forcesOf(b).map(f => ({ dir: f.dir, label: fLabel(b, f), color: FCOL[f.kind] })),
-  onArrow: (bodyId, dir, xy) => forcePicker(bodyId, dir, xy),
+  forcesFor: (b) => forcesOf(b).map(f => ({ dir: f.dir, vec: f.dir === 'custom' ? customVec(b, f.ang) : null, label: fLabel(b, f), color: FCOL[f.kind] })),
+  // a new arrow: with a force tool armed it becomes that force at once; otherwise the picker asks which force it is
+  onArrow: (bodyId, dir, xy, kind, vec) => {
+    const b = fbdBodies().find(x => x.id === bodyId); if (!b) return;
+    const where = dir ? { dir } : { dir: 'custom', ang: angleOf(b, vec) };
+    if (kind){ forcesOf(b).push({ kind, var: defaultVar(FKINDS[kind], b), ...where }); S.fbd.body = b.id; afterForces(); return; }
+    forcePicker(bodyId, where, xy);
+  },
   onArrowClick: (bodyId, i, xy) => forcePicker(bodyId, null, xy, i),
+  onArrowTurn: (bodyId, i, dir, vec) => {
+    const b = fbdBodies().find(x => x.id === bodyId), f = b && forcesOf(b)[i]; if (!f) return;
+    if (dir){ f.dir = dir; delete f.ang; } else { f.dir = 'custom'; f.ang = angleOf(b, vec); }
+    S.fbd.body = b.id; afterForces();
+  },
+  onArrowErase: (bodyId, i) => { const b = fbdBodies().find(x => x.id === bodyId); if (b){ forcesOf(b).splice(i, 1); afterForces(); } },
+  // the velocity arrow says which way it moves: on a slope it sets the "Moving" condition
+  onVector: (bodyId, k, dir) => {
+    const b = fbdBodies().find(x => x.id === bodyId); if (!b || k !== 'v' || b.frame !== 'slope') return;
+    if (dir === 'up-slope' || dir === 'down-slope'){ const up = dir === 'up-slope'; if (!!S.cond.up !== up && !S.busy){ S.cond.up = up; applyHidden(); clearDerived(); renderAll(false); say(`Your velocity arrow points <b>${up ? 'up' : 'down'} the slope</b>, so the condition “Moving” now says the same.`); } }
+    else if (dir) say('A sliding block’s velocity points along the slope. Drag the tip of <b>v</b> until it clicks onto the slope.');
+  },
+  snapshot: () => JSON.parse(JSON.stringify(S.fbd.forces)),
+  restore: (x) => { if (x) S.fbd.forces = x; if (S.dtab === 'forces'){ renderFBD(); renderForceChips(); } },
   onPropClick: (shapeId, prop) => { const sh = S.build.shapes.find(x => x.id === shapeId), id = sh && sh.props[prop]; if (id && VARS[id]) openEditor(id); },
 });
 // ---------- variables from the drawing ----------
@@ -1416,6 +1438,19 @@ function dirVectors(b){
   const num = (u) => u === '0' ? 0 : X.evalNum(X.parse(u), { inc: S.build.theta });
   return Object.entries(DIRS[b.frame] || DIRS.free).map(([key, d]) => { const us = num(d[0]), un = b.frame === 'hanging' ? 0 : num(d[1]); return { key, x: us * sAx[0] + un * nAx[0], y: us * sAx[1] + un * nAx[1] }; });
 }
+// a force at a custom angle: ang is measured from the body's ∥ axis toward its ⊥ axis, in degrees
+function frameAxes(b){
+  const th = (b.frame === 'slope' ? S.build.theta : 0) * Math.PI / 180;
+  return { s: b.frame === 'hanging' ? [0, 1] : [Math.cos(th), -Math.sin(th)], n: b.frame === 'hanging' ? [1, 0] : [-Math.sin(th), -Math.cos(th)] };
+}
+function angleOf(b, v){ const ax = frameAxes(b), cs = v.x * ax.s[0] + v.y * ax.s[1], sn = v.x * ax.n[0] + v.y * ax.n[1]; return Math.round(Math.atan2(sn, cs) * 180 / Math.PI); }
+function customVec(b, ang){ const ax = frameAxes(b), a = (ang || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); return { x: c * ax.s[0] + s * ax.n[0], y: c * ax.s[1] + s * ax.n[1] }; }
+const numTxt = (x) => Math.abs(x) < 1e-9 ? '0' : (x < 0 ? '−' : '') + String(+Math.abs(x).toFixed(4));
+// a force's direction as [∥ part, ⊥ part, words], named or custom
+function dirOf(b, f){
+  if (f.dir === 'custom'){ const a = (f.ang || 0) * Math.PI / 180; return [numTxt(Math.cos(a)), numTxt(Math.sin(a)), `${f.ang}° from the ∥ axis`]; }
+  return (DIRS[b.frame] || DIRS.free)[f.dir];
+}
 // the same direction on screen (for tests and the popover)
 S.fbdScreenDir = (b, key) => { const d = dirVectors(b).find(q => q.key === key), m = $('bd').getScreenCTM(); const x = m.a * d.x + m.c * d.y, y = m.b * d.x + m.d * d.y, n = Math.hypot(x, y); return { x: x / n, y: y / n }; };
 const FCOL = { gravity: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push: '#3ddc97', tension: '#ffffff', contact: '#c39bff' };
@@ -1423,7 +1458,8 @@ const FCOL = { gravity: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push:
 function forcePicker(bodyId, dir, xy, index = null){
   const b = fbdBodies().find(x => x.id === bodyId); if (!b) return;
   let pop = $('forcePick'); if (!pop){ pop = document.createElement('div'); pop.id = 'forcePick'; pop.className = 'pop'; document.body.appendChild(pop); }
-  const name = (DIRS[b.frame] || DIRS.free)[dir || forcesOf(b)[index].dir][2];
+  const where = typeof dir === 'string' ? { dir } : dir;
+  const name = dirOf(b, where || forcesOf(b)[index])[2];
   pop.innerHTML = `<div class="small muted">${index === null ? 'Which force is this?' : 'Change this force'} <span>(${name})</span></div>
     <div class="row">${Object.entries(FKINDS).map(([k, d]) => `<button data-fkind="${k}" style="border-color:${FCOL[k]}">${d.label}</button>`).join('')}</div>
     <div class="row">${index === null ? '' : '<button data-fdel="1">Remove it</button>'}<button data-fcancel="1">Cancel</button></div>`;
@@ -1431,11 +1467,11 @@ function forcePicker(bodyId, dir, xy, index = null){
   const close = () => { pop.hidden = true; };
   pop.querySelectorAll('[data-fkind]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.fkind, d = FKINDS[k];
-    if (index === null) forcesOf(b).push({ kind: k, var: defaultVar(d, b), dir });
+    if (index === null) forcesOf(b).push({ kind: k, var: defaultVar(d, b), ...where });
     else Object.assign(forcesOf(b)[index], { kind: k, var: defaultVar(d, b) });
     close(); S.fbd.body = b.id; afterForces();
   });
-  pop.querySelector('[data-fdel]')?.addEventListener('click', () => { forcesOf(b).splice(index, 1); close(); afterForces(); });
+  pop.querySelector('[data-fdel]')?.addEventListener('click', () => { S.build.checkpoint(); forcesOf(b).splice(index, 1); close(); afterForces(); });
   pop.querySelector('[data-fcancel]').onclick = close;
 }
 function afterForces(){ S.build.render(); renderFBD(); renderForceChips(); }
@@ -1458,18 +1494,76 @@ $('libBtn').onclick = () => setDrawer(!$('libDrawer').classList.contains('open')
 $('libClose').onclick = () => setDrawer(false);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setDrawer(false); });
 $('addGivenBtn').onclick = () => { const p = $('addPanel'); p.hidden = !p.hidden; $('addGivenBtn').setAttribute('aria-expanded', String(!p.hidden)); };
+// ---------- the drawing toolbar: two columns of pixel icons, like a classic Draw palette ----------
+const ico = (body) => `<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" shape-rendering="crispEdges">${body}</svg>`;
+const iArrow = (x1, y1, x2, y2, c, letter = '', lx = 3, ly = 18) => { const a = Math.atan2(y2 - y1, x2 - x1), h = 5; return `<line x1="${x1}" y1="${y1}" x2="${x2 - Math.cos(a) * 2}" y2="${y2 - Math.sin(a) * 2}" stroke="${c}" stroke-width="2.4"/><polygon points="${x2},${y2} ${x2 - h * Math.cos(a - 0.5)},${y2 - h * Math.sin(a - 0.5)} ${x2 - h * Math.cos(a + 0.5)},${y2 - h * Math.sin(a + 0.5)}" fill="${c}"/>${letter ? `<text x="${lx}" y="${ly}" font-family="ui-monospace,Menlo,monospace" font-size="9" font-weight="800" fill="${c}">${letter}</text>` : ''}`; };
+const ICONS = {
+  select: ico('<polygon points="5,2 5,16 8.5,12.5 11,18 13.5,17 11,11.5 16,11.5" fill="#e8edff" stroke="#090d2a" stroke-width="1"/>'),
+  erase: ico('<polygon points="2,12 9,5 17,13 12,18 8,18" fill="#ff8fa3"/><polygon points="2,12 5.5,8.5 13.5,16.5 12,18 8,18" fill="#e8edff"/>'),
+  undo: ico('<path d="M7 3 L3 7 L7 11 M3 7 H12 A5 5 0 0 1 12 17 H8" fill="none" stroke="#8796ff" stroke-width="2.4"/>'),
+  clear: ico('<path d="M4 4 L16 16 M16 4 L4 16" stroke="#ff8f50" stroke-width="3"/>'),
+  ramp: ico('<polygon points="2,17 18,17 18,5" fill="rgba(135,150,255,.35)" stroke="#8796ff" stroke-width="2"/>'),
+  block: ico('<rect x="4" y="6" width="12" height="10" fill="rgba(255,107,214,.35)" stroke="#ff6bd6" stroke-width="2"/>'),
+  ball: ico('<circle cx="10" cy="10" r="6.5" fill="rgba(255,107,214,.35)" stroke="#ff6bd6" stroke-width="2"/>'),
+  wheel: ico('<circle cx="10" cy="10" r="7.5" fill="none" stroke="#ff6bd6" stroke-width="2"/><path d="M10 3 V17 M3 10 H17" stroke="#ff6bd6" stroke-width="1.5"/>'),
+  table: ico('<rect x="2" y="6" width="16" height="3" fill="#8796ff"/><path d="M4.5 9 V18 M15.5 9 V18" stroke="#8796ff" stroke-width="2"/>'),
+  floor: ico('<path d="M1 11 H19" stroke="#8796ff" stroke-width="2.4"/><path d="M3 17 L6 12 M8 17 L11 12 M13 17 L16 12" stroke="#4a5bc4" stroke-width="1.5"/>'),
+  pulley: ico('<path d="M10 1 V5" stroke="#ffd98a" stroke-width="2"/><circle cx="10" cy="10" r="5" fill="#151d56" stroke="#ffd98a" stroke-width="2"/><path d="M5 10 V19 M15 10 V19" stroke="#e8edff" stroke-width="1.2"/>'),
+  string: ico('<path d="M3 17 L10 4 L17 17" fill="none" stroke="#e8edff" stroke-width="1.6"/><circle cx="10" cy="4" r="2" fill="#ffd98a"/>'),
+  vel: ico(iArrow(4, 15, 17, 4, '#9be15d', 'v', 11, 19)),
+  acc: ico(iArrow(4, 15, 17, 4, '#ff8f70', 'a', 11, 19)),
+  force: ico(iArrow(5, 15, 17, 3, '#ffffff', '?', 2, 9)),
+  com: ico('<circle cx="10" cy="10" r="7" fill="#e8edff" stroke="#090d2a" stroke-width="1.5"/><path d="M10 10 H17 A7 7 0 0 0 10 3 Z M10 10 H3 A7 7 0 0 0 10 17 Z" fill="#090d2a"/>'),
+  'f:gravity': ico(iArrow(12, 2, 12, 18, '#ffd166', 'W', 1, 10)),
+  'f:normal': ico(iArrow(12, 18, 12, 2, '#4fd1ff', 'N', 1, 12)),
+  'f:friction': ico(iArrow(18, 7, 3, 7, '#ff9f43', 'f', 8, 18)),
+  'f:tension': ico(iArrow(4, 17, 16, 3, '#ffffff', 'T', 12, 18)),
+  'f:push': ico(iArrow(2, 7, 17, 7, '#3ddc97', 'F', 6, 18)),
+  'f:contact': ico(iArrow(17, 7, 3, 7, '#c39bff', 'P', 8, 18) + '<rect x="16" y="3" width="3" height="9" fill="#c39bff"/>'),
+  incline: ico('<polygon points="1,18 19,18 19,6" fill="rgba(135,150,255,.35)" stroke="#8796ff" stroke-width="1.5"/><rect x="8" y="7" width="6" height="5" fill="#ff6bd6" transform="rotate(-34 11 10)"/>'),
+  tpulley: ico('<rect x="1" y="9" width="12" height="2" fill="#8796ff"/><rect x="5" y="5" width="5" height="4" fill="#ff6bd6"/><circle cx="15" cy="9" r="3" fill="none" stroke="#ffd98a" stroke-width="1.5"/><path d="M10 7 H15 M18 9 V14" stroke="#e8edff" stroke-width="1"/><rect x="16" y="14" width="4" height="4" fill="#ff6bd6"/>'),
+  blocks: ico('<path d="M1 17 H19" stroke="#8796ff" stroke-width="2"/><rect x="3" y="8" width="7" height="8" fill="#ff6bd6"/><rect x="10" y="10" width="6" height="6" fill="#c39bff"/>'),
+  twheel: ico('<circle cx="10" cy="10" r="8" fill="none" stroke="#ffd98a" stroke-width="2"/><circle cx="10" cy="10" r="2" fill="#ffd98a"/><path d="M10 2 V18 M2 10 H18" stroke="#ffd98a" stroke-width="1"/>'),
+};
+const TIPS = {
+  select: 'Select / move: drag shapes, drag the gold squares to resize, drag an arrow tip to turn it',
+  erase: 'Eraser: click a shape or an arrow to remove it', undo: 'Undo the last change', clear: 'Clear the whole drawing',
+  ramp: 'Ramp: drag the round handle for the angle, the square one for the length', block: 'Block: lands on the newest surface; drag its gold corner to resize', ball: 'Ball (mass m, radius r)', wheel: 'Wheel (radius r)',
+  table: 'Table (flat surface)', floor: 'Floor', pulley: 'Pulley: snaps to the top corner of a table or ramp', string: 'String: joins the last bodies over a pulley',
+  vel: 'Velocity v: drag out from a body; on a slope it sets which way it moves', acc: 'Acceleration a: drag out from a body to show which way it speeds up',
+  force: 'Force: drag out from a body, then say which force it is', com: 'Centre of mass: click or drag inside a body to set where the forces act (⊕)',
+  'f:gravity': 'Gravity W = mg: drag out from a body', 'f:normal': 'Normal force N: drag out from a body', 'f:friction': 'Friction f: drag out from a body',
+  'f:tension': 'Tension T: drag out from a body', 'f:push': 'Push / pull F: drag out from a body', 'f:contact': 'Contact force P (from the other block): drag out from a body',
+  incline: 'Preset: block on an incline', tpulley: 'Preset: table, pulley and hanging block', blocks: 'Preset: two blocks side by side', twheel: 'Preset: a wheel',
+};
+const tbBtn = (attrs, key, on = false) => `<button class="tb" ${attrs} title="${TIPS[key]}" aria-label="${TIPS[key].split(':')[0]}" aria-pressed="${on}">${ICONS[key]}</button>`;
 function renderBuildUI(){
-  $('bpal').hidden = S.dtab === 'forces'; // drawing forces: the shapes stay as they are
-  $('bpal').innerHTML = `<span class="small"><b>Add:</b></span>${PALETTE.map(k => `<button data-bshape="${k}">${S.build.KINDS[k].label}</button>`).join('')}
-    <span class="small" style="margin-left:8px"><b>Templates:</b></span><button data-template="incline">Incline</button><button data-template="pulley">Pulley</button><button data-template="blocks">Two blocks</button><button data-template="wheel">Wheel</button>`;
-  $('bpal').querySelectorAll('[data-bshape]').forEach(b => b.onclick = () => S.build.add(b.dataset.bshape));
-  $('bpal').querySelectorAll('[data-template]').forEach(b => b.onclick = () => S.build.template(b.dataset.template));
-  const s = S.build.selected(), box = $('bprops');
-  if (!s){ box.innerHTML = '<span class="small muted">Drag shapes; blocks and balls snap onto ramps, tables and the floor. Drag the yellow handle to change the ramp angle. Click a shape to name its properties.</span>'; return; }
+  const forces = S.dtab === 'forces', tool = S.build.tool;
+  const T = (k) => tbBtn(`data-tool="${k}"`, k, tool === k);
+  const sep = '<i class="tsep" aria-hidden="true"></i>';
+  const act = (k) => tbBtn(`data-act="${k}"`, k);
+  $('bpal').hidden = false;
+  $('bpal').innerHTML = forces
+    ? `${T('force')}${T('erase')}${act('undo')}${T('com')}${sep}${Object.keys(FKINDS).map(k => T('f:' + k)).join('')}`
+    : `${T('select')}${T('erase')}${act('undo')}${act('clear')}${sep}${['ramp', 'block', 'ball', 'wheel', 'table', 'floor', 'pulley', 'string'].map(k => tbBtn(`data-bshape="${k}"`, k)).join('')}${sep}${T('vel')}${T('acc')}${sep}`
+      + [['incline', 'incline'], ['pulley', 'tpulley'], ['blocks', 'blocks'], ['wheel', 'twheel']].map(([t, k]) => tbBtn(`data-template="${t}"`, k)).join('');
+  $('bpal').querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { S.build.tool = b.dataset.tool; renderBuildUI(); });
+  $('bpal').querySelectorAll('[data-bshape]').forEach(b => b.onclick = () => { S.build.tool = 'select'; S.build.add(b.dataset.bshape); });
+  $('bpal').querySelectorAll('[data-template]').forEach(b => b.onclick = () => { S.build.tool = 'select'; S.build.template(b.dataset.template); });
+  $('bpal').querySelector('[data-act="undo"]').onclick = () => { if (!S.build.undo()) say('Nothing to undo.'); };
+  $('bpal').querySelector('[data-act="clear"]')?.addEventListener('click', () => S.build.clear());
+  const box = $('bprops');
+  if (forces){
+    const b = fbdBody();
+    box.innerHTML = `<span class="small muted">${tool.startsWith('f:') ? `<b>${FKINDS[tool.slice(2)].label}</b>: drag out from a body.` : tool === 'com' ? '<b>Centre of mass</b>: click inside a body.' : tool === 'erase' ? '<b>Eraser</b>: click an arrow.' : 'Drag out from a body to draw a force.'} Drag an arrow’s <b>tip</b> to turn it: it clicks onto the named directions. Click an arrow to change it.${b ? ` Forces act at ⊕ on <b>${bodyName(b) === b.kind ? S.build.KINDS[b.kind].label.toLowerCase() : bodyName(b)}</b>.` : ''}</span>`;
+    return;
+  }
+  const s = S.build.selected();
+  if (!s){ box.innerHTML = `<span class="small muted">${tool === 'vel' || tool === 'acc' ? `Drag out from a body to draw its <b>${tool === 'vel' ? 'velocity' : 'acceleration'}</b>.` : 'Pick a shape from the toolbar. Bodies land on the newest surface. Click a shape for its handles; click a label to name it.'}</span>`; return; }
   const massOpts = ['m', 'm1', 'm2', 'mA', 'mB'].map(id => `<option value="${id}" ${s.props.mass === id ? 'selected' : ''}>${VARS[id].plain}</option>`).join('');
   let html = `<b>${S.build.KINDS[s.kind].label}</b>`;
   if ('mass' in s.props) html += `<label>mass <select data-bprop="mass">${massOpts}</select></label>`;
-  if ('angle' in s.props) html += `<span>angle: ${VARS.inc.plain} (${Math.round(S.build.theta)}° in the picture)</span>`;
+  if ('angle' in s.props) html += `<span>angle ${VARS.inc.plain}: ${Math.round(S.build.theta)}° in the picture · drag ● to tilt, ■ to stretch</span>`;
   if ('friction' in s.props) html += `<label><input type="checkbox" data-bprop="friction" ${s.props.friction ? 'checked' : ''}> rough surface (friction)</label>`;
   const c = S.build.contacts().find(x => x.bodyId === s.id);
   if (c) html += `<span class="small muted">touches the ${c.surface}</span>`;
@@ -1511,7 +1605,7 @@ const defaultVar = (d, b) => { if (!d.vars) return null; const sfx = (massOf(b).
 function fMag(b, f){ return f.kind === 'gravity' ? `{${massOf(b)}}{g}` : `{${f.var}}`; }
 // a force's components (s, n) as rationals in symbols, in the body's frame and with the student's axis choice
 function components(b, f){
-  const fr = DIRS[b.frame] || DIRS.free, d = fr[f.dir]; if (!d) return null;
+  const d = dirOf(b, f); if (!d) return null;
   const flip = b.frame === 'slope' && !S.cond.upAxis ? -1 : 1;
   const comp = (u, sg) => u === '0' ? null : `${sg < 0 ? '−' : ''}(${fMag(b, f)})(${u})`;
   const ids = (str) => [...str.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
@@ -1593,7 +1687,7 @@ function drawFBD(b){
   svg += `<line x1="${cx}" y1="${cy}" x2="${cx + sAx[0] * 150}" y2="${cy + sAx[1] * 150}" stroke="#555" stroke-dasharray="4 4"/><line x1="${cx}" y1="${cy}" x2="${cx + nAx[0] * 120}" y2="${cy + nAx[1] * 120}" stroke="#555" stroke-dasharray="4 4"/>`;
   const cols = { gravity: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push: '#3ddc97', tension: '#ffffff', contact: '#c39bff' };
   for (const f of fs){
-    const d = (DIRS[b.frame] || DIRS.free)[f.dir]; if (!d) continue;
+    const d = dirOf(b, f); if (!d) continue;
     const us = num(d[0]), un = num(d[1]), dx = us * sAx[0] + un * nAx[0], dy = us * sAx[1] + un * nAx[1];
     const x2 = cx + dx * L, y2 = cy + dy * L, a = Math.atan2(dy, dx);
     svg += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="${cols[f.kind]}" stroke-width="4"/><polygon points="${x2},${y2} ${x2 - 12 * Math.cos(a - 0.4)},${y2 - 12 * Math.sin(a - 0.4)} ${x2 - 12 * Math.cos(a + 0.4)},${y2 - 12 * Math.sin(a + 0.4)}" fill="${cols[f.kind]}"/>`;
@@ -1608,7 +1702,7 @@ function renderFBD(){
   const varOpts = (f) => FKINDS[f.kind].vars ? FKINDS[f.kind].vars.filter(id => chVars().includes(id) || id === f.var).map(id => `<option value="${id}" ${f.var === id ? 'selected' : ''}>${VARS[id].plain}: ${nm(id)}</option>`).join('') : '';
   const rows = fs.map((f, i) => `<div class="frow"><b>${FKINDS[f.kind].label}</b>
       ${f.kind === 'gravity' ? `<span>${fLabelHTML(b, f)}</span>` : `<select data-fvar="${i}">${varOpts(f)}</select>`}
-      <select data-fdir="${i}">${Object.entries(fr).map(([k, d]) => `<option value="${k}" ${f.dir === k ? 'selected' : ''}>${d[2]}</option>`).join('')}</select>
+      <select data-fdir="${i}">${Object.entries(fr).map(([k, d]) => `<option value="${k}" ${f.dir === k ? 'selected' : ''}>${d[2]}</option>`).join('')}${f.dir === 'custom' ? `<option value="custom" selected>${dirOf(b, f)[2]}</option>` : ''}</select>
       <button data-fdel="${i}" title="Remove">×</button></div>`).join('');
   let table = '';
   const comps = fs.map(f => ({ f, c: components(b, f) })).filter(x => x.c);
@@ -1616,7 +1710,7 @@ function renderFBD(){
     `<tr><td>${fLabelHTML(b, f)}</td><td>${ratHTML(X.toRat(X.parse(fMag(b, f)), symEnv([...fMag(b, f).matchAll(/\{(\w+)\}/g)].map(m => m[1]))))}</td><td>${c.s ? ratHTML(c.sR) : '0'}</td><td>${b.frame === 'hanging' ? '–' : c.n ? ratHTML(c.nR) : '0'}</td></tr>`).join('')}</table>`;
   const axis = b.frame === 'slope' ? `Axes: ∥ along the slope, + ${S.cond.upAxis ? 'up' : 'down'} the slope (step 2); ⊥ perpendicular, + out of the surface.` : b.frame === 'flat' ? `Axes: ∥ horizontal, + ${S.ch === 'pulley' ? 'toward the pulley' : 'forward'}; ⊥ vertical, + up.` : b.frame === 'hanging' ? 'Axis: vertical, + down (the way it moves when m₂ falls).' : 'Axis: vertical, + up.';
   box.innerHTML = `${bs.length > 1 ? `<div class="frow"><b>Body:</b> <select id="fbdBody">${bs.map(x => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${bodyName(x) === x.kind ? S.build.KINDS[x.kind].label : bodyName(x)} (${VARS[massOf(x)].plain})${x.hanging ? ', hanging' : ''}</option>`).join('')}</select></div>` : ''}
-    <div class="small">${axis} Drag from the body on the canvas to draw a force, or use the buttons.</div>
+    <div class="small">${axis} Draw forces with the toolbar beside the canvas (drag a tip to turn one), or add them here.</div>
     <div class="fadd"><span class="small"><b>Add a force:</b></span>${Object.entries(FKINDS).map(([k, d]) => `<button data-addforce="${k}">${d.label}</button>`).join('')}</div>
     ${rows || '<div class="small muted">No forces yet. Which things touch or pull on this body?</div>'}
     ${table}
@@ -1626,11 +1720,11 @@ function renderFBD(){
   box.querySelectorAll('[data-addforce]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.addforce, d = FKINDS[k];
     const v = defaultVar(d, b), dir = d.dir(b.frame, b);
-    forcesOf(b).push({ kind: k, var: v, dir: dir in fr ? dir : Object.keys(fr)[0] }); afterForces();
+    S.build.checkpoint(); forcesOf(b).push({ kind: k, var: v, dir: dir in fr ? dir : Object.keys(fr)[0] }); afterForces();
   });
   box.querySelectorAll('[data-fvar]').forEach(sel => sel.onchange = () => { fs[+sel.dataset.fvar].var = sel.value; afterForces(); });
-  box.querySelectorAll('[data-fdir]').forEach(sel => sel.onchange = () => { fs[+sel.dataset.fdir].dir = sel.value; afterForces(); });
-  box.querySelectorAll('[data-fdel]').forEach(btn => btn.onclick = () => { fs.splice(+btn.dataset.fdel, 1); afterForces(); });
+  box.querySelectorAll('[data-fdir]').forEach(sel => sel.onchange = () => { S.build.checkpoint(); const f = fs[+sel.dataset.fdir]; f.dir = sel.value; if (sel.value !== 'custom') delete f.ang; afterForces(); });
+  box.querySelectorAll('[data-fdel]').forEach(btn => btn.onclick = () => { S.build.checkpoint(); fs.splice(+btn.dataset.fdel, 1); afterForces(); });
   const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; };
   $('fbdCheck').onclick = () => { const bad = fbdCheck(b); msg(bad.length ? bad.map(x => '✗ ' + x).join('<br>') : '✓ This free-body diagram looks right: every force has a source, and each one points the way it must.', !bad.length); };
   $('fbdWrite').onclick = () => {
