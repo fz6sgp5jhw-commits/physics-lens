@@ -32,7 +32,7 @@ Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dep
 ## Data and safety
 - All data stays on the student's device. No accounts, analytics, trackers, third-party scripts, CDNs or network calls except loading the app's own files.
 - Stored data: `localStorage` only, keys prefixed `pl-` (the existing `rl-calm` key is the exception), always inside `try/catch`, JSON validated on read, and never anything identifying a student. Any new stored data needs a visible way to clear it.
-- Text the user types or pastes (problem text, symbol names, coefficients) is untrusted: never put it into `innerHTML` unescaped; use `textContent` or a shared `esc()` helper (phase 1 adds it). No `eval`, `new Function` or inline event handlers.
+- Text the user types or pastes (problem text, symbol names, coefficients) is untrusted: never put it into `innerHTML` unescaped; use `textContent` or the shared `esc()` helper in `app.js`. No `eval`, `new Function` or inline event handlers.
 - `sw.js` caches only same-origin GET requests. When any cached file changes, bump the cache name in `sw.js`.
 
 ## Code style
