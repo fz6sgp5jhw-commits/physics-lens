@@ -4,7 +4,10 @@ import * as X from './expr.js';
 import { createField } from './field.js';
 
 const $ = (id) => document.getElementById(id);
-const field = createField(document.getElementById('fieldArrows'), document.getElementById('fieldTrails'));
+// text the student typed or pasted is escaped before it goes into HTML
+const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = (t) => String(t ?? '').replace(/[&<>"']/g, c => ESC[c]);
+const field = createField($('fieldArrows'), $('fieldTrails'));
 const S = window.__rl = {
   ch: 'incline', cond: {}, condOk: false, givens: {}, found: {}, funcs: {}, gen: {}, custom: [], samples: {}, targets: [], sheet: [], path: [],
   bank: null, editing: null, focus: [], hot: [], hover: null, busy: false, sound: false, anim: false, inspectName: null, lastStep: 0,
@@ -218,7 +221,8 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ $('dlg').
 
 // ---------- chapter / reset ----------
 function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false, earth: true } : ch === 'pulley' || ch === 'blocks' ? { friction: ch === 'blocks', earth: true } : { rim: false, varA: false }; }
-function switchChapter(ch){ S.ch = ch; S.cond = defaultsFor(ch); resetAll(false); }
+// the drawing stays when the unit changes; its quantities come back as givens if the new unit uses them
+function switchChapter(ch){ S.ch = ch; S.cond = defaultsFor(ch); resetAll(false); if (S.build) syncDrawingGivens(); }
 function resetAll(keepText = true){
   dropGenerated(() => true); S.custom = []; S.samples = {}; if (S.scen) S.scen = { cols: [], rows: [] };
   S.givens = {}; S.found = {}; S.funcs = {}; S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null;
@@ -227,7 +231,7 @@ function resetAll(keepText = true){
   applyHidden(); clearWork(); resetInspector();
 }
 function clearDerived(){ S.found = {}; S.path = []; for (const [id, f] of Object.entries(S.funcs)) if (f.from !== 'given') delete S.funcs[id]; clearWork(); }
-function clearWork(){ $('work').innerHTML = '<div class="empty">Gather equations onto your sheet, pick a target, then solve a glowing equation. Its algebra appears here, one step at a time.</div>'; $('workTitle').textContent = '6. Work'; }
+function clearWork(){ $('work').innerHTML = '<div class="empty">Gather equations onto your sheet, pick a target, then solve a glowing equation. Its algebra appears here, one step at a time.</div>'; $('workTitle').textContent = 'Work'; }
 
 // hidden givens that come from conditions (“starts from rest” → v₀ = 0)
 function applyHidden(){
@@ -250,8 +254,6 @@ function renderUnit(){
     b.onclick = () => { if (S.busy || id === S.ch) return; switchChapter(id); renderAll(); say(`Unit: <b>${c.title}</b>. The library and the quantity palette now match it.`); };
     p.appendChild(b);
   }
-  $('axisNote').innerHTML = S.ch === 'incline' && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice in step 2). Pick the direction for each vector; the lab sets the sign.' : chapter().axis;
-  $('checkRow').style.display = S.bank ? 'flex' : 'none';
   $('bankTitle').textContent = S.bank ? `Practice: ${S.bank.title}` : '';
 }
 function describe(id, g){
@@ -300,18 +302,18 @@ function renderEditor(){
   if (!S.editing){ slot.innerHTML = ''; return; }
   const { id, mag, unit, dir, kind } = S.editing, d = VARS[id];
   slot.innerHTML = `<div class="editor"><div><b>${d.sym}</b>: ${nm(id)}</div>
-    ${S.editing.moment ? `<div class="erow small">Its value <b>at the moment the question asks about</b>. The lab finds the time t when it has this value.</div>` : ''}
+    ${S.editing.moment ? `<div class="erow small">Its value <b>at the moment the question asks about</b>. The app finds the time t when it has this value.</div>` : ''}
     <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button><button data-kind="scenario" aria-pressed="${kind === 'scenario'}" title="Different values in different cases">Scenario table</button>${canFn(id) ? `<button data-kind="fn" aria-pressed="${kind === 'fn'}">Function of t</button>` : ''}</div>
     ${kind === 'fn'
-      ? `<div class="erow fnrow"><b>${d.sym}(t) =</b> ${[0, 1, 2, 3].map(k => `${k ? '+' : ''} <span class="coef"><input data-coef="${k}" type="text" inputmode="decimal" value="${S.editing.coefs[k]}" placeholder="0"><small>${unitPer(id, k)}</small></span>${k ? ` t${SUPN[k]}` : ''}`).join(' ')}</div>
+      ? `<div class="erow fnrow"><b>${d.sym}(t) =</b> ${[0, 1, 2, 3].map(k => `${k ? '+' : ''} <span class="coef"><input data-coef="${k}" type="text" inputmode="decimal" value="${esc(S.editing.coefs[k])}" placeholder="0"><small>${unitPer(id, k)}</small></span>${k ? ` t${SUPN[k]}` : ''}`).join(' ')}</div>
          <div class="erow small">Type each coefficient with its sign (+ is ${dr(id) ? dr(id)[0] : 'positive'}), or a letter for a constant you don’t know (like <b>k</b>). Leave a box empty for 0. Each one has its own unit, shown under it.</div>`
       : kind === 'scenario'
-      ? `<div class="erow small">Its value changes from case to case: it becomes a column of the scenario table (step 1), and the problem is solved with <b>${d.sym}</b> as a symbol.</div>`
+      ? `<div class="erow small">Its value changes from case to case: it becomes a column of the scenario table under the givens, and the problem is solved with <b>${d.sym}</b> as a symbol.</div>`
       : kind === 'symbol'
       ? `<div class="erow small">No number: you’ll get the answer in symbols, with <b>${d.sym}</b> in it. Its unit is ${d.unit || 'none'}.</div>`
-      : `<div class="erow"><input id="edVal" type="text" inputmode="decimal" value="${mag}" placeholder="size"><select id="edUnit">${Object.keys(d.units).map(u => `<option ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`}
+      : `<div class="erow"><input id="edVal" type="text" inputmode="decimal" value="${esc(mag)}" placeholder="size"><select id="edUnit">${Object.keys(d.units).map(u => `<option ${u === unit ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`}
     ${dr(id) && kind !== 'fn' ? `<div class="erow dirs">Direction: ${dr(id).map((w, i) => `<button data-dir="${i}" aria-pressed="${i === dir}">${w} (${i ? '−' : '+'})</button>`).join('')}</div>` : ''}
-    <div class="erow"><button class="go" id="edSave">Add known</button><button id="edCancel">Cancel</button>${S.targets.includes(id) ? '<span class="small" style="color:#a00">This is one of your targets: adding it as a known removes it.</span>' : ''}</div></div>`;
+    <div class="erow"><button class="go" id="edSave">Add known</button><button id="edCancel">Cancel</button>${S.targets.includes(id) ? '<span class="small warn">This is one of your targets: adding it as a known removes it.</span>' : ''}</div></div>`;
   const keep = () => { if ($('edVal')){ S.editing.mag = $('edVal').value; S.editing.unit = $('edUnit').value; } slot.querySelectorAll('[data-coef]').forEach(i => { S.editing.coefs[+i.dataset.coef] = i.value; }); };
   slot.querySelectorAll('[data-dir]').forEach(b => b.onclick = () => { keep(); S.editing.dir = +b.dataset.dir; renderEditor(); });
   slot.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { keep(); S.editing.kind = b.dataset.kind; renderEditor(); });
@@ -393,7 +395,7 @@ function renderLibrary(){
     let html = `<h3>${active ? 'UNIT' : 'OTHER UNIT'}: ${ch.title.toUpperCase()}</h3>`;
     if (active){
       html += `<div class="intro">${ch.intro}</div>`;
-      if (!ready) html += `<div class="sheet-status">${!Object.keys(S.givens).length ? 'Add your knowns (step 1) and' : ''} ${!S.condOk ? 'confirm the conditions (step 2)' : ''} to see which equations apply and which glow.</div>`;
+      if (!ready) html += `<div class="sheet-status">${!Object.keys(S.givens).length ? 'Add your givens and' : ''} ${!S.condOk ? 'confirm the conditions' : ''} to see which equations apply and which glow.</div>`;
     }
     for (const sec of ch.sections){
       html += `<div class="section-h">${sec.title}</div><div class="section-n">${sec.note}</div>`;
@@ -402,10 +404,10 @@ function renderLibrary(){
         let cls = 'lib-eq', status;
         if (!active){ status = ''; cls += ' na'; }
         else if (!S.condOk){ status = `<span>only if ${eq.condition}</span>`; }
-        else if (!applies(e)){ cls += ' na'; status = `<span style="color:#a00">doesn’t apply here: needs ${naReason(e)}</span>`; }
+        else if (!applies(e)){ cls += ' na'; status = `<span class="warn">doesn’t apply here: needs ${naReason(e)}</span>`; }
         else {
           const u = unknownsOf(e, ks), s = solvable(e, ks);
-          if (ready && s){ cls += ' lit'; status = `<span style="color:var(--hot)">★ 1 unknown: ${VARS[s].sym}</span>`; }
+          if (ready && s){ cls += ' lit'; status = `<span class="hot">★ 1 unknown: ${VARS[s].sym}</span>`; }
           else if (u.length === 0) status = '<span>all known</span>';
           else if (u.length === 1) status = `<span>1 unknown, but ${VARS[u[0]].sym} can’t be isolated here</span>`;
           else status = `<span>${u.length} unknowns: ${u.map(x => VARS[x].sym).join(', ')}</span>`;
@@ -430,7 +432,7 @@ function renderLibrary(){
 function gather(e){
   if (S.busy) return;
   if (S.sheet.includes(e)){ S.sheet = S.sheet.filter(x => x !== e); renderAll(false); return; }
-  if (S.condOk && !applies(e)){ dialog('Illegal operation', `<b>DOESN’T APPLY HERE</b>${EQS[e].label} only holds when: <b>${EQS[e].condition}</b>. Your conditions say otherwise, so using it would give a wrong answer. Check step 2 if you think the conditions are wrong.`); return; }
+  if (S.condOk && !applies(e)){ dialog('Illegal operation', `<b>DOESN’T APPLY HERE</b>${EQS[e].label} only holds when: <b>${EQS[e].condition}</b>. Your conditions say otherwise, so using it would give a wrong answer. Check the conditions if you think they are wrong.`); return; }
   S.sheet.push(e); beep(990, 0.05); renderAll(false);
 }
 
@@ -483,7 +485,7 @@ function ladderCard(L, ks){
   };
   const missing = L.rungs.slice(1).map((x, i) => [L.rungs[i], x]).filter(([hi, lo]) => S.funcs[lo] && !S.funcs[hi] && L.start[hi] && !ks.has(L.start[hi])).map(([hi]) => `To go up to ${VARS[hi].sym}(t) with ∫dt you need the start value ${VARS[L.start[hi]].sym}.`);
   card.innerHTML = `<div class="eqhead"><span class="eqlabel">LADDER</span><span class="cond">${S.cond.varA ? 'acceleration varies with time' : 'functions of time'}</span></div>
-    <div class="ladderbody">${L.rungs.map(rung).join('')}</div>${missing.length ? `<div class="small" style="color:#a00">${missing.join(' ')}</div>` : ''}`;
+    <div class="ladderbody">${L.rungs.map(rung).join('')}</div>${missing.length ? `<div class="small warn">${missing.join(' ')}</div>` : ''}`;
   card.querySelectorAll('[data-move]').forEach(b => b.onclick = () => { if (!S.busy) ladderOp(mv[+b.dataset.move]); });
   return card;
 }
@@ -502,9 +504,9 @@ function renderSheet(){
     card.className = 'eq ' + (!ok ? 'dim' : (s || fu) ? 'lit' : u.length === 0 ? 'done' : 'dim') + (S.focus.length ? (rel ? ' rel' : ' faded') : '');
     card.dataset.eq = e;
     let act;
-    if (!ok) act = `<span class="small" style="color:#a00">Doesn’t apply now (needs ${naReason(e)})</span>`;
-    else if (s) act = `<button class="go" data-solve="${s}">Solve for ${VARS[s].sym} ▶</button>${s === curTarget() ? '<span class="small" style="color:var(--hot)">← target!</span>' : ''}`;
-    else if (fu) act = `<button class="go" data-solve="fn:${fu}">Solve for ${symOf('fn:' + fu)} ▶</button>${'fn:' + fu === curTarget() ? '<span class="small" style="color:var(--hot)">← target!</span>' : ''}`;
+    if (!ok) act = `<span class="small warn">Doesn’t apply now (needs ${naReason(e)})</span>`;
+    else if (s) act = `<button class="go" data-solve="${s}">Solve for ${VARS[s].sym} ▶</button>${s === curTarget() ? '<span class="small hot">← target!</span>' : ''}`;
+    else if (fu) act = `<button class="go" data-solve="fn:${fu}">Solve for ${symOf('fn:' + fu)} ▶</button>${'fn:' + fu === curTarget() ? '<span class="small hot">← target!</span>' : ''}`;
     else if (u.length === 0) act = `<button data-check="1">Check ✓</button><span class="small muted">All known.</span>`;
     else act = `<span class="small muted">Still missing: ${u.filter(x => !ks.has('fn:' + x)).map(x => VARS[x].sym).join(', ')}</span>`;
     const got = S.path.filter(p => p.kind === 'eq' && p.eq === e).map(p => `→ ${symOf(p.v)} = ${isFn(p.v) ? polyHTML(p.poly) : p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`}`);
@@ -537,7 +539,7 @@ function renderSheet(){
     const sys = findSystem(ks);
     if (sys){
       const [A, B] = sys.pair.map(x => VARS[x].sym), la = EQS[sys.a].label, lb = EQS[sys.b].label;
-      st.innerHTML += `<div style="margin-top:6px;color:#fff;background:#3a0ca3;padding:6px 8px">🧩 ${la} and ${lb} share the same two unknowns, ${A} and ${B}: that’s a <b>system of two equations</b>. Solve ${la} for one of them and substitute it into ${lb}: it drops out, leaving one equation with one unknown. <button class="go" id="sysBtn" style="margin-left:4px">Combine them ▶</button></div>`;
+      st.innerHTML += `<div class="sysnote">🧩 ${la} and ${lb} share the same two unknowns, ${A} and ${B}: that’s a <b>system of two equations</b>. Solve ${la} for one of them and substitute it into ${lb}: it drops out, leaving one equation with one unknown. <button class="go" id="sysBtn" style="margin-left:4px">Combine them ▶</button></div>`;
       $('sysBtn').onclick = () => combine(sys);
     }
   }
@@ -586,25 +588,52 @@ function randomSymbols(ids){
   for (const id of ids) o[id] = id === 'inc' ? 15 + 50 * Math.random() : SAMPLE[id] * (0.6 + 0.8 * Math.random());
   return o;
 }
-// Re-run the whole path with plain numbers at the random values (templates only, no simplifier)
-// and compare with the simplified symbolic answer at the same values.
-function checkWithNumbers(R, tree, branch){
+// Re-run the whole path with plain numbers at random values for the symbols (templates only, no simplifier)
+// and compare with the simplified symbolic answer at the same values. last(v, fns, rnd) → [stepwise, simplified, extra text].
+function checkWithNumbers(last){
   const syms = Object.keys(S.givens).filter(isSymGiven);
   for (let tries = 0; tries < 6; tries++){
     const rnd = randomSymbols(syms);
     try {
-      const v = {};
+      const v = {}, fns = {};
       for (const [id, g] of Object.entries(S.givens)) v[id] = g.kind === 'symbol' ? (g.dir ? -1 : 1) * rnd[id] : g.val;
-      const fns = {};
       for (const [id, f] of Object.entries(S.funcs)) if (f.from === 'given') fns[id] = f.poly.map(c => X.evalRat(c, rnd));
       for (const p of S.path) routeStep(p, v, fns);
-      const stepwise = X.evalNum(tree, v, branch), simplified = X.evalRat(R, rnd);
+      const [stepwise, simplified, extra = ''] = last(v, fns, rnd);
       if (!isFinite(stepwise) || !isFinite(simplified)) continue;
-      const ok = Math.abs(stepwise - simplified) <= 1e-6 * Math.max(1, Math.abs(stepwise));
-      return { ok, rnd, stepwise, simplified };
+      return { ok: Math.abs(stepwise - simplified) <= 1e-6 * Math.max(1, Math.abs(stepwise)), rnd, stepwise, simplified, extra };
     } catch (e){ if (!(e instanceof X.MathError)) throw e; }
   }
   return null;
+}
+function checkText(c){
+  if (!c) return 'Couldn’t find random values that work for every step, so no numeric check this time.';
+  const at = Object.entries(c.rnd).map(([id, x]) => `${VARS[id].plain} = ${fmt(x)}${id === 'inc' ? '°' : unitOf(id) ? ' ' + unitOf(id) : ''}`).join(', ') + c.extra;
+  return c.ok ? `✓ At random values (${at}), working step by step with numbers gives ${fmt(c.stepwise)} and the simplified answer gives ${fmt(c.simplified)}.`
+    : `✗ At ${at} the step-by-step numbers give ${fmt(c.stepwise)} but the simplified answer gives ${fmt(c.simplified)}. The simplifier slipped: please report this problem.`;
+}
+// ---------- the work panel: every kind of step writes its algebra here ----------
+function startWork(title, heading){
+  $('workTitle').textContent = title;
+  $('work').innerHTML = ''; workBlock('section', heading, true);
+  $('workWin').scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'nearest' });
+}
+function workBlock(cls, content, asText = false){
+  const d = document.createElement('div'); d.className = cls;
+  if (asText) d.textContent = content; else d.innerHTML = content;
+  $('work').appendChild(d); return d;
+}
+// one line of algebra (with its reason, if any), revealed with a tick
+async function workLine(html, why){
+  const d = workBlock('line', why === undefined ? html : `${html}<span class="why">${why}</span>`);
+  paintSyms(); await sleep(30); d.classList.add('show'); beep(880, 0.04); await sleep(400);
+}
+const targetNote = (v) => `🎯 That’s target ${letter(S.targets.indexOf(v))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}`;
+// the step is done: keep its work for the Path panel, update everything, celebrate the last target
+function finishStep(entry, cur){
+  S.path.push({ ...entry, html: $('work').innerHTML, title: $('workTitle').textContent });
+  beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
+  if (entry.v === cur && !curTarget()) celebrate();
 }
 // one step of the path, redone with plain numbers (v: scalars, fns: id → numeric coefficients)
 function routeStep(p, v, fns){
@@ -682,24 +711,15 @@ async function ladderOp(m){
     }
   } catch (e){ if (!(e instanceof X.MathError)) throw e; dialog('Math says no', `<b>CAN’T DO THAT</b>${e.message}`); return; }
   S.busy = true;
-  const symb = anySym();
-  if (expr){ val = X.evalRat(expr, SAMPLE); if (!symb || X.isNumeric(expr)) expr = X.isNumeric(expr) ? expr : expr; }
-  $('workTitle').textContent = `6. Work · step ${step}: ladder ${MOVE_LABEL[m.kind]} → ${plainOf(m.v)}`;
-  const work = $('work'); work.innerHTML = `<div class="section">MOTION LADDER: ${MOVE_LABEL[m.kind].toUpperCase()}</div>`;
-  $('workWin').scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'nearest' });
-  for (const [h, why] of lines){ const d = document.createElement('div'); d.className = 'line'; d.innerHTML = `${h}<span class="why">${why}</span>`; work.appendChild(d); paintSyms(); await sleep(30); d.classList.add('show'); beep(880, 0.04); await sleep(380); }
-  const r = document.createElement('div'); r.className = 'result';
-  r.innerHTML = poly ? `${symOf(m.v)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${X.isNumeric(expr) ? `${fmt(val)} ${unitOf(x)}` : X.toHTML(expr, S.printOpts)}`;
-  work.appendChild(r);
-  if (note){ const n = document.createElement('div'); n.className = 'note'; n.textContent = note; work.appendChild(n); }
+  if (expr) val = X.evalRat(expr, SAMPLE);
+  startWork(`Work · step ${step}: ladder ${MOVE_LABEL[m.kind]} → ${plainOf(m.v)}`, `MOTION LADDER: ${MOVE_LABEL[m.kind].toUpperCase()}`);
+  for (const [h, why] of lines) await workLine(h, why);
+  workBlock('result', poly ? `${symOf(m.v)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${X.isNumeric(expr) ? `${fmt(val)} ${unitOf(x)}` : X.toHTML(expr, S.printOpts)}`);
+  if (note) workBlock('note', note, true);
   if (poly) S.funcs[x] = { from: 'ladder', poly, step };
   else S.found[x] = { val, expr: X.isNumeric(expr) ? null : expr, step };
-  const f = document.createElement('div'); f.className = 'feedback';
-  f.innerHTML = m.v === cur ? `🎯 That’s target ${letter(S.targets.indexOf(m.v))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}` : `Found ${symOf(m.v)}.`;
-  work.appendChild(f);
-  S.path.push({ kind: m.kind, from, start: m.start, v: m.v, val, expr, poly, html: work.innerHTML, title: $('workTitle').textContent });
-  beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
-  if (m.v === cur && !curTarget()) celebrate();
+  workBlock('feedback', m.v === cur ? targetNote(m.v) : `Found ${symOf(m.v)}.`);
+  finishStep({ kind: m.kind, from, start: m.start, v: m.v, val, expr, poly }, cur);
 }
 // Solve any equation with symbols, functions of time and numbers:
 // generated equations (Z = 0, linear in the unknown) and library equations whose inputs include functions of t.
@@ -723,54 +743,28 @@ async function solveSym(eqId, target){
   const value = asFn ? null : X.evalRat(R, samplesNow());
   S.busy = true;
   const cur = curTarget(), step = S.path.length + 1, tgt = asFn ? 'fn:' + x : x;
-  $('workTitle').textContent = `6. Work · step ${step}: ${eq.label} → ${plainOf(tgt)}`;
-  const work = $('work'); work.innerHTML = '<div class="section">ISOLATE (SYMBOLS FIRST)</div>';
-  $('workWin').scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'nearest' });
-  const addLine = async (html, why) => { const d = document.createElement('div'); d.className = 'line'; d.innerHTML = `${html}<span class="why">${why}</span>`; work.appendChild(d); paintSyms(); await sleep(30); d.classList.add('show'); beep(880, 0.04); await sleep(380); };
-  const section = (t) => { const d = document.createElement('div'); d.className = 'section'; d.textContent = t; work.appendChild(d); };
-  await addLine(eq.form, `start from ${eq.label}${eq.condition ? ` (${eq.condition})` : ''}`);
-  if (eq.generated) await addLine(`${V(x)} = ${X.toHTML(iso, S.printOpts)}`, `isolate ${plain(x)}: move the other terms across, then divide by what multiplies ${plain(x)}`);
-  else for (const st of eq.solve[x].steps) await addLine(st.eq, st.why);
-  section('PUT IN WHAT YOU KNOW');
-  for (const w of useFn) await addLine(`${V(w)}(${V('t')}) = ${polyHTML(S.funcs[w].poly)}`, `${plain(w)} is a function of time`);
-  const r = document.createElement('div'); r.className = 'result';
-  r.innerHTML = asFn ? `${symOf('fn:' + x)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${symb ? X.toHTML(R, S.printOpts) : `${fmt(value)} ${unitOf(x)}`}`;
-  work.appendChild(r); paintSyms();
-  const u = document.createElement('div'); u.className = 'small units'; u.innerHTML = `Units ✓ every term works out to ${eq.generated ? (eq.unitText || 'the same unit') : eq.solve[x].unitText}.`; work.appendChild(u);
+  startWork(`Work · step ${step}: ${eq.label} → ${plainOf(tgt)}`, 'ISOLATE (SYMBOLS FIRST)');
+  await workLine(eq.form, `start from ${eq.label}${eq.condition ? ` (${eq.condition})` : ''}`);
+  if (eq.generated) await workLine(`${V(x)} = ${X.toHTML(iso, S.printOpts)}`, `isolate ${plain(x)}: move the other terms across, then divide by what multiplies ${plain(x)}`);
+  else for (const st of eq.solve[x].steps) await workLine(st.eq, st.why);
+  workBlock('section', 'PUT IN WHAT YOU KNOW', true);
+  for (const w of useFn) await workLine(`${V(w)}(${V('t')}) = ${polyHTML(S.funcs[w].poly)}`, `${plain(w)} is a function of time`);
+  workBlock('result', asFn ? `${symOf('fn:' + x)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${symb ? X.toHTML(R, S.printOpts) : `${fmt(value)} ${unitOf(x)}`}`); paintSyms();
+  workBlock('small units', `Units ✓ every term works out to ${eq.generated ? (eq.unitText || 'the same unit') : eq.solve[x].unitText}.`);
   if (asFn) S.funcs[x] = { from: 'eq', poly, step };
   else S.found[x] = { val: value, expr: symb ? R : null, step, moment: eq.vars.some(w => w !== x && known(w) && isMoment(w)) };
-  // check with numbers: redo the whole path with plain numbers at random values for the symbols
   if (symb){
-    section('CHECK WITH NUMBERS');
-    const d = document.createElement('div'); d.className = 'small check';
-    const syms = Object.keys(S.givens).filter(isSymGiven);
-    let ok = null;
-    for (let tries = 0; tries < 6 && ok === null; tries++){
-      const rnd = randomSymbols(syms);
-      try {
-        const v = {}, fns = {};
-        for (const [id, g] of Object.entries(S.givens)) v[id] = g.kind === 'symbol' ? (g.dir ? -1 : 1) * rnd[id] : g.val;
-        for (const [id, fg] of Object.entries(S.funcs)) if (fg.from === 'given') fns[id] = fg.poly.map(c => X.evalRat(c, rnd));
-        for (const p of S.path) routeStep(p, v, fns);
-        routeStep({ kind: 'eq', eq: eqId, v: tgt, fn: asFn, gen: !!eq.generated, useFn }, v, fns);
-        const tt = 0.5 + 3 * Math.random();
-        const stepwise = asFn ? fns[x].reduce((a, c, k) => a + c * tt ** k, 0) : v[x];
-        const simplified = asFn ? poly.reduce((a, c, k) => a + X.evalRat(c, rnd) * tt ** k, 0) : X.evalRat(R, rnd);
-        if (!isFinite(stepwise) || !isFinite(simplified)) continue;
-        ok = Math.abs(stepwise - simplified) <= 1e-6 * Math.max(1, Math.abs(stepwise));
-        const at = Object.entries(rnd).map(([id, xv]) => `${VARS[id].plain} = ${fmt(xv)}${id === 'inc' ? '°' : unitOf(id) ? ' ' + unitOf(id) : ''}`).join(', ') + (asFn ? `, t = ${fmt(tt)} s` : '');
-        d.innerHTML = ok ? `✓ At random values (${at}), working step by step with numbers gives ${fmt(stepwise)} and the simplified answer gives ${fmt(simplified)}.` : `✗ At ${at} the step-by-step numbers give ${fmt(stepwise)} but the simplified answer gives ${fmt(simplified)}. Please report this problem.`;
-      } catch (e){ if (!(e instanceof X.MathError)) throw e; }
-    }
-    if (ok === null) d.textContent = 'Couldn’t find random values that work for every step, so no numeric check this time.';
-    work.appendChild(d);
+    workBlock('section', 'CHECK WITH NUMBERS', true);
+    const c = checkWithNumbers((v, fns, rnd) => {
+      routeStep({ kind: 'eq', eq: eqId, v: tgt, fn: asFn, gen: !!eq.generated, useFn }, v, fns);
+      if (!asFn) return [v[x], X.evalRat(R, rnd)];
+      const tt = 0.5 + 3 * Math.random(), at = (cs) => cs.reduce((a, c, k) => a + c * tt ** k, 0);
+      return [at(fns[x]), at(poly.map(c => X.evalRat(c, rnd))), `, t = ${fmt(tt)} s`];
+    });
+    workBlock('small check', checkText(c));
   }
-  const f = document.createElement('div'); f.className = 'feedback';
-  f.innerHTML = tgt === cur ? `🎯 That’s target ${letter(S.targets.indexOf(tgt))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}` : `Found ${symOf(tgt)}.`;
-  work.appendChild(f);
-  S.path.push({ kind: 'eq', eq: eqId, v: tgt, fn: asFn, gen: !!eq.generated, useFn, poly, expr: asFn ? null : R, val: value, html: work.innerHTML, title: $('workTitle').textContent });
-  beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
-  if (tgt === cur && !curTarget()) celebrate();
+  workBlock('feedback', tgt === cur ? targetNote(tgt) : `Found ${symOf(tgt)}.`);
+  finishStep({ kind: 'eq', eq: eqId, v: tgt, fn: asFn, gen: !!eq.generated, useFn, poly, expr: asFn ? null : R, val: value }, cur);
 }
 async function solve(eqId, target){
   if (EQS[eqId].generated || isFn(target)) return solveSym(eqId, target);
@@ -788,51 +782,37 @@ async function solve(eqId, target){
   if (!symb && ['m', 'W', 'N', 'mu', 'f', 'g'].includes(target) && res.value < 0){ dialog('Impossible value', `<b>NEGATIVE ${plain(target).toUpperCase()}?!</b>That gives ${plain(target)} = ${fmt(res.value)}, but it’s a size and can’t be negative. Check the directions and the conditions (is friction really slowing it this way?).`); return; }
   S.busy = true;
   const cur = curTarget(), before = shortest(appEqs(), knownSet(), cur), step = S.path.length + 1;
-  $('workTitle').textContent = `6. Work · step ${step}: ${eq.label} → ${plain(target)}`;
-  const lines = [{ html: eq.form, why: `start from ${eq.label} (only if ${eq.condition})` }];
-  sol.steps.forEach(s => lines.push({ html: s.eq, why: s.why }));
-  if (!sol.steps.length) lines[0].why += `; it’s already solved for ${plain(target)}`;
-  const work = $('work'); work.innerHTML = '<div class="section">ISOLATE (SYMBOLS FIRST)</div>';
-  $('workWin').scrollIntoView({ behavior: calm() ? 'auto' : 'smooth', block: 'nearest' });
-  const addLine = async (html, cls = 'line') => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; work.appendChild(d); paintSyms(); await sleep(30); d.classList.add('show'); };
-  const section = (txt) => { const sh = document.createElement('div'); sh.className = 'section'; sh.textContent = txt; work.appendChild(sh); };
-  for (const l of lines){ await addLine(`${l.html}<span class="why">${l.why}</span>`); beep(880, 0.04); await sleep(420); }
+  startWork(`Work · step ${step}: ${eq.label} → ${plain(target)}`, 'ISOLATE (SYMBOLS FIRST)');
+  await workLine(eq.form, `start from ${eq.label} (only if ${eq.condition})${sol.steps.length ? '' : `; it’s already solved for ${plain(target)}`}`);
+  for (const st of sol.steps) await workLine(st.eq, st.why);
   const tree = res.tree, sub = tree === sol.tree ? sol.sub : sol.alt.find(a => a.tree === tree).sub;
   if (symb){
-    section('PUT IN WHAT YOU KNOW');
-    await addLine(`${V(target)} = ${plugSym(sub)}`); await sleep(420);
-    section('SIMPLIFY');
-    const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${symOf(target)} = ${X.toHTML(R, S.printOpts)}`; work.appendChild(r); paintSyms();
+    workBlock('section', 'PUT IN WHAT YOU KNOW', true);
+    await workLine(`${V(target)} = ${plugSym(sub)}`);
+    workBlock('section', 'SIMPLIFY', true);
+    workBlock('result', `${symOf(target)} = ${X.toHTML(R, S.printOpts)}`); paintSyms();
   } else {
-    section('PLUG IN NUMBERS (SI UNITS, SIGNS FROM DIRECTIONS)');
-    await addLine(`${V(target)} = ${plug(sub, v)}`); await sleep(420);
-    const r = document.createElement('div'); r.className = 'result'; r.innerHTML = `${symOf(target)} = ${fmt(res.value)} ${unitOf(target)}`; work.appendChild(r);
-    const ex = extras(target, res.value); if (ex){ const e2 = document.createElement('div'); e2.innerHTML = ex; work.appendChild(e2); }
+    workBlock('section', 'PLUG IN NUMBERS (SI UNITS, SIGNS FROM DIRECTIONS)', true);
+    await workLine(`${V(target)} = ${plug(sub, v)}`);
+    workBlock('result', `${symOf(target)} = ${fmt(res.value)} ${unitOf(target)}`);
+    const ex = extras(target, res.value); if (ex) workBlock('', ex);
   }
-  const u = document.createElement('div'); u.className = 'small units'; u.innerHTML = `Units ✓ every term works out to ${sol.unitText}.`; work.appendChild(u);
-  if (res.note){ const n = document.createElement('div'); n.className = 'note'; n.textContent = (symb && res.branch !== undefined && X.hasPM(tree) ? 'Root chosen with typical values for the symbols. ' : '') + res.note; work.appendChild(n); }
+  workBlock('small units', `Units ✓ every term works out to ${sol.unitText}.`);
+  if (res.note) workBlock('note', (symb && res.branch !== undefined && X.hasPM(tree) ? 'Root chosen with typical values for the symbols. ' : '') + res.note, true);
   if (symb){
-    section('CHECK WITH NUMBERS');
-    const c = checkWithNumbers(R, tree, res.branch);
-    const at = c ? Object.entries(c.rnd).map(([id, x]) => `${VARS[id].plain} = ${fmt(x)}${id === 'inc' ? '°' : unitOf(id) ? ' ' + unitOf(id) : ''}`).join(', ') : '';
-    const d = document.createElement('div'); d.className = 'small check';
-    d.innerHTML = !c ? 'Couldn’t find random values that work for every step, so no numeric check this time.'
-      : c.ok ? `✓ At random values (${at}), working step by step with numbers gives ${fmt(c.stepwise)} and the simplified answer gives ${fmt(c.simplified)}.`
-      : `✗ At ${at} the step-by-step numbers give ${fmt(c.stepwise)} but the simplified answer gives ${fmt(c.simplified)}. The simplifier slipped: please report this problem.`;
-    work.appendChild(d);
+    workBlock('section', 'CHECK WITH NUMBERS', true);
+    workBlock('small check', checkText(checkWithNumbers((v, fns, rnd) => [X.evalNum(tree, v, res.branch), X.evalRat(R, rnd)])));
   }
   S.found[target] = { val: res.value, expr: R, step };
   const after = shortest(appEqs(), knownSet(), curTarget());
   let fb;
-  if (target === cur) fb = `🎯 That’s target ${letter(S.targets.indexOf(target))}. ${curTarget() ? `Next up: ${symOf(curTarget())}.` : 'Solved!'}`;
+  if (target === cur) fb = targetNote(target);
   else if (!cur) fb = `Found ${symOf(target)}. Add a 🎯 target to get feedback on your route.`;
   else if (before && after && after.length < before.length) fb = `✔ Good move: one step closer. ${after.length} step${after.length > 1 ? 's' : ''} to go.`;
   else if (after) fb = `Valid algebra, but ${symOf(target)} doesn’t bring ${symOf(cur)} closer. The shortest route is still ${after.length} step${after.length > 1 ? 's' : ''}. More knowns never hurt, though.`;
   else fb = `Found ${symOf(target)}. The target still isn’t reachable: look for a hidden given or a condition.`;
-  const f = document.createElement('div'); f.className = 'feedback'; f.innerHTML = fb; work.appendChild(f);
-  S.path.push({ kind: 'eq', eq: eqId, v: target, val: res.value, expr: R, tree, branch: res.branch, html: work.innerHTML, title: $('workTitle').textContent });
-  beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
-  if (target === cur && !curTarget()) celebrate();
+  workBlock('feedback', fb);
+  finishStep({ kind: 'eq', eq: eqId, v: target, val: res.value, expr: R, tree, branch: res.branch }, cur);
 }
 function check(eqId){
   const eq = EQS[eqId], v = vals(), id = eq.vars.find(x => eq.solve[x]);
@@ -851,8 +831,8 @@ function check(eqId){
 
 $('hintBtn').onclick = () => {
   const cur = curTarget();
-  if (!userGivens()){ say('Start with step 1: add the quantities your problem gives you.'); return; }
-  if (!S.condOk){ say('Set the conditions in step 2 first. They decide which equations even apply.'); return; }
+  if (!userGivens()){ say('Start with the givens: add the quantities your problem gives you.'); return; }
+  if (!S.condOk){ say('Set the conditions first. They decide which equations even apply.'); return; }
   if (!S.targets.length){ say('Add a 🎯 target on your sheet: what does the question ask for?'); return; }
   if (!cur){ say('All targets found! Press <b>Replay motion</b>.'); return; }
   const ks = knownSet(), lp = shortest(appEqs(), ks, baseOf(cur));
@@ -921,7 +901,7 @@ $('checkSetup').onclick = () => {
   for (const [k, want] of Object.entries(p.key.cond)){
     if (!!S.cond[k] !== want){ const c = chapter().conditions.find(x => x.key === k); const w = c.type === 'choice' ? c.options.find(o => o[0] === want)[1] : (want ? 'on' : 'off'); lines.push(`✗ Condition “${c.label}” should be: <b>${w}</b>.`); bad++; }
   }
-  if (!S.condOk){ lines.push('✗ You haven’t confirmed the conditions in step 2 yet.'); bad++; }
+  if (!S.condOk){ lines.push('✗ You haven’t confirmed the conditions yet.'); bad++; }
   for (const t of p.key.targets) if (!S.targets.includes(t)){ lines.push(`✗ The question asks for <b>${symOf(t)}</b> (${nm(t)}): add it as a 🎯 target.`); bad++; }
   dialog(bad ? 'Setup check' : 'Setup check: perfect!', `<b>${bad ? `${bad} THING${bad > 1 ? 'S' : ''} TO FIX` : 'ALL SET UP CORRECTLY'}</b>${lines.join('<br>')}`, !bad);
 };
@@ -1316,7 +1296,7 @@ function stepPulse(){ if (calm()) return; const r = $('workWin').getBoundingClie
 // ---------- toggles ----------
 $('calmBtn').onclick = () => { const on = !calm(); document.body.classList.toggle('calm', on); $('calmBtn').setAttribute('aria-pressed', String(on)); field.setCalm(on); try { localStorage.setItem('rl-calm', on ? '1' : '0'); } catch {} draw(); };
 $('soundBtn').onclick = () => { S.sound = !S.sound; $('soundBtn').setAttribute('aria-pressed', String(S.sound)); beep(660, 0.08); };
-$('clearBtn').onclick = () => { if (S.busy) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); renderAll(); say('Cleared: every known, target and equation is gone. The conditions are back to their defaults.'); };
+$('clearBtn').onclick = () => { if (S.busy) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); S.fbd = { body: null, forces: {} }; renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
 
 // ---------- general system detection: two sheet equations with the same two unknowns ----------
 // Any equation can be written as Z = 0: generated ones carry Z; for library ones it comes from a solver's template.
@@ -1616,7 +1596,6 @@ function components(b, f){
 const ratTxt = (r) => X.toText(r, S.printOpts), ratHTML = (r) => X.toHTML(r, S.printOpts);
 // labels: HTML (with subscripts) for the page, and SVG tspans for the drawing
 const fLabelHTML = (b, f) => f.kind === 'gravity' ? `W = ${ratHTML(X.toRat(X.parse(`{${massOf(b)}}{g}`), symEnv([massOf(b), 'g'])))}` : VARS[f.var].sym;
-const svgSub = (t) => t.replace(/_(\w)/g, '<tspan baseline-shift="sub" font-size="70%">$1</tspan>');
 const fLabel = (b, f) => f.kind === 'gravity' ? `W = ${ratTxt(X.toRat(X.parse(`{${massOf(b)}}{g}`), symEnv([massOf(b), 'g'])))}` : VARS[f.var].plain;
 function fbdCheck(b){
   const fs = forcesOf(b), bad = [], what = bodyName(b);
@@ -1677,24 +1656,6 @@ function fbdEquations(b){
   }
   return out;
 }
-function drawFBD(b){
-  const fs = forcesOf(b), cx = 210, cy = 150, L = 95;
-  const th = b.frame === 'slope' ? S.build.theta * Math.PI / 180 : 0;
-  // screen unit vectors for the frame axes (s, n)
-  const sAx = b.frame === 'hanging' ? [0, 1] : [Math.cos(th), -Math.sin(th)], nAx = b.frame === 'hanging' ? [1, 0] : [-Math.sin(th), -Math.cos(th)];
-  const num = (u) => u === '0' ? 0 : X.evalNum(X.parse(u), { inc: S.build.theta });
-  let svg = `<svg viewBox="0 0 420 300"><g transform="rotate(${-S.build.theta * (b.frame === 'slope')} ${cx} ${cy})"><rect x="${cx - 30}" y="${cy - 20}" width="60" height="40" fill="#ff6bd6" stroke="#fff" stroke-width="2"/></g>`;
-  svg += `<line x1="${cx}" y1="${cy}" x2="${cx + sAx[0] * 150}" y2="${cy + sAx[1] * 150}" stroke="#555" stroke-dasharray="4 4"/><line x1="${cx}" y1="${cy}" x2="${cx + nAx[0] * 120}" y2="${cy + nAx[1] * 120}" stroke="#555" stroke-dasharray="4 4"/>`;
-  const cols = { gravity: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push: '#3ddc97', tension: '#ffffff', contact: '#c39bff' };
-  for (const f of fs){
-    const d = dirOf(b, f); if (!d) continue;
-    const us = num(d[0]), un = num(d[1]), dx = us * sAx[0] + un * nAx[0], dy = us * sAx[1] + un * nAx[1];
-    const x2 = cx + dx * L, y2 = cy + dy * L, a = Math.atan2(dy, dx);
-    svg += `<line x1="${cx}" y1="${cy}" x2="${x2}" y2="${y2}" stroke="${cols[f.kind]}" stroke-width="4"/><polygon points="${x2},${y2} ${x2 - 12 * Math.cos(a - 0.4)},${y2 - 12 * Math.sin(a - 0.4)} ${x2 - 12 * Math.cos(a + 0.4)},${y2 - 12 * Math.sin(a + 0.4)}" fill="${cols[f.kind]}"/>`;
-    svg += `<text x="${x2 + dx * 18}" y="${y2 + dy * 18 + 6}" fill="${cols[f.kind]}" font-family="SF Mono,Menlo,monospace" font-size="17" font-weight="600" text-anchor="middle">${svgSub(fLabel(b, f))}</text>`;
-  }
-  return svg + '</svg>';
-}
 function renderFBD(){
   const box = $('fbd'), b = fbdBody();
   if (!b){ box.innerHTML = `<p class="small">Build the setup first in the <b>Build</b> tab (or load a template there). Then draw the forces on each body here.</p>`; return; }
@@ -1708,7 +1669,7 @@ function renderFBD(){
   const comps = fs.map(f => ({ f, c: components(b, f) })).filter(x => x.c);
   if (comps.length) table = `<table class="ftable" id="fbdTable"><tr><th>force</th><th>size</th><th>∥ component</th><th>⊥ component</th></tr>${comps.map(({ f, c }) =>
     `<tr><td>${fLabelHTML(b, f)}</td><td>${ratHTML(X.toRat(X.parse(fMag(b, f)), symEnv([...fMag(b, f).matchAll(/\{(\w+)\}/g)].map(m => m[1]))))}</td><td>${c.s ? ratHTML(c.sR) : '0'}</td><td>${b.frame === 'hanging' ? '–' : c.n ? ratHTML(c.nR) : '0'}</td></tr>`).join('')}</table>`;
-  const axis = b.frame === 'slope' ? `Axes: ∥ along the slope, + ${S.cond.upAxis ? 'up' : 'down'} the slope (step 2); ⊥ perpendicular, + out of the surface.` : b.frame === 'flat' ? `Axes: ∥ horizontal, + ${S.ch === 'pulley' ? 'toward the pulley' : 'forward'}; ⊥ vertical, + up.` : b.frame === 'hanging' ? 'Axis: vertical, + down (the way it moves when m₂ falls).' : 'Axis: vertical, + up.';
+  const axis = b.frame === 'slope' ? `Axes: ∥ along the slope, + ${S.cond.upAxis ? 'up' : 'down'} the slope (your choice in Conditions); ⊥ perpendicular, + out of the surface.` : b.frame === 'flat' ? `Axes: ∥ horizontal, + ${S.ch === 'pulley' ? 'toward the pulley' : 'forward'}; ⊥ vertical, + up.` : b.frame === 'hanging' ? 'Axis: vertical, + down (the way it moves when m₂ falls).' : 'Axis: vertical, + up.';
   box.innerHTML = `${bs.length > 1 ? `<div class="frow"><b>Body:</b> <select id="fbdBody">${bs.map(x => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${bodyName(x) === x.kind ? S.build.KINDS[x.kind].label : bodyName(x)} (${VARS[massOf(x)].plain})${x.hanging ? ', hanging' : ''}</option>`).join('')}</select></div>` : ''}
     <div class="small">${axis} Draw forces with the toolbar beside the canvas (drag a tip to turn one), or add them here.</div>
     <div class="fadd"><span class="small"><b>Add a force:</b></span>${Object.entries(FKINDS).map(([k, d]) => `<button data-addforce="${k}">${d.label}</button>`).join('')}</div>
@@ -1769,7 +1730,7 @@ function renderScen(){
   const box = $('scenBox'); if (!box) return;
   if (!S.scen.cols.length){ box.innerHTML = ''; return; }
   const head = S.scen.cols.map(id => `<th>${VARS[id].sym}<small>${VARS[id].unit || 'no unit'}</small></th>`).join('');
-  const rows = S.scen.rows.map((row, r) => `<tr><td class="n">${r + 1}</td>${S.scen.cols.map((id, c) => `<td><input data-cell="${r},${c}" inputmode="decimal" value="${row[c] ?? ''}"></td>`).join('')}<td><button data-scendel="${r}" title="Remove this case">×</button></td></tr>`).join('');
+  const rows = S.scen.rows.map((row, r) => `<tr><td class="n">${r + 1}</td>${S.scen.cols.map((id, c) => `<td><input data-cell="${r},${c}" inputmode="decimal" value="${esc(row[c])}"></td>`).join('')}<td><button data-scendel="${r}" title="Remove this case">×</button></td></tr>`).join('');
   box.innerHTML = `<div class="subhead">Scenario table</div><table id="scen" class="scen"><tr><th>#</th>${head}<th></th></tr>${rows}</table>
     <div class="row"><button id="scenAdd">+ Add a case</button><span class="small muted">The problem is solved once with symbols, then every row is filled in from that one answer.</span></div>`;
   box.querySelectorAll('[data-cell]').forEach(i => i.addEventListener('change', () => {
@@ -1865,10 +1826,11 @@ function renderMatters(){
 
 // ---------- assemble ----------
 function renderAll(full = true){
-  if (full) renderUnit(); else { $('checkRow').style.display = S.bank ? 'flex' : 'none'; }
+  if (full) renderUnit();
+  $('checkRow').style.display = S.bank ? 'flex' : 'none';
   if (S.givens.inc && S.givens.inc.kind !== 'symbol' && S.givens.inc.val >= 5 && S.givens.inc.val <= 75 && Math.abs(S.build.theta - S.givens.inc.val) > 1e-9) S.build.theta = S.givens.inc.val;
   renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSheet(); renderPath(); renderMatters(); steps(); paintSyms(); renderSliders();
-  $('axisNote').innerHTML = S.ch === 'incline' && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice in step 2). Pick the direction for each vector; the lab sets the sign.' : chapter().axis;
+  $('axisNote').innerHTML = S.ch === 'incline' && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice). Pick the direction for each vector; the app sets the sign.' : chapter().axis;
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();
   draw();
 }

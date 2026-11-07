@@ -9,18 +9,24 @@ Order: function first, style last. Phases 1–3 are in priority order; 4 builds 
 **Start with:** `Do phase 1 in ROADMAP.md.`
 
 Goal: a smaller, tidier codebase with no change in what the student sees or can do.
-- [ ] Measure first: line count per file (`wc -l js/*.js index.html sw.js`) and the test summary. Record both here.
-- [ ] Fix the test script: `npm test` must run `node --test tests/*.test.js` (the current `node --test tests/` fails on Node 22). Rename the package from `rotation-lab` to `physics-lens`.
-- [ ] Bugs and irregularities: find and fix them (console errors, dead handlers, state that isn't reset by Clear all or switching units, stale text that mentions old features). List each fix in the commit message.
-- [ ] Condense (lean but readable): remove dead code and unused exports; merge duplicated helpers; in `index.html`, fold the original theme rules and the later "pixel night skin" overrides into one set of rules, so no rule exists only to be overridden.
-- [ ] Safety review, fix what it finds:
+- [x] Measure first: line count per file (`wc -l js/*.js index.html sw.js`) and the test summary. Record both here.
+  Before: app.js 1885, build.js 404, data.js 615, expr.js 628, field.js 196, index.html 731, sw.js 15 = 4474 lines; 61 tests, 61 pass (`npm test` itself failed: wrong glob).
+- [x] Fix the test script: `npm test` must run `node --test tests/*.test.js` (the current `node --test tests/` fails on Node 22). Rename the package from `rotation-lab` to `physics-lens`.
+- [x] Bugs and irregularities: find and fix them (console errors, dead handlers, state that isn't reset by Clear all or switching units, stale text that mentions old features). List each fix in the commit message.
+- [x] Condense (lean but readable): remove dead code and unused exports; merge duplicated helpers; in `index.html`, fold the original theme rules and the later "pixel night skin" overrides into one set of rules, so no rule exists only to be overridden.
+- [x] Safety review, fix what it finds:
   - add a shared `esc()` and use it (or `textContent`) wherever typed or pasted text reaches `innerHTML`;
   - confirm there is no `eval`, `new Function`, inline handler, external request or third-party code;
   - wrap all `localStorage` use in `try/catch`;
   - make `sw.js` cache only same-origin GET requests;
   - add a Content-Security-Policy `<meta>` that allows only the app's own files (inline styles and `data:` images are needed).
-- [ ] Bump the `sw.js` cache name. All 61 tests pass. The layout check at 1440×900 passes.
-- [ ] Record line counts after, and a short list of what was removed, fixed and secured.
+- [x] Bump the `sw.js` cache name. All 61 tests pass. The layout check at 1440×900 passes.
+- [x] Record line counts after, and a short list of what was removed, fixed and secured.
+  After: app.js 1847, build.js 404, data.js 614, expr.js 627, field.js 196, index.html 575, sw.js 15 = 4278 lines (−196); 61/61 pass, layout check passes.
+  - Removed: 213 CSS declarations that only existed to be overridden (the pixel skin is now the only theme; checked by comparing every element's computed style in 13 app states before and after), dead border-radius rules, the duplicate `.bpal button` and `.dg-controls` rules, unused variables (`--bg`, `--pos`, `--neg`, `--r`, …); the unused `drawFBD`, `svgSub`, `div0`, `polyDegree`; four needless exports; three copies of the work-panel code and two of "check with numbers" (now `startWork`/`workLine`/`workBlock`/`finishStep`, `checkWithNumbers(last)`, `checkText`); a duplicated axis-note line.
+  - Fixed: calm mode and reduced motion now also stop `::before`/`::after` animations (the hint-line arrow kept blinking); Clear all left the drawing and drawn forces behind while removing their givens; switching units dropped the drawing's givens; hover highlight on a given (`.known.hl`) was invisible under the pixel frame; `var(--hot)` was undefined (the "1 unknown" and "target!" hints are pink again); dark red `#a00` warnings unreadable on navy (now `--bad`); hint text pointed to old step numbers and called the app "the lab"; the work title said "6. Work"; the problem box promised a "Soon" feature.
+  - Secured: `esc()` for typed values that go into HTML (given sizes, function coefficients, scenario cells); Content-Security-Policy `<meta>`; inline colour styles moved to classes. Already fine: no `eval`/`new Function`/inline handlers/external requests, `localStorage` in `try/catch`, `sw.js` same-origin GET only. Cache `physics-lens-v7`.
+  - Left for phase 5 (visual): force chips' colours (`.fchip` border-color) and `#dlg` border colours are hidden by the pixel border images.
 
 ---
 

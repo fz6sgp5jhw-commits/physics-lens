@@ -1,4 +1,4 @@
-// Rotation Lab — a small expression engine.
+// Physics Lens — a small expression engine.
 // 1. parse(): reads an equation's plug-in template (`sub`, e.g. "{g}(sin {inc} − {mu} cos {inc})") into a tree.
 // 2. evalNum(): evaluates the tree with numbers (angles inside sin/cos/tan are in degrees, like `inc`).
 // 3. toRat(): evaluates the tree with symbols and simplifies it to a canonical rational form:
@@ -420,7 +420,7 @@ function printMonoFlat(m, o){ // magnitude only, the sign is handled by the call
   bot = bot + (bot && botAtoms ? '' : '') + botAtoms;
   return bot ? `${top || '1'}/${/[ ·]/.test(bot) || bot.length > 2 ? `(${bot})` : bot}` : (top || '1');
 }
-export function printRat(r, o){
+function printRat(r, o){
   if (!r.n.length) return '0';
   if (isNumeric(r)){ const x = numValue(r); return (x < 0 ? '−' : '') + o.fmt(Math.abs(x)); }
   // numerator = content × (sum)
@@ -503,7 +503,6 @@ export const polyD = (p) => trim(p.slice(1).map((c, k) => scale(c, k + 1)));
 // ∫₀ᵗ p dt + start
 export const polyInt = (p, start) => trim([start, ...p.map((c, k) => scale(c, 1 / (k + 1)))]);
 export const polyAt = (p, t) => p.reduce((s, c, k) => addR(s, mulR(c, powR(t, k))), num(0));
-export const polyDegree = (p) => trim(p).length - 1;
 export const polyNum = (p, t, vals = {}) => p.reduce((s, c, k) => s + evalRat(c, vals) * t ** k, 0);
 
 // Solve p(t) = value. Returns { roots: [{ r: Rat, x: number at sample values }], method } with every real root,

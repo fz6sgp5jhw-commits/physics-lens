@@ -23,7 +23,7 @@ const KINDS = {
 };
 export const PALETTE = ['ramp', 'block', 'ball', 'wheel', 'pulley', 'string', 'floor', 'table'];
 // motion vectors a student can put on a body: velocity and acceleration
-export const VECS = { v: { label: 'Velocity', color: '#9be15d' }, a: { label: 'Acceleration', color: '#ff8f70' } };
+const VECS = { v: { label: 'Velocity', color: '#9be15d' }, a: { label: 'Acceleration', color: '#ff8f70' } };
 
 // Options: onChange(); nameOf(id) → label text; and for the free-body layer (mode 'forces'):
 //   dirsFor(body) → [{ key, x, y }] unit vectors in drawing coordinates (y down) the arrows snap to
