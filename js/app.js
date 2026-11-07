@@ -329,9 +329,11 @@ function renderEditor(){
   slot.innerHTML = `<div class="editor"><div><b>${d.sym}</b>: ${nm(id)}</div>
     ${S.editing.moment ? `<div class="erow small">Its value <b>at the moment the question asks about</b>. The app finds the time t when it has this value.</div>` : ''}
     <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button><button data-kind="scenario" aria-pressed="${kind === 'scenario'}" title="Different values in different cases">Scenario table</button>${canFn(id) ? `<button data-kind="fn" aria-pressed="${kind === 'fn'}">Function of t</button>` : ''}</div>
+    ${!canFn(id) && chapter().ladder && chapter().ladder.rungs.includes(id) && !S.cond.varA ? `<div class="erow small muted">Given as a function of time or a graph? Pick <b>varies with time</b> under <b>This problem</b>, above the givens.</div>` : ''}
     ${kind === 'fn'
       ? `<div class="erow fnrow"><label for="edFn"><b>${d.sym}(t) =</b></label> <input id="edFn" type="text" spellcheck="false" autocomplete="off" value="${esc(S.editing.fnText)}" placeholder="${FN_EXAMPLE[id] || '4 − 0.5t²'}"></div>
-         <div class="erow small">Write it as you would on paper: numbers, <b>t</b>, powers like t² or t^2, and a letter for a constant you don’t know (like <b>k</b>, <b>β</b>, or type <b>beta</b>). + is ${dr(id) ? dr(id)[0] : 'positive'}.</div>
+         <div class="erow small">Write it as you would on paper: numbers, <b>t</b>, powers like t² or t^2, and a letter for a constant you don’t know (like <b>k</b>, <b>β</b>, or type <b>beta</b>). + is ${dr(id) ? dr(id)[0] : 'positive'}.
+           From a straight-line graph: (value at t = 0) + (slope)·t, where the slope is rise ÷ run read off the grid.</div>
          <div id="edFnPreview" class="fnprev" aria-live="polite"></div>`
       : kind === 'scenario'
       ? `<div class="erow small">Its value changes from case to case: it becomes a column of the scenario table under the givens, and the problem is solved with <b>${d.sym}</b> as a symbol.</div>`
@@ -423,6 +425,18 @@ function renderConds(){
   }
   $('condOk').setAttribute('aria-pressed', String(S.condOk));
   $('condOk').textContent = S.condOk ? '✓ Conditions set' : '✓ These conditions are right';
+}
+// the problem-type choices asked with the givens (Phase 4b): the student picks them before entering quantities,
+// so the function box (varies with time) and r (a point on the body) are there when needed. Conditions shows them too.
+function renderKind(){
+  const box = $('kindRow'), cs = chapter().conditions.filter(c => c.ask);
+  box.hidden = !cs.length; if (!cs.length) return;
+  box.innerHTML = '<span class="lbl">This problem</span>' + cs.map(c => `<span class="kgroup"><span class="small muted">${c.ask[0]}</span>${c.ask[1].map(([v, w], i) => `<button data-ck="${c.key}" data-i="${i}" aria-pressed="${!!S.cond[c.key] === v}">${w}</button>`).join('')}</span>`).join('');
+  box.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => { const c = cs.find(x => x.key === b.dataset.ck); setKind(c.key, c.ask[1][+b.dataset.i][0]); });
+}
+async function setKind(key, v){
+  if (S.busy || !!S.cond[key] === v || !await beforeClearing('Changing what the problem is about')) return;
+  S.cond[key] = v; applyHidden(); clearDerived(); syncDrawingGivens(); renderAll(false);
 }
 async function setCond(key, v){
   if (S.busy || !!S.cond[key] === !!v && S.condOk) return;
@@ -668,7 +682,7 @@ function usesHTML(i){
 // waits until Solve is unlocked.
 const STAGES = [
   { name: 'Setup', tip: 'Draw the setup (or load a template), and add each quantity the problem gives you.' },
-  { name: 'Forces', tip: 'Draw the forces on each body and write ΣF = ma onto your sheet, or draw its motion arrows (v, a).' },
+  { name: 'Forces', tip: 'Draw the forces on each body and write ΣF = ma onto your sheet, or draw its motion arrows (v, a, or ω, α round a wheel).' },
   { name: 'Conditions', tip: 'Set what the picture can’t show: hidden givens like “starts from rest”, your axis, constant or changing acceleration.' },
   { name: 'Solve', tip: 'Pick what the question asks for, gather equations, and solve the glowing ones one step at a time.' },
 ];
@@ -678,7 +692,7 @@ const drawnBodies = () => S.build ? fbdBodies() : [];
 function stageChecks(){
   const bs = drawnBodies();
   const fbd = bs.some(b => Object.values(S.gen).some(g => g.key === 'fbd:' + b.id));
-  const motion = bs.some(b => { const sh = S.build.shapes.find(x => x.id === b.id); return !!(sh && (sh.v || sh.a)); });
+  const motion = bs.some(b => { const sh = S.build.shapes.find(x => x.id === b.id); return !!(sh && (sh.v || sh.a || sh.omega || sh.alpha)); });
   return [bs.length > 0 || userGivens() > 0, bs.length ? fbd || motion : null, S.condOk, S.targets.length > 0 && !curTarget()];
 }
 const firstOpen = (c) => { const i = c.indexOf(false); return i < 0 ? STAGES.length : i; };
@@ -2281,7 +2295,7 @@ function renderAll(full = true){
   if (full) renderUnit();
   $('checkRow').style.display = S.bank ? 'flex' : 'none';
   if (S.givens.inc && S.givens.inc.kind !== 'symbol' && S.givens.inc.val >= 5 && S.givens.inc.val <= 75 && Math.abs(S.build.theta - S.givens.inc.val) > 1e-9) S.build.theta = S.givens.inc.val;
-  renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSpan(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
+  renderKind(); renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSpan(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
   $('calcCond').innerHTML = $('calcSolve').innerHTML = calcHTML();
   $('axisNote').innerHTML = S.ch === 'incline' && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice). Pick the direction for each vector; the app sets the sign.' : chapter().axis;
   if (S.dtab !== 'motion') S.build.render(); // labels show given values; a wheel shows its button once ω or α is known

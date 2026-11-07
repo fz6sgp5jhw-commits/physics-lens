@@ -1,7 +1,7 @@
 # Physics Lens roadmap
 
 One phase per Claude Code session. Start a session with the line under **Start with**, run `/clear` when the phase is done. A phase is done when its boxes are ticked, all tests pass, and this file says what changed.
-Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3.
+Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3; 4b smooths what 3 and 4 built.
 
 ---
 
@@ -74,6 +74,19 @@ Idea: chemistry has a formal drawing language (line drawings, implied carbons), 
 - [x] Classroom guidance: each component card has one "what to check" line, such as "a normal force is perpendicular to the surface".
 - [x] Gate: set up each practice problem from freehand strokes; the wheel button shows correct vectors for a sample ω and α.
 - What changed: `COMPONENTS` in `data.js` (16 entries: `draw` SVG, `means`, `props`, `connects`, `arrows`, `eqs` ids + `more` for relations not in the library yet, `check`, `tools`). **Diagrams** button opens `#diagDrawer` (cards in `#diagLib`); toolbar tools with a card show it in `#compCard` on hover/focus instead of a `title`. New canvas parts: particle, rod, spring, pivot (a wheel's or rod's centre dropped on it is pinned), ω and α curved arrows (click a wheel or ball; click again to reverse). The toolbar is 4 columns. **Pen** tool: strokes go to `js/recognize.js` (all rules and thresholds in `RULES`): line → floor / table / ramp at the drawn angle (6–12° asks), closed shape → box or loop by how much of its tightest turned rectangle it fills (in between asks), tiny loop → particle, small loop at a table edge or ramp top → pulley, box under a pulley → hanging block, masses named by unit (m₁/m₂, m_A/m_B), stroke from a body over a pulley to a body → string (two strokes join), line or arrow out of a body → asks v or a. After snapping, the hint line gives the component's "what to check". A wheel in Rotation shows **◎ a point** once ω (or ω₀) or α is known or drawn: P at the top of the rim gets v, aₜ, a꜀ and a, with directions from the signs and sizes from the R7–R11 templates; **+ Add these to my sheet** turns on Track a point and gathers them. `renderAll` now redraws the canvas (labels and the wheel button follow the givens). 91 tests (`tests/recognize.test.js` 5 rule tests on recorded strokes `tests/strokes.json`; `tests/diagrams.test.js` 13 practice problems drawn with the pen through the mouse and compared with the templates, ask flow, the wheel gate, the drawer and hover card). Cache `physics-lens-v10`.
+
+---
+
+## Phase 4b: smoother rotation problems
+**Start with:** `Do phase 4b in ROADMAP.md.`
+
+Problems seen while solving homework: a flywheel (r = 0.400 m, from rest, α = 0.700 rad/s²) asked for (a) the tangential, (b) the radial and (c) the resultant acceleration after 2.00 s; a disk with an α–t graph (a straight line from 0 to 6 rad/s² over 5 s) asked for the revolutions in the first 5.0 s. The app solves both, but only if the student knows where things are hidden.
+Decisions (2026-11-07): the student still makes each choice, but the problem-type choices are asked in Setup; the student reads graphs themselves; the sheet's numbering stays.
+- [x] Ask the kind of motion in Setup: a row beside the givens with the unit's problem-type choices (constant or varying acceleration; the whole body or a point at radius r), so the function box and r are there while givens are entered. Conditions still shows them.
+- [x] Textbook words: quantity names and target options also use the words homework uses (radial acceleration, resultant acceleration, revolutions), and the function box says how to read a straight-line graph.
+- [x] A wheel or ball with an ω or α arrow is its motion diagram: drawing a wheel no longer locks Solve behind the Forces stage.
+- [x] Gate: both homework problems solved through the UI in that order (Setup row → givens → conditions → targets): aₜ = 0.280, a_rad = 0.784, a = 0.832 m/s²; N = 3.98 rev from α(t) = 1.2t; with a drawn flywheel and an ω arrow, Solve opens.
+- What changed: conditions with an `ask` field in `CHAPTERS` (rotation: varA, rim; incline: varA) appear as a **This problem** row (`#kindRow`, buttons `data-ck`) above the givens; `setKind` changes them without confirming the conditions. The editor says where to find "varies with time" when the function option is missing, and the function box explains reading a straight-line graph. Names: a꜀ "radial (centripetal) acceleration", a "resultant (total) acceleration", N "revolutions turned between two moments (like “in the first 5 s”)". `stageChecks` counts ω/α arrows as a motion diagram. 94 tests (`tests/homework.test.js`, 3 new). No existing test changed. Cache `physics-lens-v11`.
 
 ---
 
