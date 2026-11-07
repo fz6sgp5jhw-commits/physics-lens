@@ -1,7 +1,7 @@
 # Physics Lens roadmap
 
 One phase per Claude Code session. Start a session with the line under **Start with**, run `/clear` when the phase is done. A phase is done when its boxes are ticked, all tests pass, and this file says what changed.
-Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3; 4b smooths what 3 and 4 built.
+Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3; 4b smooths what 3 and 4 built; 5 (torque) comes before the new look (6), decided 2026-11-07.
 
 ---
 
@@ -26,7 +26,7 @@ Goal: a smaller, tidier codebase with no change in what the student sees or can 
   - Removed: 213 CSS declarations that only existed to be overridden (the pixel skin is now the only theme; checked by comparing every element's computed style in 13 app states before and after), dead border-radius rules, the duplicate `.bpal button` and `.dg-controls` rules, unused variables (`--bg`, `--pos`, `--neg`, `--r`, …); the unused `drawFBD`, `svgSub`, `div0`, `polyDegree`; four needless exports; three copies of the work-panel code and two of "check with numbers" (now `startWork`/`workLine`/`workBlock`/`finishStep`, `checkWithNumbers(last)`, `checkText`); a duplicated axis-note line.
   - Fixed: calm mode and reduced motion now also stop `::before`/`::after` animations (the hint-line arrow kept blinking); Clear all left the drawing and drawn forces behind while removing their givens; switching units dropped the drawing's givens; hover highlight on a given (`.known.hl`) was invisible under the pixel frame; `var(--hot)` was undefined (the "1 unknown" and "target!" hints are pink again); dark red `#a00` warnings unreadable on navy (now `--bad`); hint text pointed to old step numbers and called the app "the lab"; the work title said "6. Work"; the problem box promised a "Soon" feature.
   - Secured: `esc()` for typed values that go into HTML (given sizes, function coefficients, scenario cells); Content-Security-Policy `<meta>`; inline colour styles moved to classes. Already fine: no `eval`/`new Function`/inline handlers/external requests, `localStorage` in `try/catch`, `sw.js` same-origin GET only. Cache `physics-lens-v7`.
-  - Left for phase 5 (visual): force chips' colours (`.fchip` border-color) and `#dlg` border colours are hidden by the pixel border images.
+  - Left for phase 6 (visual): force chips' colours (`.fchip` border-color) and `#dlg` border colours are hidden by the pixel border images.
 
 ---
 
@@ -91,8 +91,26 @@ Decisions (2026-11-07): the student still makes each choice, but the problem-typ
 
 ---
 
-## Phase 5: the new look
-**Start with:** `Do phase 5 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
+## Phase 5: torque, statics and rotational dynamics
+**Start with:** `Do phase 5 in ROADMAP.md. Ask me the open questions first.`
+
+Problems seen in class (end of the torque and rotational-motion homework): beams held by a hinge or pivot and a cable, with hung weights; moments of inertia of standard shapes; a body spun up by a torque. None can be set up today: the app has no torque, lever arm or moment of inertia. The rod and pivot from phase 4 are drawable but bring no equations.
+- [ ] **Open questions (ask before building):** how the student picks the axis for Στ (any point they click, or the pivot by default with a prompt to explain why it's a good choice); whether this is one new unit ("Torque & equilibrium") or two ("Statics", "Rotational dynamics"); how far the extended free-body diagram goes (forces drawn at their point on the rod, not at the centre).
+- [ ] An extended free-body diagram on the drawing: forces on a rod or beam start where they act (the weight at its centre, a hung mass at its hook, a cable where it's tied, the hinge at the pivot). Distances along the beam are named properties, like a ramp's angle.
+- [ ] Torque with the lever arm shown: τ = rF sin φ, counterclockwise +, the sign from the drawn direction (never a typed minus). The student picks the axis; each torque card says which force, its lever arm and its sign.
+- [ ] Equilibrium writes equations from the picture, like ΣF = ma does now: ΣFx = 0, ΣFy = 0 and Στ = 0 about the chosen axis. The hinge force is two unknown components (H_x, H_y) whose signs come out of the algebra; a negative answer is explained, not hidden.
+- [ ] Moments of inertia: a table of standard shapes and axes (thin rod about its centre or one end, solid disc or cylinder, thin ring, solid and hollow sphere, a point mass at r), each with its standard drawing in the diagram library, and the parallel-axis theorem I = I_cm + Md².
+- [ ] Rotational dynamics: Στ = Iα, and a string wrapped on a disc tied to a hanging mass (a = rα, the no-slip link from phase 3).
+- [ ] Gate tests, written first with hand-worked numbers (g = 9.81 m/s²):
+  - beam on a pivot with a slanted cord: L = 1.79 m, M = 1.07 kg, pivot 0.262 m from the left end, m = 0.301 kg hung 0.262 m from the right end, cord 0.354 m from the right end at 24.9° to the beam → T = 21.0 N, hinge H_x = 19.05 N (toward the beam's far end), H_y = 4.61 N up;
+  - beam hinged to the ceiling, hanging by a vertical cable: L = 45.3 cm, M = 1.41 kg, cable 12.9 cm long at x = 38.5 cm → the beam tilts 18.5°, T = 7.72 N, H_x = 0, H_y = 6.12 N up;
+  - thin rod, 2.50 kg, 70.0 cm, axis through one end → I = ⅓ML² = 0.408 kg·m² (and 4 × the centre-axis value, by the parallel-axis theorem);
+  - solid disc M = 2.00 kg, R = 0.200 m, string to a hanging m = 1.00 kg, from rest → a = mg/(m + M/2) = 4.905 m/s², T = 4.905 N, α = 24.5 rad/s².
+
+---
+
+## Phase 6: the new look
+**Start with:** `Do phase 6 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
 
 Mood: late-'90s/early-2000s TV and film animation and science shows: bold outlines, flat cel colour, playful science-show energy, a hint of anime-era mecha UI panels and handheld-game menus. These are mood references only. Draw nothing from those shows: no characters, logos, title lettering or recognisable designs.
 - [ ] Palette: soft pastels, like a 2020s K-pop album cover (sky blue, bubblegum pink, cream, soft lilac), with one bright accent. The four variable-state colours keep their meanings and stay readable (checked for contrast).
@@ -109,4 +127,4 @@ Mood: late-'90s/early-2000s TV and film animation and science shows: bold outlin
 
 ## Later (not scheduled)
 - Energy and momentum: snapshots and stages with per-stage conservation choices; an energy bar chart and a momentum before/after diagram that write equations. Gate: block m from rest at height h on a frictionless ramp sticks to M, slides on a floor with μk: d = (h/μk)(m/(m + M))², independent of g; fraction of K lost = M/(m + M). Plan: `docs/phase-e-design.md`.
-- Torque diagrams (Στ = Iα), energy shown as soft glowing clouds, more practice problems, pasting a homework problem for setup.
+- Energy shown as soft glowing clouds, more practice problems, pasting a homework problem for setup.
