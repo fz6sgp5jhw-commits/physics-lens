@@ -1,7 +1,7 @@
 # Physics Lens roadmap
 
 One phase per Claude Code session. Start a session with the line under **Start with**, run `/clear` when the phase is done. A phase is done when its boxes are ticked, all tests pass, and this file says what changed.
-Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3.
+Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3; 4b smooths what 3 and 4 built; 5 (torque) comes before the new look (6), decided 2026-11-07.
 
 ---
 
@@ -26,7 +26,7 @@ Goal: a smaller, tidier codebase with no change in what the student sees or can 
   - Removed: 213 CSS declarations that only existed to be overridden (the pixel skin is now the only theme; checked by comparing every element's computed style in 13 app states before and after), dead border-radius rules, the duplicate `.bpal button` and `.dg-controls` rules, unused variables (`--bg`, `--pos`, `--neg`, `--r`, …); the unused `drawFBD`, `svgSub`, `div0`, `polyDegree`; four needless exports; three copies of the work-panel code and two of "check with numbers" (now `startWork`/`workLine`/`workBlock`/`finishStep`, `checkWithNumbers(last)`, `checkText`); a duplicated axis-note line.
   - Fixed: calm mode and reduced motion now also stop `::before`/`::after` animations (the hint-line arrow kept blinking); Clear all left the drawing and drawn forces behind while removing their givens; switching units dropped the drawing's givens; hover highlight on a given (`.known.hl`) was invisible under the pixel frame; `var(--hot)` was undefined (the "1 unknown" and "target!" hints are pink again); dark red `#a00` warnings unreadable on navy (now `--bad`); hint text pointed to old step numbers and called the app "the lab"; the work title said "6. Work"; the problem box promised a "Soon" feature.
   - Secured: `esc()` for typed values that go into HTML (given sizes, function coefficients, scenario cells); Content-Security-Policy `<meta>`; inline colour styles moved to classes. Already fine: no `eval`/`new Function`/inline handlers/external requests, `localStorage` in `try/catch`, `sw.js` same-origin GET only. Cache `physics-lens-v7`.
-  - Left for phase 5 (visual): force chips' colours (`.fchip` border-color) and `#dlg` border colours are hidden by the pixel border images.
+  - Left for phase 6 (visual): force chips' colours (`.fchip` border-color) and `#dlg` border colours are hidden by the pixel border images.
 
 ---
 
@@ -67,17 +67,52 @@ Problems seen in class: defining ω(t) was hard. Given θ(t), finding the revolu
 **Start with:** `Do phase 4 in ROADMAP.md.`
 
 Idea: chemistry has a formal drawing language (line drawings, implied carbons), so drawings can be read. Give mechanics diagrams the same: a small, fixed set of components, each drawn one standard way and each tied to the equations it brings.
-- [ ] A component library in `data.js`. Each entry has a standard drawing, named properties (and the variables they create), how it connects (rests on, hangs from, pivots at), the arrows that belong to it, and the equations it produces. Components: surface, ramp, block, particle, ball, wheel/disc, rod, pulley, string, spring, pivot, plus arrows for force, v, a, ω, α.
-- [ ] Teach the notation: a "Diagram library" drawer, like the equation library, showing each component's standard drawing and what it means. Hovering a toolbar tool shows the same card.
-- [ ] Recognition of freehand strokes: a line to a ramp or surface, a closed loop to a ball or wheel, a box to a block, an arrow to a vector. Snap to the standard form, and ask when the stroke is ambiguous. Recognition rules live in one place and can be tested with recorded strokes.
-- [ ] Recognised rotation: when a wheel or disc is given ω or α, a button appears on it. Pressing it shows a point's v, a_t and a_c vectors and their equations, and adds them to the sheet if the student chooses.
-- [ ] Classroom guidance: each component card has one "what to check" line, such as "a normal force is perpendicular to the surface".
-- [ ] Gate: set up each practice problem from freehand strokes; the wheel button shows correct vectors for a sample ω and α.
+- [x] A component library in `data.js`. Each entry has a standard drawing, named properties (and the variables they create), how it connects (rests on, hangs from, pivots at), the arrows that belong to it, and the equations it produces. Components: surface, ramp, block, particle, ball, wheel/disc, rod, pulley, string, spring, pivot, plus arrows for force, v, a, ω, α.
+- [x] Teach the notation: a "Diagram library" drawer, like the equation library, showing each component's standard drawing and what it means. Hovering a toolbar tool shows the same card.
+- [x] Recognition of freehand strokes: a line to a ramp or surface, a closed loop to a ball or wheel, a box to a block, an arrow to a vector. Snap to the standard form, and ask when the stroke is ambiguous. Recognition rules live in one place and can be tested with recorded strokes.
+- [x] Recognised rotation: when a wheel or disc is given ω or α, a button appears on it. Pressing it shows a point's v, a_t and a_c vectors and their equations, and adds them to the sheet if the student chooses.
+- [x] Classroom guidance: each component card has one "what to check" line, such as "a normal force is perpendicular to the surface".
+- [x] Gate: set up each practice problem from freehand strokes; the wheel button shows correct vectors for a sample ω and α.
+- What changed: `COMPONENTS` in `data.js` (16 entries: `draw` SVG, `means`, `props`, `connects`, `arrows`, `eqs` ids + `more` for relations not in the library yet, `check`, `tools`). **Diagrams** button opens `#diagDrawer` (cards in `#diagLib`); toolbar tools with a card show it in `#compCard` on hover/focus instead of a `title`. New canvas parts: particle, rod, spring, pivot (a wheel's or rod's centre dropped on it is pinned), ω and α curved arrows (click a wheel or ball; click again to reverse). The toolbar is 4 columns. **Pen** tool: strokes go to `js/recognize.js` (all rules and thresholds in `RULES`): line → floor / table / ramp at the drawn angle (6–12° asks), closed shape → box or loop by how much of its tightest turned rectangle it fills (in between asks), tiny loop → particle, small loop at a table edge or ramp top → pulley, box under a pulley → hanging block, masses named by unit (m₁/m₂, m_A/m_B), stroke from a body over a pulley to a body → string (two strokes join), line or arrow out of a body → asks v or a. After snapping, the hint line gives the component's "what to check". A wheel in Rotation shows **◎ a point** once ω (or ω₀) or α is known or drawn: P at the top of the rim gets v, aₜ, a꜀ and a, with directions from the signs and sizes from the R7–R11 templates; **+ Add these to my sheet** turns on Track a point and gathers them. `renderAll` now redraws the canvas (labels and the wheel button follow the givens). 91 tests (`tests/recognize.test.js` 5 rule tests on recorded strokes `tests/strokes.json`; `tests/diagrams.test.js` 13 practice problems drawn with the pen through the mouse and compared with the templates, ask flow, the wheel gate, the drawer and hover card). Cache `physics-lens-v10`.
 
 ---
 
-## Phase 5: the new look
-**Start with:** `Do phase 5 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
+## Phase 4b: smoother rotation problems
+**Start with:** `Do phase 4b in ROADMAP.md.`
+
+Problems seen while solving homework: a flywheel (r = 0.400 m, from rest, α = 0.700 rad/s²) asked for (a) the tangential, (b) the radial and (c) the resultant acceleration after 2.00 s; a disk with an α–t graph (a straight line from 0 to 6 rad/s² over 5 s) asked for the revolutions in the first 5.0 s. The app solves both, but only if the student knows where things are hidden.
+Decisions (2026-11-07): the student still makes each choice, but the problem-type choices are asked in Setup; the student reads graphs themselves; the sheet's numbering stays.
+- [x] Ask the kind of motion in Setup: a row beside the givens with the unit's problem-type choices (constant or varying acceleration; the whole body or a point at radius r), so the function box and r are there while givens are entered. Conditions still shows them.
+- [x] Textbook words: quantity names and target options also use the words homework uses (radial acceleration, resultant acceleration, revolutions), and the function box says how to read a straight-line graph.
+- [x] A wheel or ball with an ω or α arrow is its motion diagram: drawing a wheel no longer locks Solve behind the Forces stage.
+- [x] Gate: both homework problems solved through the UI in that order (Setup row → givens → conditions → targets): aₜ = 0.280, a_rad = 0.784, a = 0.832 m/s²; N = 3.98 rev from α(t) = 1.2t; with a drawn flywheel and an ω arrow, Solve opens.
+- What changed: conditions with an `ask` field in `CHAPTERS` (rotation: varA, rim; incline: varA) appear as a **This problem** row (`#kindRow`, buttons `data-ck`) above the givens; `setKind` changes them without confirming the conditions. The editor says where to find "varies with time" when the function option is missing, and the function box explains reading a straight-line graph. Names: a꜀ "radial (centripetal) acceleration", a "resultant (total) acceleration", N "revolutions turned between two moments (like “in the first 5 s”)". `stageChecks` counts ω/α arrows as a motion diagram. 94 tests (`tests/homework.test.js`, 3 new). No existing test changed. Cache `physics-lens-v11`.
+  Follow-up: a student drew gravity on the flywheel and stayed locked. Rotation kinematics has no forces or torques yet, so `CHAPTERS.rotation.forcesOptional` makes the Forces stage optional there (no star, doesn't block); an ω or α arrow still earns the star. Cache `physics-lens-v12`.
+
+---
+
+## Phase 5: torque, statics and rotational dynamics
+**Start with:** `Do phase 5 in ROADMAP.md. Ask me the open questions first.`
+
+Problems seen in class (end of the torque and rotational-motion homework): beams held by a hinge or pivot and a cable, with hung weights; moments of inertia of standard shapes; a body spun up by a torque. None can be set up today: the app has no torque, lever arm or moment of inertia. The rod and pivot from phase 4 are drawable but bring no equations.
+- [x] **Open questions (ask before building):** how the student picks the axis for Στ (any point they click, or the pivot by default with a prompt to explain why it's a good choice); whether this is one new unit ("Torque & equilibrium") or two ("Statics", "Rotational dynamics"); how far the extended free-body diagram goes (forces drawn at their point on the rod, not at the centre).
+  Decided 2026-11-07: the axis starts at the pivot or hinge, the student can click any other point on the beam, and a prompt asks why the pivot is a good choice (the hinge forces have no lever arm there). One unit, "Torque & equilibrium", whose This problem row asks equilibrium (α = 0) or spinning up (Στ = Iα). Points of application on rods/beams and on discs (string tension at the rim); blocks keep one centre point. In gate 2, x = 38.5 cm is measured horizontally from the hinge to where the cable hangs.
+- [x] An extended free-body diagram on the drawing: forces on a rod or beam start where they act (the weight at its centre, a hung mass at its hook, a cable where it's tied, the hinge at the pivot). Distances along the beam are named properties, like a ramp's angle.
+- [x] Torque with the lever arm shown: τ = rF sin φ, counterclockwise +, the sign from the drawn direction (never a typed minus). The student picks the axis; each torque card says which force, its lever arm and its sign.
+- [x] Equilibrium writes equations from the picture, like ΣF = ma does now: ΣFx = 0, ΣFy = 0 and Στ = 0 about the chosen axis. The hinge force is two unknown components (H_x, H_y) whose signs come out of the algebra; a negative answer is explained, not hidden.
+- [x] Moments of inertia: a table of standard shapes and axes (thin rod about its centre or one end, solid disc or cylinder, thin ring, solid and hollow sphere, a point mass at r), each with its standard drawing in the diagram library, and the parallel-axis theorem I = I_cm + Md².
+- [x] Rotational dynamics: Στ = Iα, and a string wrapped on a disc tied to a hanging mass (a = rα, the no-slip link from phase 3).
+- [x] Gate tests, written first with hand-worked numbers (g = 9.81 m/s²):
+  - beam on a pivot with a slanted cord: L = 1.79 m, M = 1.07 kg, pivot 0.262 m from the left end, m = 0.301 kg hung 0.262 m from the right end, cord 0.354 m from the right end at 24.9° to the beam → T = 21.0 N, hinge H_x = 19.05 N (toward the beam's far end), H_y = 4.61 N up;
+  - beam hinged to the ceiling, hanging by a vertical cable: L = 45.3 cm, M = 1.41 kg, cable 12.9 cm long at x = 38.5 cm → the beam tilts 18.5°, T = 7.72 N, H_x = 0, H_y = 6.12 N up;
+  - thin rod, 2.50 kg, 70.0 cm, axis through one end → I = ⅓ML² = 0.408 kg·m² (and 4 × the centre-axis value, by the parallel-axis theorem);
+  - solid disc M = 2.00 kg, R = 0.200 m, string to a hanging m = 1.00 kg, from rest → a = mg/(m + M/2) = 4.905 m/s², T = 4.905 N, α = 24.5 rad/s².
+- What changed: a new unit **Torque & equilibrium** (`CHAPTERS.torque`; This problem asks equilibrium or spinning up, `dyn`; Conditions add `shape` and `axis`, settled by a drawn disc or rod and where it is pinned; conditions can now hold named values, `condIs`). New file `js/torque.js` holds the extended free-body math: force kinds on a beam or disc (`KINDS`: gravity, hung mass, cord, hinge as H_x + H_y, push), named directions (`DIRS`, slants at φ to the beam, tilt β), each force's point (centre, ends, pivot, or d_P, d_m, d_T, d_F from the end the student picks), its lever arm r, sin φ and τ (`parts`), the equations (`equations`: ΣFx = 0, ΣFy = 0, Στ = 0 about the chosen axis, or Στ = Iα) and the checker (`check`). On the canvas a rod is a body in this unit (frame `beam`), pinned at any point over a pivot (`pinAt`, `pinU`) and tilted with the beam; a wheel is a `disc`; forces start where the drag starts; an **axis** tool (forces toolbar) clicks the axis onto the nearest named point; dashed lever arms; strings attach at a disc's rim or on the beam; templates **beam** and **disc** (only in this unit). The Forces panel for a beam/disc (`renderExtFBD`) has the tilt, the left/right-end choice per distance, the axis select (`#fbdAxis`) with “Why is the pivot a good axis?” (`[data-why]`, `#whyMsg`), the torque cards (`#torqueTable`) and Write. Found force parts show their direction, and a negative one is explained (`foundDir`). Library: D1 τ = rF sin φ; I1–I9 moments of inertia (rod centre/end, disc, ring, solid and hollow sphere, point mass, parallel axis, I = I_cm) with cards in the diagram library; D2–D6 Στ = Iα, a = Rα, TR = Iα, mg − T = ma, a = mg/(m + I/R²); G1–G2 beam geometry (ids `GEO1`, `GEO2`: generated equations are `G<n>`). Path finding and **Combine them** handle a **system of three** linear equations (`triples`, `eliminate`; dependent ones are skipped). 101 tests (`tests/torque.test.js` new, 7: the four gates, the axis tool, a force drawn on the beam; solver count 134 → 188 in `tests/expr.test.js`, on purpose). Cache `physics-lens-v13`.
+
+---
+
+## Phase 6: the new look
+**Start with:** `Do phase 6 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
 
 Mood: late-'90s/early-2000s TV and film animation and science shows: bold outlines, flat cel colour, playful science-show energy, a hint of anime-era mecha UI panels and handheld-game menus. These are mood references only. Draw nothing from those shows: no characters, logos, title lettering or recognisable designs.
 - [ ] Palette: soft pastels, like a 2020s K-pop album cover (sky blue, bubblegum pink, cream, soft lilac), with one bright accent. The four variable-state colours keep their meanings and stay readable (checked for contrast).
@@ -94,4 +129,4 @@ Mood: late-'90s/early-2000s TV and film animation and science shows: bold outlin
 
 ## Later (not scheduled)
 - Energy and momentum: snapshots and stages with per-stage conservation choices; an energy bar chart and a momentum before/after diagram that write equations. Gate: block m from rest at height h on a frictionless ramp sticks to M, slides on a floor with μk: d = (h/μk)(m/(m + M))², independent of g; fraction of K lost = M/(m + M). Plan: `docs/phase-e-design.md`.
-- Torque diagrams (Στ = Iα), energy shown as soft glowing clouds, more practice problems, pasting a homework problem for setup.
+- Energy shown as soft glowing clouds, more practice problems, pasting a homework problem for setup.

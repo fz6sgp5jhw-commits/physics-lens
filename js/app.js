@@ -1,7 +1,8 @@
-import { VARS, EQS, CHAPTERS, PRACTICE, V, fmt, SAMPLE, PRINT_ORDER, DIMS } from './data.js';
+import { VARS, EQS, CHAPTERS, PRACTICE, COMPONENTS, V, fmt, SAMPLE, PRINT_ORDER, DIMS } from './data.js';
 import { createBuild, PALETTE } from './build.js';
 import * as X from './expr.js';
 import { createField } from './field.js';
+import * as TQ from './torque.js';
 
 const $ = (id) => document.getElementById(id);
 // text the student typed or pasted is escaped before it goes into HTML
@@ -162,9 +163,10 @@ function moves(eqList, ks){
       const ub = unknownsOf(eqList[j], ks);
       if (ub.length !== 2 || !ua.every(x => ub.includes(x)) || !EQS[eqList[i]].vars.concat(EQS[eqList[j]].vars).every(x => ks.has(x) || ua.includes(x))) continue;
       if (!zeroForm(eqList[i]) || !zeroForm(eqList[j])) continue;
-      for (const x of ua) out.push({ kind: 'sys', a: eqList[i], b: eqList[j], pair: ua, v: x });
+      for (const x of ua) out.push({ kind: 'sys', a: eqList[i], b: eqList[j], eqs: [eqList[i], eqList[j]], pair: ua, v: x });
     }
   }
+  for (const t of triples(eqList, ks)) for (const x of t.keeps) out.push({ kind: 'sys', ...t, v: x });
   const L = ladder(); if (!L) return out;
   const f = (x) => ks.has('fn:' + x), R = L.rungs;
   for (let i = 0; i < R.length - 1; i++) if (f(R[i]) && !f(R[i + 1])) out.push({ kind: 'deriv', from: R[i], v: 'fn:' + R[i + 1] });
@@ -245,12 +247,14 @@ function beforeClearing(what){
 }
 
 // ---------- chapter / reset ----------
-function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false, earth: true } : ch === 'pulley' || ch === 'blocks' ? { friction: ch === 'blocks', earth: true } : { rim: false, varA: false }; }
+function defaultsFor(ch){ return ch === 'incline' ? { friction: false, up: false, earth: true } : ch === 'pulley' || ch === 'blocks' ? { friction: ch === 'blocks', earth: true } : ch === 'torque' ? { dyn: false, shape: 'rod', axis: 'centre', earth: true } : { rim: false, varA: false }; }
+// a condition's value: most are yes/no, some name a choice (the torque unit's shape and axis)
+const condIs = (key, v) => typeof v === 'boolean' ? !!S.cond[key] === v : S.cond[key] === v;
 // the drawing stays when the unit changes; its quantities come back as givens if the new unit uses them
 function switchChapter(ch){ S.ch = ch; S.cond = defaultsFor(ch); resetAll(false); if (S.build) syncDrawingGivens(); }
 function resetAll(keepText = true){
   dropGenerated(() => true); S.custom = []; S.samples = {}; if (S.scen) S.scen = { cols: [], rows: [] };
-  S.givens = {}; S.found = {}; S.funcs = {}; S.span = newSpan(); S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null;
+  S.givens = {}; S.found = {}; S.funcs = {}; S.span = newSpan(); S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null; S.pointView = null;
   if (!keepText){ $('problem').value = ''; S.bank = null; }
   S.cond = { ...defaultsFor(S.ch), ...Object.fromEntries(Object.entries(S.cond).filter(([k]) => k in defaultsFor(S.ch))) };
   applyHidden(); clearWork(); resetInspector();
@@ -287,6 +291,12 @@ function describe(id, g){
   if (g.kind === 'symbol') return `<span class="small muted">${g.scenario ? 'a column of the scenario table' : 'symbol, no number'}</span>${dirTxt}`;
   return `${fmt(g.mag)} ${g.unit === 'no unit' ? '' : g.unit}${dirTxt}`;
 }
+// torque: which way a found force part points; a negative one is explained, not hidden (its arrow was drawn the other way)
+function foundDir(id){
+  if (S.ch !== 'torque' || !VARS[id].dir || isSymbolic(id)) return '';
+  const v = val(id); if (Math.abs(v) < 1e-12) return '';
+  return ` <span class="kdir">${v > 0 ? dr(id)[0] : `${dr(id)[1]}: it came out negative, so it points opposite to the arrow you drew`}</span>`;
+}
 function renderKnowns(){
   const box = $('knowns'); box.innerHTML = '';
   const ids = chVars().filter(known);
@@ -295,7 +305,7 @@ function renderKnowns(){
     const g = S.givens[id], f = S.found[id];
     const row = document.createElement('div'); row.className = 'known ' + (f ? 'found' : g.from === 'condition' ? 'cond' : ''); row.dataset.v = id;
     let txt, sub, act = '';
-    if (f){ txt = showVal(id) + partTag(f); sub = `found in step ${f.step}${partOf(f) ? `, part ${partOf(f)}` : ''}`; }
+    if (f){ txt = showVal(id) + foundDir(id) + partTag(f); sub = `found in step ${f.step}${partOf(f) ? `, part ${partOf(f)}` : ''}`; }
     else { txt = describe(id, g); sub = g.from === 'condition' ? `from condition: ${g.why}` : g.from === 'drawing' ? `${nm(id)} (from your drawing)` : nm(id); act = g.from === 'you' || g.from === 'drawing' ? `<button data-edit="${id}" title="Edit">✎</button><button data-del="${id}" title="Remove">×</button>` : ''; }
     row.innerHTML = `<div class="vsym">${VARS[id].sym}</div><div><div class="kv">${VARS[id].sym}${g && g.kind === 'symbol' ? ':' : ' ='} ${txt}</div><div class="kd">${sub}</div></div><div class="kact">${act}</div>`;
     row.title = sub.replace(/<[^>]*>/g, '');
@@ -329,9 +339,11 @@ function renderEditor(){
   slot.innerHTML = `<div class="editor"><div><b>${d.sym}</b>: ${nm(id)}</div>
     ${S.editing.moment ? `<div class="erow small">Its value <b>at the moment the question asks about</b>. The app finds the time t when it has this value.</div>` : ''}
     <div class="erow kinds"><button data-kind="value" aria-pressed="${kind === 'value'}">Number</button><button data-kind="symbol" aria-pressed="${kind === 'symbol'}">Symbol only</button><button data-kind="scenario" aria-pressed="${kind === 'scenario'}" title="Different values in different cases">Scenario table</button>${canFn(id) ? `<button data-kind="fn" aria-pressed="${kind === 'fn'}">Function of t</button>` : ''}</div>
+    ${!canFn(id) && chapter().ladder && chapter().ladder.rungs.includes(id) && !S.cond.varA ? `<div class="erow small muted">Given as a function of time or a graph? Pick <b>varies with time</b> under <b>This problem</b>, above the givens.</div>` : ''}
     ${kind === 'fn'
       ? `<div class="erow fnrow"><label for="edFn"><b>${d.sym}(t) =</b></label> <input id="edFn" type="text" spellcheck="false" autocomplete="off" value="${esc(S.editing.fnText)}" placeholder="${FN_EXAMPLE[id] || '4 − 0.5t²'}"></div>
-         <div class="erow small">Write it as you would on paper: numbers, <b>t</b>, powers like t² or t^2, and a letter for a constant you don’t know (like <b>k</b>, <b>β</b>, or type <b>beta</b>). + is ${dr(id) ? dr(id)[0] : 'positive'}.</div>
+         <div class="erow small">Write it as you would on paper: numbers, <b>t</b>, powers like t² or t^2, and a letter for a constant you don’t know (like <b>k</b>, <b>β</b>, or type <b>beta</b>). + is ${dr(id) ? dr(id)[0] : 'positive'}.
+           From a straight-line graph: (value at t = 0) + (slope)·t, where the slope is rise ÷ run read off the grid.</div>
          <div id="edFnPreview" class="fnprev" aria-live="polite"></div>`
       : kind === 'scenario'
       ? `<div class="erow small">Its value changes from case to case: it becomes a column of the scenario table under the givens, and the problem is solved with <b>${d.sym}</b> as a symbol.</div>`
@@ -410,7 +422,7 @@ function renderConds(){
     if (c.key in drawn){
       el.innerHTML = `<div class="clabel">${c.label}</div><div class="settled"><b>${c.options.find(o => o[0] === drawn[c.key])[1]}</b>: settled by your drawing. ${DRAWN_WHY[c.key]}</div>`;
     } else if (c.type === 'choice'){
-      el.innerHTML = `<div class="clabel">${c.label}</div><div class="opts">${c.options.map(([v, w], i) => `<button data-i="${i}" aria-pressed="${!!S.cond[c.key] === v}">${w}</button>`).join('')}</div>`;
+      el.innerHTML = `<div class="clabel">${c.label}</div><div class="opts">${c.options.map(([v, w], i) => `<button data-i="${i}" aria-pressed="${condIs(c.key, v)}">${w}</button>`).join('')}</div>`;
       el.querySelectorAll('button').forEach(b => b.onclick = () => setCond(c.key, c.options[+b.dataset.i][0]));
     } else if (c.type === 'locked'){
       el.innerHTML = `<label class="ccheck"><input type="checkbox" checked disabled><span>${c.label}<small>${c.note}</small></span></label>`;
@@ -424,8 +436,20 @@ function renderConds(){
   $('condOk').setAttribute('aria-pressed', String(S.condOk));
   $('condOk').textContent = S.condOk ? '✓ Conditions set' : '✓ These conditions are right';
 }
+// the problem-type choices asked with the givens (Phase 4b): the student picks them before entering quantities,
+// so the function box (varies with time) and r (a point on the body) are there when needed. Conditions shows them too.
+function renderKind(){
+  const box = $('kindRow'), cs = chapter().conditions.filter(c => c.ask);
+  box.hidden = !cs.length; if (!cs.length) return;
+  box.innerHTML = '<span class="lbl">This problem</span>' + cs.map(c => `<span class="kgroup"><span class="small muted">${c.ask[0]}</span>${c.ask[1].map(([v, w], i) => `<button data-ck="${c.key}" data-i="${i}" aria-pressed="${condIs(c.key, v)}">${w}</button>`).join('')}</span>`).join('');
+  box.querySelectorAll('[data-ck]').forEach(b => b.onclick = () => { const c = cs.find(x => x.key === b.dataset.ck); setKind(c.key, c.ask[1][+b.dataset.i][0]); });
+}
+async function setKind(key, v){
+  if (S.busy || condIs(key, v) || !await beforeClearing('Changing what the problem is about')) return;
+  S.cond[key] = v; applyHidden(); clearDerived(); syncDrawingGivens(); renderAll(false);
+}
 async function setCond(key, v){
-  if (S.busy || !!S.cond[key] === !!v && S.condOk) return;
+  if (S.busy || condIs(key, v) && S.condOk) return;
   if (!await beforeClearing('Changing a condition')) return;
   if (key === 'upAxis' && !!S.cond.upAxis !== !!v) for (const [id, g] of Object.entries(S.givens)) if (g.from === 'you' && VARS[id].dir && g.kind !== 'fn'){ g.dir = 1 - g.dir; if (g.kind !== 'symbol') g.val = -g.val; }
   S.cond[key] = v; S.condOk = true; applyHidden(); clearDerived();
@@ -439,7 +463,8 @@ $('condOk').onclick = () => {
   else say(`Conditions locked in. <b>Solve</b> unlocks when <b>${STAGES[firstOpen(stageChecks())].name}</b> passes its check.`);
 };
 // what the picture already shows: a rough surface means friction; v drawn along the slope says which way it moves
-const DRAWN_WHY = { friction: 'To change it, select the surface on the drawing and switch its friction.', up: 'To change it, turn the velocity arrow on the drawing.' };
+const DRAWN_WHY = { friction: 'To change it, select the surface on the drawing and switch its friction.', up: 'To change it, turn the velocity arrow on the drawing.',
+  shape: 'To change it, draw a different body.', axis: 'To change it, move the pivot on the drawing.' };
 function drawnConds(){
   const out = {}; if (!S.build) return out;
   const cs = S.build.contacts();
@@ -448,12 +473,18 @@ function drawnConds(){
     const k = S.build.shapes.find(x => x.id === b.id)?.v?.key;
     if (k === 'up-slope' || k === 'down-slope') out.up = k === 'up-slope';
   }
+  // torque: a drawn disc or rod is the shape; where it is pinned says whether it turns about its centre
+  if (S.ch === 'torque'){
+    const bs = S.build.bodies(), w = bs.find(b => b.kind === 'wheel'), r = bs.find(b => b.kind === 'rod');
+    if (w){ out.shape = 'disc'; if (w.pivot) out.axis = 'centre'; }
+    else if (r){ out.shape = 'rod'; if (r.pinAt) out.axis = r.pinAt === 'centre' ? 'centre' : 'other'; }
+  }
   return out;
 }
 // returns the labels of the conditions the drawing just changed
 function syncDrawnConds(){
   const changed = [];
-  for (const [k, v] of Object.entries(drawnConds())) if (!!S.cond[k] !== v){ S.cond[k] = v; const c = chapter().conditions.find(x => x.key === k); changed.push(`${c.label}: ${c.options.find(o => o[0] === v)[1]}`); }
+  for (const [k, v] of Object.entries(drawnConds())) if (!condIs(k, v)){ S.cond[k] = v; const c = chapter().conditions.find(x => x.key === k); changed.push(`${c.label}: ${c.options.find(o => o[0] === v)[1]}`); }
   if (changed.length){ applyHidden(); clearDerived(); }
   return changed;
 }
@@ -648,8 +679,11 @@ function renderSheet(){
     else st.innerHTML = `Even the whole library can’t reach ${tl} yet. Is there a hidden given or a condition to set?`;
     const sys = findSystem(ks);
     if (sys){
-      const [A, B] = sys.pair.map(x => VARS[x].sym), la = EQS[sys.a].label, lb = EQS[sys.b].label;
-      st.innerHTML += `<div class="sysnote">🧩 ${la} and ${lb} share the same two unknowns, ${A} and ${B}: that’s a <b>system of two equations</b>. Solve ${la} for one of them and substitute it into ${lb}: it drops out, leaving one equation with one unknown. <button class="go" id="sysBtn" style="margin-left:4px">Combine them ▶</button></div>`;
+      const U = sys.pair.map(x => VARS[x].sym), la = EQS[sys.a].label, lb = EQS[sys.b].label;
+      const txt = sys.eqs.length === 3
+        ? `${sysLabel(sys, ', ')} hold three unknowns, ${U[0]}, ${U[1]} and ${U[2]}, two at a time: that’s a <b>system of three equations</b>. Solve one for an unknown and put it into another that holds it, then do it again: one equation with one unknown is left.`
+        : `${la} and ${lb} share the same two unknowns, ${U[0]} and ${U[1]}: that’s a <b>system of two equations</b>. Solve ${la} for one of them and substitute it into ${lb}: it drops out, leaving one equation with one unknown.`;
+      st.innerHTML += `<div class="sysnote">🧩 ${txt} <button class="go" id="sysBtn" style="margin-left:4px">Combine them ▶</button></div>`;
       $('sysBtn').onclick = () => combine(sys);
     }
   }
@@ -668,7 +702,7 @@ function usesHTML(i){
 // waits until Solve is unlocked.
 const STAGES = [
   { name: 'Setup', tip: 'Draw the setup (or load a template), and add each quantity the problem gives you.' },
-  { name: 'Forces', tip: 'Draw the forces on each body and write ΣF = ma onto your sheet, or draw its motion arrows (v, a).' },
+  { name: 'Forces', tip: 'Draw the forces on each body and write ΣF = ma onto your sheet, or draw its motion arrows (v, a, or ω, α round a wheel).' },
   { name: 'Conditions', tip: 'Set what the picture can’t show: hidden givens like “starts from rest”, your axis, constant or changing acceleration.' },
   { name: 'Solve', tip: 'Pick what the question asks for, gather equations, and solve the glowing ones one step at a time.' },
 ];
@@ -678,8 +712,9 @@ const drawnBodies = () => S.build ? fbdBodies() : [];
 function stageChecks(){
   const bs = drawnBodies();
   const fbd = bs.some(b => Object.values(S.gen).some(g => g.key === 'fbd:' + b.id));
-  const motion = bs.some(b => { const sh = S.build.shapes.find(x => x.id === b.id); return !!(sh && (sh.v || sh.a)); });
-  return [bs.length > 0 || userGivens() > 0, bs.length ? fbd || motion : null, S.condOk, S.targets.length > 0 && !curTarget()];
+  const motion = bs.some(b => { const sh = S.build.shapes.find(x => x.id === b.id); return !!(sh && (sh.v || sh.a || sh.omega || sh.alpha)); });
+  const forces = !bs.length ? null : chapter().forcesOptional ? (motion || null) : fbd || motion;
+  return [bs.length > 0 || userGivens() > 0, forces, S.condOk, S.targets.length > 0 && !curTarget()];
 }
 const firstOpen = (c) => { const i = c.indexOf(false); return i < 0 ? STAGES.length : i; };
 const reach = (c = stageChecks()) => Math.min(STAGES.length - 1, firstOpen(c) + 1);
@@ -707,7 +742,7 @@ function renderStage(){
 }
 function steps(){
   const c = stageChecks(), f = firstOpen(c), r = reach(c);
-  const state = (i) => c[i] ? 'passed: star earned' : c[i] === null ? 'nothing drawn, so no diagram to check' : i > r ? `locked until ${STAGES[f].name} passes` : 'not passed yet';
+  const state = (i) => c[i] ? 'passed: star earned' : c[i] === null ? (drawnBodies().length ? 'optional here: draw ω or α on the wheel for a star' : 'nothing drawn, so no diagram to check') : i > r ? `locked until ${STAGES[f].name} passes` : 'not passed yet';
   $('steps').innerHTML = STAGES.map((st, i) => `<button data-stage="${i}" class="${c[i] ? 'done' : ''}${c[i] === null ? ' na' : ''}${i === S.stage ? ' now' : ''}${i > r ? ' locked' : ''}" ${i === S.stage ? 'aria-current="step"' : ''} title="${st.name}: ${state(i)}"><b>${i + 1}</b>${st.name}<i class="st" aria-hidden="true"></i></button>`).join('<i class="sep">›</i>')
     + `<button id="sheetTab" class="${S.stage === 3 ? 'now' : ''}" title="Your sheet, from any stage">Sheet · ${S.sheet.length}</button>`;
   $('steps').querySelectorAll('[data-stage]').forEach(b => b.onclick = () => openStage(+b.dataset.stage));
@@ -1145,7 +1180,7 @@ $('hintBtn').onclick = () => {
   const ks = knownSet(), lp = shortest(appEqs(), ks, baseOf(cur));
   if (!lp){ say(chapter().stuck ? 'No route yet. ' + chapter().stuck : S.ch === 'incline' ? 'No route yet. Hidden givens? “Starts from rest” means v₀ = 0, “stops” means v = 0. Is “On Earth” ticked so g is known?' : 'No route yet. “Starts from rest” means ω₀ = 0 and “stops” means ω = 0. For a point on the rim, tick “Track a point”.'); return; }
   const sp = shortest(S.sheet.filter(applies), ks, baseOf(cur));
-  if (sp && sp[0].kind === 'sys'){ say(`Psst… <b>${EQS[sp[0].a].label}</b> and <b>${EQS[sp[0].b].label}</b> share the same two unknowns: a system. Combine them.`); return; }
+  if (sp && sp[0].kind === 'sys'){ say(`Psst… <b>${sysLabel(sp[0], '</b> and <b>')}</b> share ${sp[0].eqs.length === 3 ? 'three unknowns, two at a time' : 'the same two unknowns'}: a system. Combine them.`); return; }
   if (sp && sp[0].kind !== 'eq'){ const n = sp[0]; say(`Psst… on your <b>motion ladder</b>, you can ${MOVE_TXT[n.kind](n)}. ${n.v === cur ? 'That’s your target!' : 'That gets you closer.'}`); return; }
   if (sp){ const n = sp[0]; say(`Psst… on your sheet, <b>${EQS[n.eq].label}</b> has just one unknown, <b>${symOf(n.v)}</b>. ${n.v === cur ? 'And it’s your target!' : 'Finding it gets you closer.'}`); return; }
   const miss = lp.find(s => s.kind === 'eq' && !S.sheet.includes(s.eq));
@@ -1162,7 +1197,7 @@ $('showBtn').onclick = async () => {
     const lp = shortest(appEqs(), knownSet(), goal);
     if (!lp){ dialog('No route', '<b>TARGET UNREACHABLE</b>No chain of equations gets from your knowns to the target. Look for a hidden given or a condition you haven’t set.'); return; }
     for (const s of lp) if (s.kind === 'eq' && !S.sheet.includes(s.eq)){ S.sheet.push(s.eq); renderAll(false); await sleep(350); }
-    say(`Path to ${symOf(goal)}: ${lp.map(s => `${s.kind === 'eq' ? EQS[s.eq].label : s.kind === 'sys' ? `${EQS[s.a].label}+${EQS[s.b].label}` : MOVE_LABEL[s.kind]}→${symOf(s.v)}`).join(', then ')}.`);
+    say(`Path to ${symOf(goal)}: ${lp.map(s => `${s.kind === 'eq' ? EQS[s.eq].label : s.kind === 'sys' ? sysLabel(s) : MOVE_LABEL[s.kind]}→${symOf(s.v)}`).join(', then ')}.`);
     for (const s of lp){ if (s.kind === 'eq') await solve(s.eq, s.v); else if (s.kind === 'sys') await sysOp(s); else await ladderOp(s); await sleep(450); }
     if (lp.length && !known(lp[lp.length - 1].v)) return; // a step was refused (its dialog explains why)
   }
@@ -1316,7 +1351,7 @@ function draw(tau = null){
   const cv = $('dg'), ctx = cv.getContext('2d'); S.hot = [];
   const { v, illus } = simValues(), k = K(), T = v[k.t], now = tau === null ? T : tau;
   grid(ctx, cv.width, cv.height);
-  ({ incline: drawIncline, pulley: drawPulley, blocks: drawBlocks, rotation: drawWheel })[S.ch](ctx, v, k, T, now, tau, cv.width, cv.height);
+  ({ incline: drawIncline, pulley: drawPulley, blocks: drawBlocks, rotation: drawWheel, torque: drawTorque })[S.ch](ctx, v, k, T, now, tau, cv.width, cv.height);
   $('dgNote').textContent = illus ? 'Some values are made up for the picture until you give or find them.' : 'Drawn to scale with your numbers.';
   drawGraphs(v, k, tau);
 }
@@ -1518,6 +1553,35 @@ function drawWheel(ctx, v, k, T, now, tau, Wd, Hd){
   caption(ctx, '+ is counterclockwise. Ghost spokes = equal time steps.', Hd);
 }
 
+// torque: a still picture of the setup (a beam on a pivot, or a disc spun by a hanging mass); nothing moves in equilibrium
+function drawTorque(ctx, v, k, T, now, tau, Wd, Hd){
+  const cx = Wd / 2, cy = Hd / 2 - 10;
+  ctx.lineCap = 'round';
+  if (S.cond.dyn){
+    const R = 130, mx = cx - R, my = cy + R + 60;
+    ctx.strokeStyle = '#f7f4ff'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 7); ctx.stroke();
+    ctx.fillStyle = '#ffd98a'; ctx.beginPath(); ctx.arc(cx, cy, 12, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#e6eef8'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(mx, cy); ctx.lineTo(mx, my - 30); ctx.stroke();
+    body(ctx, mx, my, 70, 60);
+    ctx.strokeStyle = colOf('R'); ctx.lineWidth = hl('R', 3); ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
+    label(ctx, 'R', cx + R / 2, cy - 22, colOf('R'), 'R'); label(ctx, 'M', cx + 30, cy + 50, colOf('M'), 'M'); label(ctx, 'm', mx, my + 6, colOf('m'), 'm');
+    label(ctx, 'T', mx - 30, cy + R / 2, colOf('Tn'), 'Tn');
+    arrow(ctx, mx + 70, my - 30, mx + 70, my + 40, colOf('a'), hl('a', 4), 'a'); label(ctx, 'a', mx + 95, my + 10, colOf('a'), 'a');
+    arcArrow(ctx, cx, cy, R + 34, Math.PI * 0.55, Math.PI * 1.05, colOf('alpha'), hl('alpha', 4)); label(ctx, 'α', cx - R - 10, cy - R - 10, colOf('alpha'), 'alpha');
+    caption(ctx, '+ is counterclockwise: the mass falls on the left, so the disc turns counterclockwise.', Hd);
+    return;
+  }
+  const L = Math.min(620, Wd - 160), x0 = cx - L / 2, px = x0 + 0.15 * L;
+  ctx.fillStyle = 'rgba(255,107,214,.35)'; ctx.strokeStyle = '#ff6bd6'; ctx.lineWidth = 3; ctx.fillRect(x0, cy - 8, L, 16); ctx.strokeRect(x0, cy - 8, L, 16);
+  ctx.strokeStyle = '#ffd98a'; ctx.beginPath(); ctx.moveTo(px, cy + 8); ctx.lineTo(px - 22, cy + 50); ctx.lineTo(px + 22, cy + 50); ctx.closePath(); ctx.stroke();
+  arrow(ctx, cx, cy, cx, cy + 110, colOf('M'), hl('M', 4), 'M'); label(ctx, 'Mg', cx + 34, cy + 100, colOf('M'), 'M');
+  arrow(ctx, px, cy, px + 90, cy, colOf('Hx'), hl('Hx', 4), 'Hx'); label(ctx, 'Hₓ', px + 110, cy + 30, colOf('Hx'), 'Hx');
+  arrow(ctx, px, cy, px, cy - 100, colOf('Hy'), hl('Hy', 4), 'Hy'); label(ctx, 'H_y', px + 20, cy - 110, colOf('Hy'), 'Hy');
+  arrow(ctx, x0 + 0.8 * L, cy, x0 + 0.8 * L - 80, cy - 100, colOf('Tn'), hl('Tn', 4), 'Tn'); label(ctx, 'T', x0 + 0.8 * L - 100, cy - 110, colOf('Tn'), 'Tn');
+  label(ctx, 'L', cx, cy - 40, colOf('L'), 'L');
+  caption(ctx, '+ is counterclockwise. In equilibrium ΣFx = 0, ΣFy = 0 and Στ = 0 about any point.', Hd);
+}
+
 // ---------- graphs ----------
 function drawGraph(id, fn, T, labelTxt, color, tau, sub, shade){
   const cv = $(id), ctx = cv.getContext('2d'), Wd = cv.width, Hd = cv.height, L = 90, Rm = 24, Tp = 30, B = 42;
@@ -1618,34 +1682,86 @@ function zeroForm(e){
   }
   return null;
 }
+// three equations whose unknowns are three quantities, two in each (a disc, its string and the hanging mass: T and α,
+// T and a, a and α): a system of three. Pairs with the same two unknowns are left to the two-equation move.
+function triples(eqList, ks){
+  // only linear equations: then substituting one into another always works
+  const linear = (e, u) => { const Z = zeroForm(e); if (!Z) return false; return u.every(v => { const p = X.ratToPolyIn(Z, v); return p && p.length === 2; }); };
+  const two = eqList.map(e => ({ e, u: unknownsOf(e, ks) })).filter(x => x.u.length === 2 && linear(x.e, x.u));
+  const out = [], same = (p, q) => p.u.every(v => q.u.includes(v));
+  for (let i = 0; i < two.length; i++) for (let j = i + 1; j < two.length; j++) for (let k = j + 1; k < two.length; k++){
+    const [A, B, C] = [two[i], two[j], two[k]], us = [...new Set([...A.u, ...B.u, ...C.u])];
+    if (us.length !== 3 || same(A, B) || same(A, C) || same(B, C)) continue;
+    if (![A, B, C].every(x => EQS[x.e].vars.every(v => ks.has(v) || us.includes(v)))) continue;
+    // dependent equations (one follows from the other two) eliminate down to 0 = 0: offer only unknowns that survive
+    const keeps = us.filter(x => solvesFor([A.e, B.e, C.e], us, x));
+    if (keeps.length) out.push({ eqs: [A.e, B.e, C.e], a: A.e, b: B.e, pair: us, keeps });
+  }
+  return out;
+}
+const SYS_OK = new Map();
+function solvesFor(eqs, us, x){
+  const key = `${eqs.join('+')}|${[...us].sort().join(',')}|${x}`;
+  if (!SYS_OK.has(key)){
+    let ok = false;
+    try { ok = !!eliminate(eqs.map(e => ({ Z: zeroForm(e), label: EQS[e].label })), us, x); } catch (e){ if (!(e instanceof X.MathError)) throw e; }
+    SYS_OK.set(key, ok);
+  }
+  return SYS_OK.get(key);
+}
+const sysLabel = (sys, sep = '+') => (sys.eqs || [sys.a, sys.b]).map(e => EQS[e].label).join(sep);
 function findSystem(ks){
-  const eqs = S.sheet.filter(e => applies(e));
+  const eqs = S.sheet.filter(e => applies(e)), done = (list) => Object.values(S.gen).some(g => g.key === list.join('+'));
   for (let i = 0; i < eqs.length; i++) for (let j = i + 1; j < eqs.length; j++){
     const [a, b] = [eqs[i], eqs[j]], ua = unknownsOf(a, ks), ub = unknownsOf(b, ks);
     if (ua.length !== 2 || ub.length !== 2 || !ua.every(x => ub.includes(x))) continue;
-    if (Object.values(S.gen).some(g => g.key === `${a}+${b}`)) continue;
+    if (done([a, b])) continue;
     if (!zeroForm(a) || !zeroForm(b)) continue;
-    return { a, b, pair: ua };
+    return { a, b, eqs: [a, b], pair: ua };
   }
-  return null;
+  return triples(eqs, ks).find(t => !done(t.eqs)) || null;
+}
+// Combine a system: solve one equation for an unknown and put it into the others that hold it, again and again,
+// until one equation with one unknown (keep, if given) is left. Every step is exact algebra on the Z = 0 forms.
+function eliminate(list, unknowns, keep){
+  let work = list.map(q => ({ ...q })), steps = [];
+  while (work.length > 1){
+    const has = (q, x) => X.symbolsOf(q.Z).has(x);
+    let moved = false;
+    for (const x of unknowns.filter(u => u !== keep)){
+      const holders = work.filter(q => has(q, x));
+      if (holders.length < 2) continue;
+      for (const src of holders){
+        let iso; try { iso = X.solveLinear(src.Z, x, plain(x)); } catch (e){ if (e instanceof X.MathError) continue; throw e; }
+        steps.push({ from: src.label, x, iso });
+        work = work.filter(q => q !== src).map(q => has(q, x) ? { Z: X.substRat(q.Z, { [x]: iso }), label: `${src.label}→${q.label}` } : q);
+        moved = true; break;
+      }
+      if (moved) break;
+    }
+    if (!moved) return null;
+  }
+  const left = unknowns.filter(u => X.symbolsOf(work[0].Z).has(u));
+  return left.length === 1 && (!keep || left[0] === keep) ? { Z: work[0].Z, x: left[0], steps } : null;
 }
 function combine(sys, keep = null){
   if (solveLocked()) return null;
-  const { a, b, pair } = sys, Za = zeroForm(a), Zb = zeroForm(b);
-  const existing = Object.keys(S.gen).find(id => S.gen[id].key === `${a}+${b}` && (!keep || S.gen[id].vars.includes(keep)));
+  const eqs = sys.eqs || [sys.a, sys.b], key = eqs.join('+');
+  const existing = Object.keys(S.gen).find(id => S.gen[id].key === key && (!keep || S.gen[id].vars.includes(keep)));
   if (existing) return existing;
-  for (const x of [...pair.filter(p => p !== keep), ...pair.filter(p => p === keep)]){
-    try {
-      const iso = X.solveLinear(Za, x, plain(x));
-      const Z = X.substRat(Zb, { [x]: iso });
-      const vars = [...new Set([...EQS[a].vars, ...EQS[b].vars])].filter(v => v !== x && X.symbolsOf(Z).has(v));
-      const id = addGenerated({ label: `${EQS[a].label}+${EQS[b].label}`, vars, Z, key: `${a}+${b}`, condition: `${EQS[a].label} and ${EQS[b].label} together`, meaning: `${EQS[a].label} solved for ${plain(x)} and put into ${EQS[b].label}` });
-      beep(990, 0.05); renderAll(false);
-      say(`Combined! ${EQS[a].label} gives ${VARS[x].sym} = ${X.toHTML(iso, S.printOpts)}. Put into ${EQS[b].label}, ${VARS[x].sym} drops out: <b>${EQS[id].label}</b> has one unknown left, so it glows.`);
-      return id;
-    } catch (e){ if (!(e instanceof X.MathError)) throw e; }
+  const list = eqs.map(e => ({ Z: zeroForm(e), label: EQS[e].label }));
+  for (const k of keep ? [keep] : [...sys.pair].reverse()){
+    let res;
+    try { res = eliminate(list, sys.pair, k); } catch (e){ if (!(e instanceof X.MathError)) throw e; res = null; }
+    if (!res) continue;
+    const vars = [...new Set(eqs.flatMap(e => EQS[e].vars))].filter(v => X.symbolsOf(res.Z).has(v));
+    const label = sysLabel(sys);
+    const id = addGenerated({ label, vars, Z: res.Z, key, condition: `${sysLabel(sys, ', ')} together`, meaning: res.steps.map(st => `${st.from} solved for ${plain(st.x)}`).join(', then ') + ', and put into the others' });
+    beep(990, 0.05); renderAll(false);
+    say(`Combined! ${res.steps.map(st => `${st.from} gives ${VARS[st.x].sym} = ${X.toHTML(st.iso, S.printOpts)}`).join('; ')}. Put in, ${res.steps.map(st => VARS[st.x].sym).join(' and ')} drop${res.steps.length > 1 ? '' : 's'} out: <b>${EQS[id].label}</b> has one unknown left, so it glows.`);
+    return id;
   }
-  dialog('Math says no', '<b>CAN’T COMBINE</b>Neither unknown can be isolated in a single linear step here.');
+  dialog('Math says no', '<b>CAN’T COMBINE</b>None of the unknowns can be isolated in a single linear step here.');
 }
 
 // Show me: a system move combines the two equations (eliminating the other unknown), then solves for this one
@@ -1681,10 +1797,16 @@ S.build = createBuild($('bd'), {
   // labels on the drawing: the symbol, and its value once it has one
   nameOf: (id) => { if (!VARS[id]) return id; const g = S.givens[id]; return g && g.kind !== 'symbol' ? `${VARS[id].plain} = ${fmt(g.mag)}${g.unit && g.unit !== 'no unit' ? (g.unit === '°' ? '°' : ' ' + g.unit) : ''}` : VARS[id].plain; },
   dirsFor: (b) => dirVectors(b),
-  forcesFor: (b) => forcesOf(b).map(f => ({ dir: f.dir, vec: f.dir === 'custom' ? customVec(b, f.ang) : null, label: fLabel(b, f), color: FCOL[f.kind] })),
+  forcesFor: (b) => forcesOf(b).map(f => ({ dir: f.dir, vec: f.dir === 'custom' ? customVec(b, f.ang) : null, label: fLabel(b, f), color: FCOL[f.kind], ...(isExt(b) ? extDraw(b, f) : {}) })),
   // a new arrow: with a force tool armed it becomes that force at once; otherwise the picker asks which force it is
-  onArrow: (bodyId, dir, xy, kind, vec) => {
+  // (on a beam it acts where the drag started; directions there are always named ones)
+  onArrow: (bodyId, dir, xy, kind, vec, u) => {
     const b = fbdBodies().find(x => x.id === bodyId); if (!b) return;
+    if (isExt(b)){
+      const where = { dir: dir || nearestDir(b, vec), u };
+      if (kind && TQ.KINDS[kind]){ addExtForce(b, kind, where); S.fbd.body = b.id; afterForces(); return; }
+      forcePicker(bodyId, where, xy); return;
+    }
     const where = dir ? { dir } : { dir: 'custom', ang: angleOf(b, vec) };
     if (kind){ forcesOf(b).push({ kind, var: defaultVar(FKINDS[kind], b), ...where }); S.fbd.body = b.id; afterForces(); return; }
     forcePicker(bodyId, where, xy);
@@ -1692,6 +1814,7 @@ S.build = createBuild($('bd'), {
   onArrowClick: (bodyId, i, xy) => forcePicker(bodyId, null, xy, i),
   onArrowTurn: (bodyId, i, dir, vec) => {
     const b = fbdBodies().find(x => x.id === bodyId), f = b && forcesOf(b)[i]; if (!f) return;
+    if (isExt(b)){ f.dir = dir || nearestDir(b, vec); S.fbd.body = b.id; afterForces(); return; }
     if (dir){ f.dir = dir; delete f.ang; } else { f.dir = 'custom'; f.ang = angleOf(b, vec); }
     S.fbd.body = b.id; afterForces();
   },
@@ -1704,11 +1827,96 @@ S.build = createBuild($('bd'), {
   snapshot: () => JSON.parse(JSON.stringify(S.fbd.forces)),
   restore: (x) => { if (x) S.fbd.forces = x; if (S.dtab === 'forces'){ renderFBD(); renderForceChips(); } },
   onPropClick: (shapeId, prop) => { const sh = S.build.shapes.find(x => x.id === shapeId), id = sh && sh.props[prop]; if (id && VARS[id]) openEditor(id); },
+  unit: () => S.ch,
+  // torque: the axis marker and its lever arms on a beam or disc, and clicks with the axis tool
+  axisFor: (b) => S.dtab === 'forces' && isExt(b) && (b.frame === 'disc' || b.id === fbdBody()?.id) ? (b.frame === 'disc' ? { centre: true } : { u: pointU(b, axisKey(b)) }) : null,
+  onAxisClick: (bodyId, u) => setAxisAt(bodyId, u),
+  // a pen stroke was read: snap it, or ask which component it is when the stroke could be either
+  onStroke: (res, xy, place) => {
+    if (!res.options.length){ say(res.why); return; }
+    const done = (o) => { place(o); const c = COMPONENTS[compOf(o)]; say(`Read as <b>${esc(o.label)}</b>: it snapped to the standard drawing. ${c ? `<i>What to check:</i> ${c.check}` : ''}`); };
+    if (res.options.length === 1) done(res.options[0]);
+    else choosePop(res.ask, res.options.map(o => o.label), xy, (i) => done(res.options[i]));
+  },
+  wheelButton: (s) => S.ch === 'rotation' && s.kind === 'wheel' && spinState(s) ? (S.pointView === s.id ? '× hide the point' : '◎ a point') : null,
+  pointVectors: (s) => S.pointView === s.id && S.ch === 'rotation' ? pointMath(s)?.vecs || null : null,
+  onWheelButton: (id) => {
+    S.pointView = S.pointView === id ? null : id; S.build.render(); renderBuildUI();
+    if (S.pointView) say('A point P on the rim: <b>v</b> along its path, <b>aₜ = rα</b> along its path too, <b>a꜀ = ω²r</b> toward the centre. Their equations are under the drawing.');
+  },
 });
+// which library card a recognised stroke or a shape belongs to
+const compOf = (o) => o.kind === 'vec' ? o.vec : o.kind === 'floor' || o.kind === 'table' ? 'surface' : o.kind;
+// ask which component a stroke was meant to be
+function choosePop(title, labels, xy, pick){
+  let pop = $('choosePick'); if (!pop){ pop = document.createElement('div'); pop.id = 'choosePick'; pop.className = 'pop'; document.body.appendChild(pop); }
+  pop.innerHTML = `<div class="small">${esc(title)}</div><div class="row">${labels.map((l, i) => `<button data-pick="${i}">${esc(l)}</button>`).join('')}<button data-pick="-1">Neither</button></div>`;
+  pop.style.left = Math.min(innerWidth - 340, xy.x + 10) + 'px'; pop.style.top = Math.min(innerHeight - 140, xy.y + 10) + 'px'; pop.hidden = false;
+  pop.querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { pop.hidden = true; if (+b.dataset.pick >= 0) pick(+b.dataset.pick); else say('Nothing added. Try the stroke again, or pick the shape from the toolbar.'); });
+}
+
+// ---------- a point on a spinning wheel (Phase 4) ----------
+// The wheel shows its button once ω or α is known or drawn on it. The point P sits at the top of the rim (counterclockwise
+// is +, so there "along its path" is to the left). Every number comes from the library equations' templates.
+function spinState(s){
+  const part = (ids, arrow, sampleId) => {
+    const id = ids.find(known);
+    if (id) return { id, val: val(id), num: !isSymbolic(id) };
+    return arrow ? { id: null, val: (arrow.ccw ? 1 : -1) * sampleOf(sampleId), num: false } : null;
+  };
+  const w = part(['w', 'w0'], s.omega, 'w'), al = part(['alpha'], s.alpha, 'alpha');
+  if (!w && !al) return null;
+  return { w, al, r: known('r') ? { id: 'r', val: val('r'), num: !isSymbolic('r') } : { id: null, val: sampleOf('r'), num: false } };
+}
+const POINT_EQS = [
+  { x: 'v', e: 'E7', needs: ['w'], color: '#9be15d', label: 'v' },
+  { x: 'at', e: 'E8', needs: ['al'], color: '#ff8f70', label: 'aₜ' },
+  { x: 'ac', e: 'E9', needs: ['w'], color: '#ffd166', label: 'a꜀' },
+  { x: 'atot', e: 'E11', needs: ['w', 'al'], color: '#ff6bd6', label: 'a' },
+];
+function pointMath(s){
+  const st = spinState(s); if (!st) return null;
+  const v = { r: st.r.val, w: st.w ? st.w.val : 0, alpha: st.al ? st.al.val : 0 };
+  const rows = POINT_EQS.filter(q => q.needs.every(k => st[k])).map(q => {
+    const res = EQS[q.e].solve[q.x].f(v); v[q.x] = res.value;
+    return { ...q, value: res.value, num: q.needs.every(k => st[k].num) && st.r.num };
+  });
+  // directions on the drawing (y down): along the path at the top is (−1, 0) for counterclockwise; the centre is straight down
+  // the accelerations share one scale (the longest reaches 70% of the way to the centre), so their sizes compare truly
+  const by = Object.fromEntries(rows.map(q => [q.x, q])), aMax = Math.max(Math.abs(by.at?.value || 0), Math.abs(by.ac?.value || 0)) || 1, L = Math.min(110, 0.7 * s.r);
+  const vecs = [];
+  if (by.v && by.v.value) vecs.push({ key: 'v', x: -Math.sign(by.v.value), y: 0, len: 95, color: by.v.color, label: 'v' });
+  if (by.at && by.at.value) vecs.push({ key: 'at', x: -Math.sign(by.at.value), y: 0, len: Math.max(24, L * Math.abs(by.at.value) / aMax), color: by.at.color, label: 'aₜ' });
+  if (by.ac && by.ac.value) vecs.push({ key: 'ac', x: 0, y: 1, len: Math.max(24, L * by.ac.value / aMax), color: by.ac.color, label: 'a꜀' });
+  if (by.atot && by.at.value && by.ac.value){
+    const ax = -by.at.value, ay = by.ac.value, n = Math.hypot(ax, ay);
+    vecs.push({ key: 'atot', x: ax / n, y: ay / n, len: L * n / aMax, color: by.atot.color, label: 'a' });
+  }
+  return { st, rows, vecs };
+}
+function pointPanelHTML(s){
+  const pm = pointMath(s); if (!pm) return '';
+  const { st, rows } = pm, wName = st.w && st.w.id ? VARS[st.w.id].sym : 'ω';
+  const vals = { r: st.r.val, w: st.w?.val, alpha: st.al?.val, ...Object.fromEntries(rows.map(q => [q.x, q.value])) };
+  const lines = rows.map(q => {
+    const eq = EQS[q.e], sub = eq.solve[q.x].sub;
+    return `<div class="pteq"><span class="tag">${eq.label}</span> ${eq.form}${q.num ? ` = ${plug(sub, vals)} = <b>${fmt(q.value)} ${unitOf(q.x)}</b>` : ''}</div>`;
+  }).join('');
+  const missing = !st.r.num || rows.some(q => !q.num) ? `<div class="small muted">Give ${[!st.r.num && 'r', st.w && !st.w.num && 'ω', st.al && !st.al.num && 'α'].filter(Boolean).join(', ')} a number to see the sizes; the arrows use typical values.</div>` : '';
+  const note = st.w && st.w.id === 'w0' ? `<div class="small muted">ω here is ${wName}, at t = 0.</div>` : '';
+  return `<div class="ptpanel"><b>A point P at radius r</b>${lines}${note}${missing}<div class="row"><button class="go" id="ptAdd">+ Add these to my sheet</button></div></div>`;
+}
+function addPointEqs(s){
+  const pm = pointMath(s); if (!pm || S.busy) return;
+  S.cond.rim = true; syncDrawingGivens();
+  const add = pm.rows.map(q => q.e).filter(e => !S.sheet.includes(e));
+  S.sheet.push(...add); beep(990, 0.05); renderAll(false);
+  say(`${add.length ? `Added ${add.map(e => EQS[e].label).join(', ')} to your sheet` : 'They are already on your sheet'}, and <b>Track a point</b> is on.`);
+}
 // ---------- variables from the drawing ----------
 // Each shape property names a quantity (the ramp's angle θ, a block's mass m). Drawing the shape adds it as a given,
 // a symbol until you give it a number (click its label or chip). Removing the shape removes it.
-const PROP_VARS = { angle: true, mass: true, radius: true };
+const PROP_VARS = { angle: true, mass: true, radius: true, length: true };
 function syncDrawingGivens(){
   const want = new Set();
   for (const sh of S.build.shapes) for (const [prop, id] of Object.entries(sh.props)) if (PROP_VARS[prop] && typeof id === 'string' && chVars().includes(id)) want.add(id);
@@ -1721,6 +1929,15 @@ function syncDrawingGivens(){
 }
 // the directions an arrow can snap to on this body, as unit vectors on the drawing (y down)
 function dirVectors(b){
+  if (isExt(b)){
+    const sg = b.frame === 'beam' ? TQ.TILT[extOpts(b).tilt] : 0, be = numAngle('beta') * Math.PI / 180, ph = numAngle('phi') * Math.PI / 180;
+    return Object.entries(TQ.DIRS[b.frame]).map(([key, d]) => {
+      let x, y;
+      if (d.w){ [x, y] = d.w.map(c => Number(c.replace('−', '-'))); }
+      else { const A = d.s[0] * Math.cos(ph), P = d.s[1] * Math.sin(ph); x = A * Math.cos(be) - P * sg * Math.sin(be); y = A * sg * Math.sin(be) + P * Math.cos(be); }
+      return { key, x, y: -y };
+    });
+  }
   const th = (b.frame === 'slope' ? S.build.theta : 0) * Math.PI / 180;
   const sAx = b.frame === 'hanging' ? [0, 1] : [Math.cos(th), -Math.sin(th)], nAx = b.frame === 'hanging' ? [1, 0] : [-Math.sin(th), -Math.cos(th)];
   const num = (u) => u === '0' ? 0 : X.evalNum(X.parse(u), { inc: S.build.theta });
@@ -1731,30 +1948,34 @@ function frameAxes(b){
   const th = (b.frame === 'slope' ? S.build.theta : 0) * Math.PI / 180;
   return { s: b.frame === 'hanging' ? [0, 1] : [Math.cos(th), -Math.sin(th)], n: b.frame === 'hanging' ? [1, 0] : [-Math.sin(th), -Math.cos(th)] };
 }
+const nearestDir = (b, v) => dirVectors(b).map(d => ({ k: d.key, dot: d.x * v.x + d.y * v.y })).sort((p, q) => q.dot - p.dot)[0].k;
 function angleOf(b, v){ const ax = frameAxes(b), cs = v.x * ax.s[0] + v.y * ax.s[1], sn = v.x * ax.n[0] + v.y * ax.n[1]; return Math.round(Math.atan2(sn, cs) * 180 / Math.PI); }
 function customVec(b, ang){ const ax = frameAxes(b), a = (ang || 0) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a); return { x: c * ax.s[0] + s * ax.n[0], y: c * ax.s[1] + s * ax.n[1] }; }
 const numTxt = (x) => Math.abs(x) < 1e-9 ? '0' : (x < 0 ? '−' : '') + String(+Math.abs(x).toFixed(4));
 // a force's direction as [∥ part, ⊥ part, words], named or custom
 function dirOf(b, f){
+  if (isExt(b)){ const d = TQ.DIRS[b.frame][f.dir]; return ['', '', d ? d.name : f.dir]; }
   if (f.dir === 'custom'){ const a = (f.ang || 0) * Math.PI / 180; return [numTxt(Math.cos(a)), numTxt(Math.sin(a)), `${f.ang}° from the ∥ axis`]; }
   return (DIRS[b.frame] || DIRS.free)[f.dir];
 }
 // the same direction on screen (for tests and the popover)
 S.fbdScreenDir = (b, key) => { const d = dirVectors(b).find(q => q.key === key), m = $('bd').getScreenCTM(); const x = m.a * d.x + m.c * d.y, y = m.b * d.x + m.d * d.y, n = Math.hypot(x, y); return { x: x / n, y: y / n }; };
-const FCOL = { gravity: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push: '#3ddc97', tension: '#ffffff', contact: '#c39bff' };
+const FCOL = { gravity: '#ffd166', hung: '#ffd166', normal: '#4fd1ff', friction: '#ff9f43', push: '#3ddc97', tension: '#ffffff', contact: '#c39bff', hinge: '#9be1c9' };
 // after drawing an arrow: which force is it? (or, for an existing arrow: change it or remove it)
 function forcePicker(bodyId, dir, xy, index = null){
   const b = fbdBodies().find(x => x.id === bodyId); if (!b) return;
   let pop = $('forcePick'); if (!pop){ pop = document.createElement('div'); pop.id = 'forcePick'; pop.className = 'pop'; document.body.appendChild(pop); }
   const where = typeof dir === 'string' ? { dir } : dir;
   const name = dirOf(b, where || forcesOf(b)[index])[2];
+  const kinds = isExt(b) ? extKinds(b) : FKINDS;
   pop.innerHTML = `<div class="small muted">${index === null ? 'Which force is this?' : 'Change this force'} <span>(${name})</span></div>
-    <div class="row">${Object.entries(FKINDS).map(([k, d]) => `<button data-fkind="${k}" style="border-color:${FCOL[k]}">${d.label}</button>`).join('')}</div>
+    <div class="row">${Object.entries(kinds).map(([k, d]) => `<button data-fkind="${k}" style="border-color:${FCOL[k]}">${d.label}</button>`).join('')}</div>
     <div class="row">${index === null ? '' : '<button data-fdel="1">Remove it</button>'}<button data-fcancel="1">Cancel</button></div>`;
   pop.style.left = Math.min(innerWidth - 340, xy.x + 10) + 'px'; pop.style.top = Math.min(innerHeight - 140, xy.y + 10) + 'px'; pop.hidden = false;
   const close = () => { pop.hidden = true; };
   pop.querySelectorAll('[data-fkind]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.fkind, d = FKINDS[k];
+    if (isExt(b)){ if (index !== null) forcesOf(b).splice(index, 1); addExtForce(b, k, where || {}); close(); S.fbd.body = b.id; afterForces(); return; }
     if (index === null) forcesOf(b).push({ kind: k, var: defaultVar(d, b), ...where });
     else Object.assign(forcesOf(b)[index], { kind: k, var: defaultVar(d, b) });
     close(); S.fbd.body = b.id; afterForces();
@@ -1767,20 +1988,44 @@ function afterForces(){ S.build.render(); renderFBD(); renderForceChips(); }
 function renderForceChips(){
   const box = $('forceChips'); if (!box) return;
   const seen = new Map();
-  for (const b of fbdBodies()) for (const f of forcesOf(b)){ const key = f.kind === 'gravity' ? 'W:' + massOf(b) : f.var; if (!seen.has(key)) seen.set(key, { b, f }); }
+  for (const b of fbdBodies()) for (const f of forcesOf(b)){ const key = isWeight(f) ? 'W:' + weightMass(b, f) : f.var; if (!seen.has(key)) seen.set(key, { b, f }); }
   if (!seen.size){ box.innerHTML = ''; return; }
   box.innerHTML = `<span class="lbl">Forces</span>` + [...seen.values()].map(({ b, f }) => {
-    const id = f.kind === 'gravity' ? null : f.var, st = id ? stateOf(id) : 'given';
-    const txt = f.kind === 'gravity' ? fLabelHTML(b, f) : `${VARS[id].sym}${known(id) ? ' = ' + showVal(id) : ''}`;
+    const id = isWeight(f) ? null : f.var, st = id ? stateOf(id) : 'given';
+    const txt = isWeight(f) ? fLabelHTML(b, f) : `${VARS[id].sym}${known(id) ? ' = ' + showVal(id) : ''}`;
     return `<button class="fchip s-${st}" style="border-color:${FCOL[f.kind]}" ${id && !known(id) && !S.targets.includes(id) ? `data-ftarget="${id}" title="Make it a target"` : 'disabled'}>${txt}</button>`;
   }).join('');
   box.querySelectorAll('[data-ftarget]').forEach(btn => btn.onclick = () => addTarget(btn.dataset.ftarget));
 }
 // ---------- library drawer, add-a-given panel ----------
-function setDrawer(open){ $('libDrawer').classList.toggle('open', open); $('libBtn').setAttribute('aria-expanded', String(open)); }
-$('libBtn').onclick = () => setDrawer(!$('libDrawer').classList.contains('open'));
+// two drawers share the right edge: the equation library and the diagram library; opening one closes the other
+const DRAWERS = { libDrawer: 'libBtn', diagDrawer: 'diagBtn' };
+function setDrawer(open, id = 'libDrawer'){
+  for (const [d, b] of Object.entries(DRAWERS)){ const on = open && d === id; $(d).classList.toggle('open', on); $(b).setAttribute('aria-expanded', String(on)); }
+}
+for (const [d, b] of Object.entries(DRAWERS)) $(b).onclick = () => setDrawer(!$(d).classList.contains('open'), d);
 $('libClose').onclick = () => setDrawer(false);
+$('diagClose').onclick = () => setDrawer(false);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setDrawer(false); });
+// a component's card: its standard drawing, what it means, its properties, connections, arrows, equations and what to check
+function compHTML(k, tip = ''){
+  const c = COMPONENTS[k], eqs = c.eqs.map(e => `<span class="ceq"><span class="tag">${EQS[e].label}</span> ${EQS[e].form}</span>`).join('');
+  return `<div class="comp" data-comp="${k}"><svg class="cdraw" viewBox="0 0 80 50" aria-hidden="true">${c.draw}</svg><div class="cbody"><b>${c.label}</b><p>${c.means}</p>
+    <dl><dt>Properties</dt><dd>${c.props.map(([n, v]) => `${n}: ${v}`).join(' · ')}</dd><dt>Connects</dt><dd>${c.connects}</dd>${c.arrows.length ? `<dt>Arrows</dt><dd>${c.arrows.join(' · ')}</dd>` : ''}
+    <dt>Equations</dt><dd>${eqs}${c.more ? `<span class="cmore">${c.more}</span>` : ''}</dd></dl>
+    <p class="cchk">✓ <b>What to check:</b> ${c.check}</p>${tip ? `<p class="ctip">${tip}</p>` : ''}</div></div>`;
+}
+$('diagLib').innerHTML = Object.keys(COMPONENTS).map(k => compHTML(k)).join('');
+// hovering (or focusing) a toolbar tool shows the same card beside it
+const TOOL_COMP = Object.fromEntries(Object.entries(COMPONENTS).flatMap(([k, c]) => c.tools.map(t => [t, k])));
+function showCard(btn){
+  const card = $('compCard'), key = btn.dataset.tipkey;
+  card.innerHTML = compHTML(TOOL_COMP[key], TIPS[key]); card.hidden = false;
+  const r = btn.getBoundingClientRect(), right = $('bpal').getBoundingClientRect().right;
+  card.style.left = Math.min(innerWidth - card.offsetWidth - 8, right + 8) + 'px';
+  card.style.top = Math.max(8, Math.min(innerHeight - card.offsetHeight - 8, r.top - 10)) + 'px';
+}
+const hideCard = () => { $('compCard').hidden = true; };
 $('addGivenBtn').onclick = () => { const p = $('addPanel'); p.hidden = !p.hidden; $('addGivenBtn').setAttribute('aria-expanded', String(!p.hidden)); };
 // ---------- the drawing toolbar: two columns of pixel icons, like a classic Draw palette ----------
 const ico = (body) => `<svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" shape-rendering="crispEdges">${body}</svg>`;
@@ -1802,6 +2047,13 @@ const ICONS = {
   acc: ico(iArrow(4, 15, 17, 4, '#ff8f70', 'a', 11, 19)),
   force: ico(iArrow(5, 15, 17, 3, '#ffffff', '?', 2, 9)),
   com: ico('<circle cx="10" cy="10" r="7" fill="#e8edff" stroke="#090d2a" stroke-width="1.5"/><path d="M10 10 H17 A7 7 0 0 0 10 3 Z M10 10 H3 A7 7 0 0 0 10 17 Z" fill="#090d2a"/>'),
+  pen: ico('<polygon points="3,17 4,13 14,3 17,6 7,16" fill="#ffd98a" stroke="#090d2a" stroke-width="1"/><polygon points="3,17 4,13 7,16" fill="#e8edff"/>'),
+  particle: ico('<circle cx="10" cy="10" r="3.5" fill="#ff6bd6"/>'),
+  rod: ico('<rect x="2" y="8" width="16" height="4" fill="rgba(255,107,214,.35)" stroke="#ff6bd6" stroke-width="1.5"/>'),
+  spring: ico('<path d="M1 10 H4 L6 5 L9 15 L12 5 L15 15 L16 10 H19" fill="none" stroke="#9be15d" stroke-width="1.8"/>'),
+  pivot: ico('<polygon points="10,5 4,16 16,16" fill="none" stroke="#ffd98a" stroke-width="2"/><circle cx="10" cy="5" r="2.5" fill="#ffd98a"/>'),
+  omega: ico('<path d="M10 17 A7 7 0 1 0 3 10" fill="none" stroke="#9be15d" stroke-width="2.2"/><polygon points="3,14 0,9 6,9" fill="#9be15d"/><text x="7" y="13" font-family="ui-monospace,Menlo,monospace" font-size="8" font-weight="800" fill="#9be15d">ω</text>'),
+  alpha: ico('<path d="M10 17 A7 7 0 1 0 3 10" fill="none" stroke="#ff8f70" stroke-width="2.2"/><polygon points="3,14 0,9 6,9" fill="#ff8f70"/><text x="7" y="13" font-family="ui-monospace,Menlo,monospace" font-size="8" font-weight="800" fill="#ff8f70">α</text>'),
   'f:gravity': ico(iArrow(12, 2, 12, 18, '#ffd166', 'W', 1, 10)),
   'f:normal': ico(iArrow(12, 18, 12, 2, '#4fd1ff', 'N', 1, 12)),
   'f:friction': ico(iArrow(18, 7, 3, 7, '#ff9f43', 'f', 8, 18)),
@@ -1812,9 +2064,16 @@ const ICONS = {
   tpulley: ico('<rect x="1" y="9" width="12" height="2" fill="#8796ff"/><rect x="5" y="5" width="5" height="4" fill="#ff6bd6"/><circle cx="15" cy="9" r="3" fill="none" stroke="#ffd98a" stroke-width="1.5"/><path d="M10 7 H15 M18 9 V14" stroke="#e8edff" stroke-width="1"/><rect x="16" y="14" width="4" height="4" fill="#ff6bd6"/>'),
   blocks: ico('<path d="M1 17 H19" stroke="#8796ff" stroke-width="2"/><rect x="3" y="8" width="7" height="8" fill="#ff6bd6"/><rect x="10" y="10" width="6" height="6" fill="#c39bff"/>'),
   twheel: ico('<circle cx="10" cy="10" r="8" fill="none" stroke="#ffd98a" stroke-width="2"/><circle cx="10" cy="10" r="2" fill="#ffd98a"/><path d="M10 2 V18 M2 10 H18" stroke="#ffd98a" stroke-width="1"/>'),
+  tbeam: ico('<rect x="1" y="5" width="18" height="3" fill="#ff6bd6"/><polygon points="5,8 2,13 8,13" fill="none" stroke="#ffd98a" stroke-width="1.5"/><path d="M16 8 V12" stroke="#e8edff" stroke-width="1"/><rect x="14" y="12" width="4" height="4" fill="#ff6bd6"/>'),
+  tdisc: ico('<circle cx="11" cy="7" r="5.5" fill="none" stroke="#ff6bd6" stroke-width="2"/><circle cx="11" cy="7" r="1.5" fill="#ffd98a"/><path d="M5.5 7 V13" stroke="#e8edff" stroke-width="1"/><rect x="3.5" y="13" width="4" height="5" fill="#ff6bd6"/>'),
+  axis: ico('<rect x="1" y="9" width="18" height="3" fill="rgba(255,107,214,.5)"/><circle cx="7" cy="10.5" r="5" fill="none" stroke="#9be15d" stroke-width="2"/><path d="M7 5 V16 M2 10.5 H12" stroke="#9be15d" stroke-width="1.5"/>'),
 };
 const TIPS = {
   select: 'Select / move: drag shapes, drag the gold squares to resize, drag an arrow tip to turn it',
+  pen: 'Pen: sketch freehand. A line becomes a ramp or surface, a closed loop a ball or wheel, a box a block, an arrow from a body a vector',
+  particle: 'Particle: a point mass; lands on the newest surface', rod: 'Rod: drag the gold square to change its length; drop it on a pivot to pin it at that point',
+  spring: 'Spring: drag the gold square to stretch it', pivot: 'Pivot: drop a wheel’s centre, or any point of a rod, on it to pin it there',
+  omega: 'Angular velocity ω: click a wheel or ball; click again to turn it the other way', alpha: 'Angular acceleration α: click a wheel or ball; click again to turn it the other way',
   erase: 'Eraser: click a shape or an arrow to remove it', undo: 'Undo the last change', clear: 'Clear the whole drawing',
   ramp: 'Ramp: drag the round handle for the angle, the square one for the length', block: 'Block: lands on the newest surface; drag its gold corner to resize', ball: 'Ball (mass m, radius r)', wheel: 'Wheel (radius r)',
   table: 'Table (flat surface)', floor: 'Floor', pulley: 'Pulley: snaps to the top corner of a table or ramp', string: 'String: joins the last bodies over a pulley',
@@ -1823,8 +2082,10 @@ const TIPS = {
   'f:gravity': 'Gravity W = mg: drag out from a body', 'f:normal': 'Normal force N: drag out from a body', 'f:friction': 'Friction f: drag out from a body',
   'f:tension': 'Tension T: drag out from a body', 'f:push': 'Push / pull F: drag out from a body', 'f:contact': 'Contact force P (from the other block): drag out from a body',
   incline: 'Preset: block on an incline', tpulley: 'Preset: table, pulley and hanging block', blocks: 'Preset: two blocks side by side', twheel: 'Preset: a wheel',
+  tbeam: 'Preset: a beam on a pivot with a hung mass', tdisc: 'Preset: a disc on an axle, a string to a hanging mass', axis: 'Axis for torques: click a point on the beam',
 };
-const tbBtn = (attrs, key, on = false) => `<button class="tb" ${attrs} title="${TIPS[key]}" aria-label="${TIPS[key].split(':')[0]}" aria-pressed="${on}">${ICONS[key]}</button>`;
+// tools with a diagram-library card show it on hover instead of a plain tooltip
+const tbBtn = (attrs, key, on = false) => `<button class="tb" ${attrs} ${TOOL_COMP[key] ? `data-tipkey="${key}"` : `title="${TIPS[key]}"`} aria-label="${TIPS[key].split(':')[0]}" aria-pressed="${on}">${ICONS[key]}</button>`;
 function renderBuildUI(){
   const forces = S.dtab === 'forces', tool = S.build.tool;
   const T = (k) => tbBtn(`data-tool="${k}"`, k, tool === k);
@@ -1832,22 +2093,28 @@ function renderBuildUI(){
   const act = (k) => tbBtn(`data-act="${k}"`, k);
   $('bpal').hidden = false;
   $('bpal').innerHTML = forces
-    ? `${T('force')}${T('erase')}${act('undo')}${T('com')}${sep}${Object.keys(FKINDS).map(k => T('f:' + k)).join('')}`
-    : `${T('select')}${T('erase')}${act('undo')}${act('clear')}${sep}${['ramp', 'block', 'ball', 'wheel', 'table', 'floor', 'pulley', 'string'].map(k => tbBtn(`data-bshape="${k}"`, k)).join('')}${sep}${T('vel')}${T('acc')}${sep}`
-      + [['incline', 'incline'], ['pulley', 'tpulley'], ['blocks', 'blocks'], ['wheel', 'twheel']].map(([t, k]) => tbBtn(`data-template="${t}"`, k)).join('');
+    ? `${T('force')}${T('erase')}${act('undo')}${S.ch === 'torque' ? T('axis') : T('com')}${sep}${Object.keys(FKINDS).filter(k => S.ch !== 'torque' || TQ.KINDS[k]).map(k => T('f:' + k)).join('')}`
+    : `${T('select')}${T('pen')}${T('erase')}${act('undo')}${act('clear')}${sep}${PALETTE.map(k => tbBtn(`data-bshape="${k}"`, k)).join('')}${sep}${T('vel')}${T('acc')}${T('omega')}${T('alpha')}${sep}`
+      + (S.ch === 'torque' ? [['beam', 'tbeam'], ['disc', 'tdisc']] : [['incline', 'incline'], ['pulley', 'tpulley'], ['blocks', 'blocks'], ['wheel', 'twheel']]).map(([t, k]) => tbBtn(`data-template="${t}"`, k)).join('');
   $('bpal').querySelectorAll('[data-tool]').forEach(b => b.onclick = () => { S.build.tool = b.dataset.tool; renderBuildUI(); });
   $('bpal').querySelectorAll('[data-bshape]').forEach(b => b.onclick = () => { S.build.tool = 'select'; S.build.add(b.dataset.bshape); });
   $('bpal').querySelectorAll('[data-template]').forEach(b => b.onclick = () => { S.build.tool = 'select'; S.build.template(b.dataset.template); });
   $('bpal').querySelector('[data-act="undo"]').onclick = () => { if (!S.build.undo()) say('Nothing to undo.'); };
   $('bpal').querySelector('[data-act="clear"]')?.addEventListener('click', () => S.build.clear());
+  hideCard();
+  $('bpal').querySelectorAll('[data-tipkey]').forEach(b => { b.onpointerenter = b.onfocus = () => showCard(b); b.onpointerleave = b.onblur = hideCard; });
   const box = $('bprops');
   if (forces){
     const b = fbdBody();
-    box.innerHTML = `<span class="small muted">${tool.startsWith('f:') ? `<b>${FKINDS[tool.slice(2)].label}</b>: drag out from a body.` : tool === 'com' ? '<b>Centre of mass</b>: click inside a body.' : tool === 'erase' ? '<b>Eraser</b>: click an arrow.' : 'Drag out from a body to draw a force.'} Drag an arrow’s <b>tip</b> to turn it: it clicks onto the named directions. Click an arrow to change it.${b ? ` Forces act at ⊕ on <b>${bodyName(b) === b.kind ? S.build.KINDS[b.kind].label.toLowerCase() : bodyName(b)}</b>.` : ''}</span>`;
+    box.innerHTML = `<span class="small muted">${tool.startsWith('f:') ? `<b>${FKINDS[tool.slice(2)].label}</b>: drag out from a body.` : tool === 'com' ? '<b>Centre of mass</b>: click inside a body.' : tool === 'axis' ? '<b>Axis</b>: click a point on the beam; torques are measured about it.' : tool === 'erase' ? '<b>Eraser</b>: click an arrow.' : isExt(b) ? 'Drag out from the point where a force acts.' : 'Drag out from a body to draw a force.'} Drag an arrow’s <b>tip</b> to turn it: it clicks onto the named directions. Click an arrow to change it.${b && !isExt(b) ? ` Forces act at ⊕ on <b>${bodyName(b) === b.kind ? S.build.KINDS[b.kind].label.toLowerCase() : bodyName(b)}</b>.` : ''}</span>`;
     return;
   }
+  const wheel = S.pointView && S.build.shapes.find(x => x.id === S.pointView), panel = wheel && S.ch === 'rotation' ? pointPanelHTML(wheel) : '';
+  if (panel){ box.innerHTML = panel; $('ptAdd').onclick = () => addPointEqs(wheel); return; }
   const s = S.build.selected();
-  if (!s){ box.innerHTML = `<span class="small muted">${tool === 'vel' || tool === 'acc' ? `Drag out from a body to draw its <b>${tool === 'vel' ? 'velocity' : 'acceleration'}</b>.` : 'Pick a shape from the toolbar. Bodies land on the newest surface. Click a shape for its handles; click a label to name it.'}</span>`; return; }
+  const idle = { vel: 'Drag out from a body to draw its <b>velocity</b>.', acc: 'Drag out from a body to draw its <b>acceleration</b>.', pen: '<b>Pen</b>: sketch a line (ramp or surface), a closed loop (ball or wheel), a box (block), or an arrow out of a body. It snaps to the standard drawing; the <b>Diagrams</b> drawer shows them all.',
+    omega: 'Click a wheel or ball to show which way it <b>spins</b> (ω); click again to turn it.', alpha: 'Click a wheel or ball to show which way its spin <b>changes</b> (α); click again to turn it.' };
+  if (!s){ box.innerHTML = `<span class="small muted">${idle[tool] || 'Pick a shape from the toolbar, or sketch it with the pen. Bodies land on the newest surface. Click a shape for its handles; click a label to name it.'}</span>`; return; }
   const massOpts = ['m', 'm1', 'm2', 'mA', 'mB'].map(id => `<option value="${id}" ${s.props.mass === id ? 'selected' : ''}>${VARS[id].plain}</option>`).join('');
   let html = `<b>${S.build.KINDS[s.kind].label}</b>`;
   if ('mass' in s.props) html += `<label>mass <select data-bprop="mass">${massOpts}</select></label>`;
@@ -1883,14 +2150,18 @@ const FKINDS = {
   tension: { label: 'Tension', vars: ['Tn'], dir: (fr) => fr === 'slope' ? 'up-slope' : fr === 'flat' ? 'forward' : 'up' },
 };
 S.fbd = { body: null, forces: {} };
-const fbdBodies = () => S.build.bodies();
+// in torque equilibrium a hung block is a load on the beam (its weight acts at the hook), not a body of its own
+const fbdBodies = () => S.build.bodies().filter(b => !(S.ch === 'torque' && !S.cond.dyn && b.kind === 'block'));
 const fbdBody = () => { const bs = fbdBodies(); return bs.find(b => b.id === S.fbd.body) || bs[0] || null; };
 const forcesOf = (b) => (S.fbd.forces[b.id] = S.fbd.forces[b.id] || []);
 const massOf = (b) => b.mass || 'm';
-const bodyName = (b) => b.mass === 'mA' ? 'block A' : b.mass === 'mB' ? 'block B' : b.kind;
+const bodyName = (b) => b.mass === 'mA' ? 'block A' : b.mass === 'mB' ? 'block B' : b.frame === 'beam' ? 'beam' : b.frame === 'disc' ? 'disc' : b.kind;
+// a weight: gravity on the body (its own mass) or a mass hung from a beam (m), both mg straight down
+const isWeight = (f) => f.kind === 'gravity' || f.kind === 'hung';
+const weightMass = (b, f) => f.kind === 'hung' ? 'm' : massOf(b);
 // the symbol a new force gets: the one named for this body (N_A on block A), else the unit's first
 const defaultVar = (d, b) => { if (!d.vars) return null; const sfx = (massOf(b).match(/[AB12]$/) || [''])[0]; const own = d.vars.find(id => sfx && id.endsWith(sfx) && chVars().includes(id)); return own || d.vars.find(id => chVars().includes(id)) || d.vars[0]; };
-function fMag(b, f){ return f.kind === 'gravity' ? `{${massOf(b)}}{g}` : `{${f.var}}`; }
+function fMag(b, f){ return isWeight(f) ? `{${weightMass(b, f)}}{g}` : `{${f.var}}`; }
 // a force's components (s, n) as rationals in symbols, in the body's frame and with the student's axis choice
 function components(b, f){
   const d = dirOf(b, f); if (!d) return null;
@@ -1903,9 +2174,11 @@ function components(b, f){
 }
 const ratTxt = (r) => X.toText(r, S.printOpts), ratHTML = (r) => X.toHTML(r, S.printOpts);
 // labels: HTML (with subscripts) for the page, and SVG tspans for the drawing
-const fLabelHTML = (b, f) => f.kind === 'gravity' ? `W = ${ratHTML(X.toRat(X.parse(`{${massOf(b)}}{g}`), symEnv([massOf(b), 'g'])))}` : VARS[f.var].sym;
-const fLabel = (b, f) => f.kind === 'gravity' ? `W = ${ratTxt(X.toRat(X.parse(`{${massOf(b)}}{g}`), symEnv([massOf(b), 'g'])))}` : VARS[f.var].plain;
+const weightRat = (b, f) => X.toRat(X.parse(`{${weightMass(b, f)}}{g}`), symEnv([weightMass(b, f), 'g']));
+const fLabelHTML = (b, f) => isWeight(f) ? `${f.kind === 'hung' ? '' : 'W = '}${ratHTML(weightRat(b, f))}` : VARS[f.var].sym;
+const fLabel = (b, f) => isWeight(f) ? `${f.kind === 'hung' ? '' : 'W = '}${ratTxt(weightRat(b, f))}` : VARS[f.var].plain;
 function fbdCheck(b){
+  if (isExt(b)) return TQ.check(b, forcesOf(b), extSetting(b), plain);
   const fs = forcesOf(b), bad = [], what = bodyName(b);
   const grav = fs.filter(f => f.kind === 'gravity');
   if (!grav.length) bad.push(`Every body needs gravity: W = ${VARS[massOf(b)].plain}g, straight down.`);
@@ -1966,6 +2239,7 @@ function fbdEquations(b){
 }
 function renderFBD(){
   const box = $('fbd'), b = fbdBody();
+  if (isExt(b)) return renderExtFBD(b, box);
   if (!b){ box.innerHTML = `<p class="small">Build the setup first in the <b>Build</b> tab (or load a template there). Then draw the forces on each body here.</p>`; return; }
   const bs = fbdBodies(), fs = forcesOf(b), fr = DIRS[b.frame] || DIRS.free;
   const varOpts = (f) => FKINDS[f.kind].vars ? FKINDS[f.kind].vars.filter(id => chVars().includes(id) || id === f.var).map(id => `<option value="${id}" ${f.var === id ? 'selected' : ''}>${VARS[id].plain}: ${nm(id)}</option>`).join('') : '';
@@ -2008,6 +2282,151 @@ function renderFBD(){
     clearDerived(); renderAll(false);
     msg(`✓ Wrote ${ids.map(id => `<b>${EQS[id].label}</b>`).join(' and ')} onto your sheet.`, true);
     say(`Your free-body diagram gave ${ids.length} equation${ids.length > 1 ? 's' : ''}: ${ids.map(id => EQS[id].form).join(' and ')}. They’re on your sheet. ${fbdBodies().length > 1 ? 'Draw the next body, or go' : 'Go'} on to <b>3 · Conditions</b>.`);
+  };
+}
+
+// ---------- extended free-body diagrams: a beam or a disc (Phase 5, torque.js has the math) ----------
+// Forces start where they act. A beam's points are distances from the end the student picks (S.fbd.from); each beam
+// has a tilt and an axis for Στ (S.fbd.opts). The axis starts at the pivot, with a question about why that is a good choice.
+const isExt = (b) => !!b && (b.frame === 'beam' || b.frame === 'disc');
+const fromMap = () => (S.fbd.from = S.fbd.from || {});
+const extOpts = (b) => { S.fbd.opts = S.fbd.opts || {}; return (S.fbd.opts[b.id] = S.fbd.opts[b.id] || { tilt: 'level', axis: null, why: null }); };
+const axisKey = (b) => b.frame === 'disc' ? 'centre' : extOpts(b).axis || (b.pivot ? 'pivot' : 'left');
+const numAngle = (id) => known(id) ? Math.abs(val(id)) : sampleOf(id);
+const shapeOf = (b) => S.build.shapes.find(x => x.id === b.id);
+const extKinds = (b) => Object.fromEntries(Object.entries(TQ.KINDS).filter(([, d]) => !d.beamOnly || b.frame === 'beam'));
+const pinnedEnd = (b) => b.pinAt === 'left' || b.pinAt === 'right' ? b.pinAt : null;
+// the string tied to this body, and where its other end is (a hung block below, to the left or right)
+function stringOn(b){
+  const sh = shapeOf(b);
+  for (const st of S.build.strings()){
+    const i = st.ends.indexOf(b.id); if (i < 0) continue;
+    const other = S.build.shapes.find(x => x.id === st.ends[i ? i - 1 : i + 1]); if (!other) continue;
+    return { other, left: other.x < sh.x, below: other.y > sh.y };
+  }
+  return null;
+}
+const extSetting = (b) => { const st = stringOn(b); return { pinned: !!b.pivot, hungBlock: !!(st && st.other.kind === 'block' && st.other.hanging), stringTo: st }; };
+function addExtForce(b, k, where = {}){
+  const d = TQ.KINDS[k], fs = forcesOf(b), fr = fromMap();
+  if (k === 'hinge'){
+    const at = b.frame === 'disc' ? 'centre' : 'pivot';
+    if (at === 'pivot' && b.pinAt === 'point' && !fr.dP) fr.dP = (shapeOf(b).pinU ?? 0) > 0.5 ? 'right' : 'left';
+    fs.push({ kind: 'hinge', var: 'Hx', dir: 'right', at }, { kind: 'hinge', var: 'Hy', dir: 'up', at });
+    return;
+  }
+  let at = d.at, dir = where.dir && TQ.DIRS[b.frame][where.dir] ? where.dir : d.dir;
+  if (b.frame === 'disc'){
+    const st = stringOn(b);
+    at = k === 'tension' || k === 'push' ? (st && !st.left ? 'rim-right' : 'rim-left') : 'centre';
+    if (k === 'tension' && !where.dir && st) dir = st.below ? 'down' : 'up';
+  }
+  const f = { kind: k, var: d.vars ? d.vars[0] : null, dir, at };
+  if (b.frame === 'beam' && TQ.POINT_VARS.includes(at)){
+    if (where.u !== undefined && where.u !== null) f.u = where.u;
+    if (!fr[at]) fr[at] = f.u !== undefined ? (f.u > 0.5 ? 'right' : 'left') : pinnedEnd(b) || 'left';
+  }
+  fs.push(f);
+}
+// where a point is along the beam (0 = left end, 1 = right end): to scale once L and its distance are numbers
+function pointU(b, at, f = null){
+  const sh = shapeOf(b), fr = fromMap();
+  if (at === 'centre') return 0.5;
+  if (at === 'left') return 0;
+  if (at === 'right') return 1;
+  if (at === 'pivot') return sh.pinU ?? 0;
+  const num = (id) => known(id) && !isSymbolic(id) ? Math.abs(val(id)) : null, L = num('L'), d = num(at);
+  if (L && d !== null) return Math.min(1, Math.max(0, fr[at] === 'right' ? 1 - d / L : d / L));
+  if (f && f.u !== undefined) return f.u;
+  const st = stringOn(b);
+  if (at === 'dm' && st && st.other.kind === 'block') return Math.min(1, Math.max(0, (st.other.x - (sh.x - sh.w / 2)) / sh.w));
+  return { dm: 0.85, dT: 0.75, dF: 0.6 }[at] ?? 0.5;
+}
+// what the canvas needs to draw a beam's or disc's force where it acts
+function extDraw(b, f){
+  const at = TQ.atOf(f);
+  if (b.frame === 'disc'){ const r = TQ.RIM[at]; return r ? { off: { x: r[0], y: -r[1] } } : {}; }
+  const named = TQ.POINT_VARS.includes(at) ? at : at === 'pivot' && b.pinAt === 'point' ? 'dP' : null;
+  return { u: pointU(b, at, f), ptLabel: named ? plain(named) : '' };
+}
+// the points an axis can sit at: the pivot, the ends, the centre and every named point a force acts at
+function axisOptions(b){
+  const keys = [...(b.pivot ? ['pivot'] : []), 'left', 'right', 'centre'];
+  for (const f of forcesOf(b)){ const at = TQ.atOf(f); if (TQ.POINT_VARS.includes(at) && !keys.includes(at)) keys.push(at); }
+  return keys;
+}
+const axisName = (b, k) => k === 'pivot' ? 'the pivot' : TQ.placeName(k, b, fromMap(), plain);
+const radiusOf = (b) => shapeOf(b)?.props.radius || 'R';
+const extCtx = (b) => ({ tilt: extOpts(b).tilt, axis: axisKey(b), axisName: axisName(b, axisKey(b)), from: fromMap(), dyn: !!S.cond.dyn, radius: radiusOf(b) });
+const tplRat = (t) => X.toRat(X.parse(t), symEnv([...new Set([...t.matchAll(/\{(\w+)\}/g)].map(m => m[1]))]));
+function setAxisAt(bodyId, u){
+  const b = fbdBodies().find(x => x.id === bodyId); if (!isExt(b)) return;
+  if (b.frame === 'disc'){ say('A disc on an axle turns about the axle, so its torques are taken about the centre.'); return; }
+  const best = axisOptions(b).map(k => ({ k, d: Math.abs(pointU(b, k) - u) })).sort((p, q) => p.d - q.d)[0];
+  extOpts(b).axis = best.k; extOpts(b).why = null; S.fbd.body = b.id; afterForces();
+  say(`The axis for Στ is now at <b>${axisName(b, best.k)}</b>. In equilibrium Στ = 0 about every point, so any axis works; one where unknown forces act makes the algebra shortest.`);
+}
+const WHY = [
+  ['The hinge force acts there, so it has no lever arm: H_x and H_y drop out of Στ = 0.', true, 'Right: about the pivot the hinge’s lever arm is zero, so Στ = 0 has fewer unknowns and you can solve it first.'],
+  ['Στ = 0 only holds about the pivot.', false, 'Not quite: in equilibrium Στ = 0 about every point. The pivot is just the most convenient one, because the unknown hinge force acts there.'],
+  ['The torques are biggest about the pivot.', false, 'No: the torques change with the axis, but that doesn’t make one axis better. The pivot is good because the unknown hinge force has no lever arm there.'],
+];
+function renderExtFBD(b, box){
+  const bs = fbdBodies(), fs = forcesOf(b), o = extOpts(b), fr = fromMap(), beam = b.frame === 'beam', ctx = extCtx(b), dirs = TQ.DIRS[b.frame];
+  if (beam) S.build.setTilt(b.id, TQ.TILT[o.tilt] * numAngle('beta'));
+  const fromBtns = (id) => `<span class="seg">from the <button data-ffrom="${id}" data-side="left" aria-pressed="${(fr[id] || 'left') === 'left'}">left end</button><button data-ffrom="${id}" data-side="right" aria-pressed="${fr[id] === 'right'}">right end</button></span>`;
+  const rows = fs.map((f, i) => {
+    const at = TQ.atOf(f), pt = beam && TQ.POINT_VARS.includes(at);
+    return `<div class="frow"><b>${TQ.KINDS[f.kind].label.replace(/ \(.*/, '')}</b><span>${fLabelHTML(b, f)}</span>
+      <select data-fdir="${i}">${Object.entries(dirs).map(([k, d]) => `<option value="${k}" ${f.dir === k ? 'selected' : ''}>${d.name}</option>`).join('')}</select>
+      <span class="small">at ${pt ? VARS[at].sym : esc(TQ.placeName(at, b, fr, plain))}</span>${pt ? fromBtns(at) : ''}<button data-fdel="${i}" title="Remove">×</button></div>`;
+  }).join('');
+  const pivotRow = beam && b.pinAt === 'point' ? `<div class="frow small">Pivot at ${VARS.dP.sym} ${fromBtns('dP')}</div>` : '';
+  const hasHinge = fs.some(f => f.kind === 'hinge'), ak = axisKey(b);
+  const axisRow = beam
+    ? `<div class="frow"><b>Axis for Στ:</b> <select id="fbdAxis">${axisOptions(b).map(k => `<option value="${k}" ${k === ak ? 'selected' : ''}>${esc(axisName(b, k))}</option>`).join('')}</select><span class="small muted">or click the beam with the axis tool</span></div>
+      ${ak === 'pivot' && hasHinge ? `<div class="why"><b>Why is the pivot a good axis?</b>${WHY.map(([w], i) => `<button data-why="${i}" aria-pressed="${o.why === i}">${w}</button>`).join('')}<div id="whyMsg" class="fmsg ${o.why === null ? '' : WHY[o.why][1] ? 'ok' : 'bad'}">${o.why === null ? '' : WHY[o.why][2]}</div></div>` : ''}`
+    : `<div class="small">Axis for Στ: <b>the axle</b> (the disc’s centre). The weight and the axle force act there, so they have no lever arm.</div>`;
+  // torque cards: which force, where it acts, its lever arm, sin φ, its torque and its sign
+  const nv = { ...samplesNow(), ...vals() };
+  const trows = fs.map(f => ({ f, p: TQ.parts(b, f, ctx) })).filter(x => x.p).map(({ f, p }) => {
+    const tau = p.tau === null ? null : tplRat(p.tau), t = tau ? X.evalRat(tau, nv) : 0;
+    const sign = !tau || Math.abs(t) < 1e-12 ? '<span title="no lever arm or no perpendicular part">— 0</span>' : t > 0 ? '<span title="counterclockwise">↺ +</span>' : '<span title="clockwise">↻ −</span>';
+    return `<tr><td>${fLabelHTML(b, f)}</td><td>${p.r === '0' ? '0' : ratHTML(tplRat(p.r))}</td><td>${p.sin === '0' ? '0' : ratHTML(tplRat(p.sin))}</td><td>${tau ? ratHTML(tau) : '0'}</td><td>${sign}</td></tr>`;
+  }).join('');
+  const table = trows ? `<div class="small muted">Torque cards: r runs from the axis to where each force acts${beam ? ' (along the beam, + toward the right end)' : ''}; φ is the angle between r and F.</div><table class="ftable" id="torqueTable"><tr><th>force</th><th>r</th><th>sin φ</th><th>τ = rF sin φ</th><th>sign</th></tr>${trows}</table>` : '';
+  box.innerHTML = `${bs.length > 1 ? `<div class="frow"><b>Body:</b> <select id="fbdBody">${bs.map(x => `<option value="${x.id}" ${x.id === b.id ? 'selected' : ''}>${bodyName(x)} (${VARS[massOf(x)].plain})${x.hanging ? ', hanging' : ''}</option>`).join('')}</select></div>` : ''}
+    <div class="small">Forces: x toward the ${beam ? 'beam’s right end' : 'right'}, y up. Torques: + counterclockwise. Each force starts where it acts${beam ? ': drag out from that point on the beam' : ''}.</div>
+    ${beam ? `<div class="frow"><b>The beam is</b>${[['level', 'level'], ['down', 'tilted: right end lower by β'], ['up', 'tilted: right end higher by β']].map(([k, w]) => `<button data-tilt="${k}" aria-pressed="${o.tilt === k}">${w}</button>`).join('')}</div>` : ''}
+    <div class="fadd"><span class="small"><b>Add a force:</b></span>${Object.entries(extKinds(b)).map(([k, d]) => `<button data-addforce="${k}">${d.label}</button>`).join('')}</div>
+    ${rows || '<div class="small muted">No forces yet. What pulls or pushes on it, and where?</div>'}${pivotRow}
+    ${axisRow}${table}
+    <div class="frow"><button id="fbdCheck">Check my diagram</button><button class="go" id="fbdWrite">${S.cond.dyn ? 'Write Στ = Iα onto my sheet' : 'Write ΣF = 0 and Στ = 0 onto my sheet'}</button></div>
+    <div id="fbdMsg"></div>`;
+  $('fbdBody')?.addEventListener('change', (e) => { S.fbd.body = e.target.value; renderFBD(); renderBuildUI(); });
+  box.querySelectorAll('[data-addforce]').forEach(btn => btn.onclick = () => { S.build.checkpoint(); addExtForce(b, btn.dataset.addforce); afterForces(); });
+  box.querySelectorAll('[data-fdir]').forEach(sel => sel.onchange = () => { S.build.checkpoint(); fs[+sel.dataset.fdir].dir = sel.value; afterForces(); });
+  box.querySelectorAll('[data-fdel]').forEach(btn => btn.onclick = () => { S.build.checkpoint(); const f = fs[+btn.dataset.fdel]; S.fbd.forces[b.id] = fs.filter(x => x !== f && !(f.kind === 'hinge' && x.kind === 'hinge')); afterForces(); });
+  box.querySelectorAll('[data-ffrom]').forEach(btn => btn.onclick = () => { fr[btn.dataset.ffrom] = btn.dataset.side; afterForces(); });
+  box.querySelectorAll('[data-tilt]').forEach(btn => btn.onclick = () => { o.tilt = btn.dataset.tilt; afterForces(); });
+  box.querySelectorAll('[data-why]').forEach(btn => btn.onclick = () => { o.why = +btn.dataset.why; renderFBD(); });
+  $('fbdAxis')?.addEventListener('change', (e) => { o.axis = e.target.value; o.why = null; afterForces(); });
+  const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; };
+  $('fbdCheck').onclick = () => { const bad = fbdCheck(b); msg(bad.length ? bad.map(x => '✗ ' + x).join('<br>') : `✓ This diagram looks right: every force has a source and starts where it acts.`, !bad.length); };
+  $('fbdWrite').onclick = async () => {
+    const bad = fbdCheck(b);
+    if (bad.length){ msg('Fix the diagram first:<br>' + bad.map(x => '✗ ' + x).join('<br>'), false); return; }
+    const eqs = TQ.equations(b, fs, extCtx(b));
+    try { for (const q of eqs) q.unitText = q.torque ? 'N·m' : X.dimStr(X.dimOf(X.parse(q.zsub), DIMS)); }
+    catch (e){ if (!(e instanceof X.MathError)) throw e; msg(`✗ The units don’t add up: ${e.message}.`, false); return; }
+    if (!await beforeClearing('Rewriting the diagram’s equations')) return;
+    dropGenerated(g => g.key === 'fbd:' + b.id);
+    const side = (t) => { const r = tplRat(t); return { text: ratTxt(r), html: ratHTML(r) }; };
+    const ids = eqs.map(q => addGenerated({ label: q.label, zsub: q.zsub, lhs: side(q.lhs), rhs: side(q.rhs), condition: q.condition, unitText: q.unitText,
+      vars: [...new Set([...q.zsub.matchAll(/\{(\w+)\}/g)].map(m => m[1]))], key: 'fbd:' + b.id, meaning: 'Written from your diagram: every force where it acts.' }));
+    clearDerived(); renderAll(false);
+    msg(`✓ Wrote ${ids.map(id => `<b>${EQS[id].label}</b>`).join(', ')} onto your sheet.`, true);
+    say(`Your diagram gave ${ids.map(id => EQS[id].form).join(' · ')}. ${fbdBodies().length > 1 ? 'Draw the next body, or go' : 'Go'} on to <b>3 · Conditions</b>.`);
   };
 }
 
@@ -2157,9 +2576,10 @@ function renderAll(full = true){
   if (full) renderUnit();
   $('checkRow').style.display = S.bank ? 'flex' : 'none';
   if (S.givens.inc && S.givens.inc.kind !== 'symbol' && S.givens.inc.val >= 5 && S.givens.inc.val <= 75 && Math.abs(S.build.theta - S.givens.inc.val) > 1e-9) S.build.theta = S.givens.inc.val;
-  renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSpan(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
+  renderKind(); renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSpan(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
   $('calcCond').innerHTML = $('calcSolve').innerHTML = calcHTML();
   $('axisNote').innerHTML = S.ch === 'incline' && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice). Pick the direction for each vector; the app sets the sign.' : chapter().axis;
+  if (S.dtab !== 'motion') S.build.render(); // labels show given values; a wheel shows its button once ω or α is known
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();
   draw();
 }
