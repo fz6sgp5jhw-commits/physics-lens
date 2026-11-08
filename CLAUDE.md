@@ -42,6 +42,7 @@ Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dep
 - Small, focused commits. Never commit `node_modules`.
 
 ## Saving context (tokens)
+- **Usage stop rule:** after each roadmap checkbox, check usage (the session usage tool). If the 5-hour limit is past 75% or this conversation is past 40% of its context window, stop cleanly: run the phase's own tests, commit what is done (even if the phase isn't finished), and write one line under the phase in `ROADMAP.md`, `Resume from: …`, naming the next unticked box and anything half-built. Then tell the user to `/clear` and start the next session with the same line. A session that starts and finds a `Resume from` note continues from it and deletes the note when the phase is done.
 - One roadmap phase per session; the user runs `/clear` between phases.
 - `app.js` is ~2,300 lines: `grep -n` for the function you need and read that range; don't read whole files without a reason.
 - Filter long command output (tests, git diff --stat). Take screenshots only to check layout or visuals.

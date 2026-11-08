@@ -115,6 +115,16 @@ Problems seen in class (end of the torque and rotational-motion homework): beams
 Design: `docs/drawing-first-plan.md`, decided with the user on 2026-11-08. Each phase names the plan sections to read; read only those. First scope: the torque unit and a rod with point masses (worked example: three blocks of mass m clamped at the ends and centre of a light rod of length L; I about the centre = mL²/2, about one end = 5mL²/4).
 Ground rules for every phase: drawing-first is the default and guided mode (today's flow) stays behind a toggle, unchanged; new code goes in new files (`js/setup.js`, `js/algebra.js`), not into `app.js`; the student does the physics and the algebra, and the code only carries out and checks exactly what they ask. During a session, run only the phase's own test file; run the full suite once before committing.
 
+Sessions (decided 2026-11-08): four build sessions, grouped so each reads shared code once. Set the model and effort in the app's model picker before the first message. Every session follows the usage stop rule in `CLAUDE.md`; if it stops early, the next session starts with the same line and resumes from the phase's "Resume from" note.
+
+| Session | Phases | Start with | Model | Effort |
+|---|---|---|---|---|
+| 1 | 6a | `Do phase 6a in ROADMAP.md.` | Opus | High |
+| 2 | 6b and 7 (canvas tools in `build.js`) | `Do phases 6b and 7 in ROADMAP.md.` | Sonnet | Medium |
+| 3 | 8a | `Do phase 8a in ROADMAP.md.` | Opus | High |
+| 4 | 8b and 9 (both on the workspace) | `Do phases 8b and 9 in ROADMAP.md.` | Opus | Medium |
+| later | 10, the new look | `Do phase 10 in ROADMAP.md. …` | Opus | Medium |
+
 ## Phase 6a: modes, part cards, summary
 **Start with:** `Do phase 6a in ROADMAP.md.` Read plan sections 1, 2 and 3.
 - [ ] Mode toggle in the app bar: drawing-first (default) and guided mode (today's stages, sheet, Hint, Show me). Stored as `pl-mode` (with a visible way to reset it). `openApp` in `tests/helpers.js` gets a `mode` option and opens in guided mode by default, so the existing tests keep passing unchanged.
@@ -124,7 +134,7 @@ Ground rules for every phase: drawing-first is the default and guided mode (toda
 - [ ] Gate (`tests/drawfirst-setup.test.js`, written first): rod and three blocks drawn; every card answered (rod negligible mass; each block a point mass); a block marked free while drawn on the rod is named as a conflict; guided mode still opens today's flow.
 
 ## Phase 6b: connections, names, knowns, counter
-**Start with:** `Do phase 6b in ROADMAP.md.` Read plan sections 3 (connections and strings), 4 and 6.
+**Start with:** `Do phases 6b and 7 in ROADMAP.md.` (session 2) Read plan sections 3 (connections and strings), 4 and 6.
 - [ ] Connect tool: drag from one part to another; the connector gets a dot and a card (clamped, resting on, hangs by a string, sliding along); a connection to a rod adds a tick. Strings drawn with the same tool, through pulleys and off a disc's rim.
 - [ ] Per-part names (m₁, m₂, L_rod, T₁): "has mass" → typed symbol or number with units writes m₁ = m; a value of the wrong kind is refused. Numbers stay with their symbol.
 - [ ] Knowns list with each entry's source (drawing, card, assumed); targets; "not needed" greys an entry out.
@@ -132,7 +142,7 @@ Ground rules for every phase: drawing-first is the default and guided mode (toda
 - [ ] Gate (`tests/drawfirst-knowns.test.js`): the three blocks connected and clamped, each "has mass m" → knowns m₁ = m, m₂ = m, m₃ = m, L_rod = L, M_rod = 0; target I; counter 1 unknown, 0 relationships. A disc's shape card adds its I_cm.
 
 ## Phase 7: the toolkit
-**Start with:** `Do phase 7 in ROADMAP.md.` Read plan section 5.
+**Start with:** done in session 2, after 6b. Read plan section 5.
 - [ ] One set of x–y axes: drag the origin, turn by a handle, snaps to meaningful directions, the angle can be named.
 - [ ] Split a force onto the axes: dashed projections the student labels (W sin θ …); labels are checked only when a check is used (phase 8b).
 - [ ] Rod ticks at every point of interest (ends, centre, connections, pivot, ones the student adds); gap labels as dimension lines; optional point letters (A, B, C).
@@ -148,7 +158,7 @@ Ground rules for every phase: drawing-first is the default and guided mode (toda
 - [ ] Gate (`tests/drawfirst-algebra.test.js`): from I = Σmr² with the knowns substituted to I = mL²/2, once by mouse only and once by keyboard only; a one-sided division is written as asked.
 
 ## Phase 8b: condensing, checks, numbers, rewards
-**Start with:** `Do phase 8b in ROADMAP.md.` Read plan sections 8 (condensing), 9 and 10.
+**Start with:** `Do phases 8b and 9 in ROADMAP.md.` (session 4) Read plan sections 8 (condensing), 9 and 10.
 - [ ] Condensing: name a selected piece (A = …, expandable), work a piece out in numbers, simplify a selected part (each its own line).
 - [ ] The code's own answer for the setup (the first scope: I = Σmr² from the clamped point masses and their positions; beams and discs through `torque.js`), used only by the checks.
 - [ ] Two checks the student can use whenever before the answer, and a final check: pass or something to look at; revise, or ask for a correction (names the first line that doesn't follow and why, never writes it). After a failed check the formula sheet can highlight the group to look in.
@@ -156,7 +166,7 @@ Ground rules for every phase: drawing-first is the default and guided mode (toda
 - [ ] Gate (`tests/drawfirst-checks.test.js`): parts A (mL²/2) and B (5mL²/4) end to end; a planted sign slip is found by a check with its line named; a swapped sin/cos label on a split force is flagged.
 
 ## Phase 9: drag shortcuts (optional)
-**Start with:** `Do phase 9 in ROADMAP.md.` Read plan section 8.
+**Start with:** done in session 4, after 8b (skip it if the stop rule triggers first). Read plan section 8.
 - [ ] Drag a term across = (its sign flips, or it moves from top to bottom of a fraction), and drag a known onto a symbol to substitute it. Both are shortcuts for what the tap menu already does.
 - [ ] Gate: the phase 8a mouse route redone with drags.
 
