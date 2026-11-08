@@ -48,13 +48,14 @@ const spins = (s) => KINDS[s.kind].spins || s.kind === 'ball';
 //   onStroke(result, clientXY, place)  a pen stroke was read: result from recognize(); call place(option) to snap it
 //   wheelButton(shape) → label text when a wheel shows its "a point" button; pointVectors(shape) → [{ key, x, y, len, color, label }]
 //   onWheelButton(shapeId)
+//   afterRender(svg) runs after every redraw (drawing-first mode puts its part dots on top)
 // Torque (Phase 5): in the torque unit a rod is a body (frame 'beam') and a wheel is a disc (frame 'disc'). A force can say
 // where it acts: u (fraction along the rod from its left end) or off (offset from a disc's centre, in radii); onArrow
 // then gets the u where the drag started. axisFor(body) → { u } | { centre: true } marks the axis for torques, and
 // onAxisClick(bodyId, u | null) reports a click with the axis tool. A rod pinned at a pivot records pinAt
 // ('left' | 'right' | 'centre' | 'point') and pinU; setTilt(id, degrees) turns it about the pin (+ counterclockwise).
 export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dirsFor = () => [], forcesFor = () => [], onArrow = () => {}, onArrowClick = () => {}, onArrowTurn = () => {}, onArrowErase = () => {}, onVector = () => {}, onPropClick = () => {}, snapshot = () => null, restore = () => {},
-  unit = () => '', onStroke = () => {}, wheelButton = () => null, pointVectors = () => null, onWheelButton = () => {}, axisFor = () => null, onAxisClick = () => {} } = {}){
+  unit = () => '', onStroke = () => {}, wheelButton = () => null, pointVectors = () => null, onWheelButton = () => {}, axisFor = () => null, onAxisClick = () => {}, afterRender = () => {} } = {}){
   const st = { shapes: [], sel: null, seq: 0, theta: 30, mode: 'setup', tool: 'select', preview: null, turn: null, hover: null, stroke: null };
   const hist = [];
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -351,6 +352,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     if (st.mode === 'setup'){ renderVectors(); renderSpins(); }
     if (st.mode === 'forces') renderForces();
     if (st.stroke) el('polyline', { points: st.stroke.map(p => `${p.x},${p.y}`).join(' '), class: 'bstroke' });
+    afterRender(svg);
   }
   // arrows
   const L = 105;
@@ -596,6 +598,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     setTilt: (id, a) => { const s = shape(id); if (s && s.kind === 'rod' && (s.ang || 0) !== a){ s.ang = a; render(); } },
     // a point a fraction u along a rod, on screen (for tests)
     rodScreen: (id, u) => { const q = rodPoint(shape(id), u); return api.toScreen(q.x, q.y); },
+    rodAt: (id, u) => rodPoint(shape(id), u),
     setVec: (id, k, key) => { const s = shape(id), b = bodyOf(id), d = b && dirVec(b, key); if (!s || !d || !s[k]) return; s[k] = { ...s[k], x: d.x, y: d.y, key }; render(); },
     get theta(){ return st.theta; }, set theta(v){ st.theta = v; snapAll(); render(); },
     get shapes(){ return st.shapes; },

@@ -127,11 +127,12 @@ Sessions (decided 2026-11-08): four build sessions, grouped so each reads shared
 
 ## Phase 6a: modes, part cards, summary
 **Start with:** `Do phase 6a in ROADMAP.md.` Read plan sections 1, 2 and 3.
-- [ ] Mode toggle in the app bar: drawing-first (default) and guided mode (today's stages, sheet, Hint, Show me). Stored as `pl-mode` (with a visible way to reset it). `openApp` in `tests/helpers.js` gets a `mode` option and opens in guided mode by default, so the existing tests keep passing unchanged.
-- [ ] **Done drawing** button; after it, a pressable dot with a title on every part ("Rod", "Block 1"); a counter ("3 of 5 parts set").
-- [ ] Part cards driven by one data table in `js/setup.js`: the draft-2 vocabulary (groups, choices with the term and a plain line, what each adds, assumed defaults with the words that overturn them, conflict rules). Only groups that fit what's drawn are shown (no vectors: stationary groups only). Conditions are clicked, never typed.
-- [ ] Summary: every choice, the assumed defaults (changeable), and conflicts named with their reason; it closes only when there are none.
-- [ ] Gate (`tests/drawfirst-setup.test.js`, written first): rod and three blocks drawn; every card answered (rod negligible mass; each block a point mass); a block marked free while drawn on the rod is named as a conflict; guided mode still opens today's flow.
+- [x] Mode toggle in the app bar: drawing-first (default) and guided mode (today's stages, sheet, Hint, Show me). Stored as `pl-mode` (with a visible way to reset it). `openApp` in `tests/helpers.js` gets a `mode` option and opens in guided mode by default, so the existing tests keep passing unchanged.
+- [x] **Done drawing** button; after it, a pressable dot with a title on every part ("Rod", "Block 1"); a counter ("3 of 5 parts set").
+- [x] Part cards driven by one data table in `js/setup.js`: the draft-2 vocabulary (groups, choices with the term and a plain line, what each adds, assumed defaults with the words that overturn them, conflict rules). Only groups that fit what's drawn are shown (no vectors: stationary groups only). Conditions are clicked, never typed.
+- [x] Summary: every choice, the assumed defaults (changeable), and conflicts named with their reason; it closes only when there are none.
+- [x] Gate (`tests/drawfirst-setup.test.js`, written first): rod and three blocks drawn; every card answered (rod negligible mass; each block a point mass); a block marked free while drawn on the rod is named as a conflict; guided mode still opens today's flow.
+- What changed: new `js/setup.js` (the `VOCAB` table: groups, choices with term, plain line and what each adds, assumed defaults with the words that overturn them, `needs`/`clash` conflict rules; facts read from the drawing; dots, cards, counter, summary). App bar **Drawing first / Guided** (`#modeBtn`, `pl-mode`; drawing-first uses the torque unit and hides the guided flow with `.guided-only`). Canvas bar: **Done drawing** (`#doneDraw`), **Summary** (`#dfSumBtn`), counter (`#dfCount`); right column `#dfCard`; taller canvas in drawing-first. `build.js` gained `afterRender` and `rodAt`. `openApp` gets `mode` (guided by default; existing tests unchanged). 104 tests (`tests/drawfirst-setup.test.js` new, 3). Cache `physics-lens-v14`.
 
 ## Phase 6b: connections, names, knowns, counter
 **Start with:** `Do phases 6b and 7 in ROADMAP.md.` (session 2) Read plan sections 3 (connections and strings), 4 and 6.

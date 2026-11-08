@@ -3,6 +3,7 @@ import { createBuild, PALETTE } from './build.js';
 import * as X from './expr.js';
 import { createField } from './field.js';
 import * as TQ from './torque.js';
+import { createSetup } from './setup.js';
 
 const $ = (id) => document.getElementById(id);
 // text the student typed or pasted is escaped before it goes into HTML
@@ -1786,8 +1787,11 @@ function showTab(t){
 document.querySelectorAll('[data-dtab]').forEach(b => b.onclick = () => { const t = b.dataset.dtab; if (t === 'motion') showTab(t); else openStage(t === 'forces' ? 1 : 0); });
 
 // ---------- build canvas ----------
+let DF = null; // the drawing-first setup (part dots, cards, summary), created just after the canvas
 S.build = createBuild($('bd'), {
+  afterRender: (svg) => DF?.decorate(svg),
   onChange: () => {
+    DF?.changed();
     const sel = S.build && S.build.selected();
     if (sel && S.dtab === 'forces' && fbdBodies().some(b => b.id === sel.id)) S.fbd.body = sel.id; // click a body: its free-body diagram opens
     const conds = syncDrawnConds();
@@ -1845,6 +1849,26 @@ S.build = createBuild($('bd'), {
     if (S.pointView) say('A point P on the rim: <b>v</b> along its path, <b>aₜ = rα</b> along its path too, <b>a꜀ = ω²r</b> toward the centre. Their equations are under the drawing.');
   },
 });
+DF = S.df = createSetup({ build: S.build, svg: $('bd'), panel: $('dfCard'), count: $('dfCount'), doneBtn: $('doneDraw'), sumBtn: $('dfSumBtn'), say, active: () => S.mode === 'draw' });
+
+// ---------- modes: drawing-first (the default) or guided (today's stages, sheet, Hint and Show me) ----------
+// Guided is remembered as pl-mode on this device; choosing drawing-first again forgets it.
+const savedMode = () => { try { return localStorage.getItem('pl-mode') === 'guided' ? 'guided' : 'draw'; } catch { return 'draw'; } };
+function setMode(m, remember = true){
+  S.mode = m;
+  document.body.classList.toggle('mode-draw', m === 'draw');
+  $('modeBtn').querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  if (remember) try { if (m === 'guided') localStorage.setItem('pl-mode', 'guided'); else localStorage.removeItem('pl-mode'); } catch {}
+  // drawing-first covers the torque unit for now (a rod and point masses)
+  if (m === 'draw'){ if (S.ch !== 'torque'){ switchChapter('torque'); renderAll(); } showTab('build'); }
+  DF.render(); S.build.render();
+}
+$('modeBtn').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+  if (b.dataset.mode === S.mode) return;
+  setMode(b.dataset.mode);
+  say(S.mode === 'draw' ? 'Drawing first: draw the problem, press <b>Done drawing</b>, then set each part from its dot.' : 'Guided mode: the four stages, the sheet, <b>Hint</b> and <b>Show me</b>.');
+});
+
 // which library card a recognised stroke or a shape belongs to
 const compOf = (o) => o.kind === 'vec' ? o.vec : o.kind === 'floor' || o.kind === 'table' ? 'surface' : o.kind;
 // ask which component a stroke was meant to be
@@ -2587,10 +2611,14 @@ async function boot(){
   try { if (localStorage.getItem('rl-calm') === '1') document.body.classList.add('calm'); } catch {}
   $('calmBtn').setAttribute('aria-pressed', String(calm()));
   field.setCalm(calm());
+  const mode = savedMode();
+  if (mode === 'draw') S.ch = 'torque';
   S.cond = defaultsFor(S.ch); applyHidden(); clearWork(); resetInspector();
   S.lastStep = -1; renderAll();
   showTab('build');
-  say('Work through four stages: <b>1 Setup</b> (draw it, add the givens), <b>2 Forces</b> (the free-body or motion diagram), <b>3 Conditions</b>, <b>4 Solve</b>. Each passed check earns a ⭐. Or open the <b>Practice bank</b>. (The background is a live electric field: your cursor is a small test charge.)');
+  setMode(mode, false);
+  if (mode === 'draw') say('Draw the problem with the tools beside the canvas, or sketch it with the pen. Press <b>Done drawing</b> when it’s all there; each part then gets a dot to set it. (Guided mode, top right, has the step-by-step stages.)');
+  else say('Work through four stages: <b>1 Setup</b> (draw it, add the givens), <b>2 Forces</b> (the free-body or motion diagram), <b>3 Conditions</b>, <b>4 Solve</b>. Each passed check earns a ⭐. Or open the <b>Practice bank</b>. (The background is a live electric field: your cursor is a small test charge.)');
   if ('serviceWorker' in navigator && location.protocol === 'https:'){ try { navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch {} }
 }
 boot();

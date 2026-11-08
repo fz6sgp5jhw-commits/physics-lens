@@ -510,6 +510,40 @@
   @keyframes solvedIn{0%{opacity:0;letter-spacing:.6em}25%{opacity:1;letter-spacing:.3em}75%{opacity:1}100%{opacity:0}}
 
   /* calm mode and reduced motion: the field stands still and nothing bobs, blinks or glides */
+  /* modes: drawing-first hides the guided flow; guided hides the drawing-first setup */
+  body.mode-draw .guided-only,body.mode-draw .ws-right > [data-stage]{display:none !important}
+  body:not(.mode-draw) .draw-only{display:none !important}
+  body.mode-draw .canvascard .bsvg{height:64vh;max-height:64vh}
+  .seg{display:flex}
+  .seg button{padding:7px 9px}
+  #dfCount{align-self:center;margin-bottom:5px;color:var(--gold-hi);white-space:nowrap}
+  /* drawing-first setup: a dot and title on every part; the open part glows, the rest dims */
+  .bsvg .dfdot{cursor:pointer;shape-rendering:auto}
+  .bsvg .dfdot:focus{outline:none}
+  .bsvg .dfbg{fill:rgba(9,13,42,.88);stroke:var(--line-hi);stroke-width:2}
+  .bsvg .dfpip{fill:none;stroke:var(--muted);stroke-width:3}
+  .bsvg .dftxt{font:700 17px var(--ui);fill:var(--text);pointer-events:none}
+  .bsvg .dfdot.set .dfpip{fill:var(--good);stroke:var(--good)}
+  .bsvg .dfdot.conflict .dfpip{fill:var(--bad);stroke:var(--bad)}
+  .bsvg .dfdot.conflict .dfbg{stroke:var(--bad)}
+  .bsvg .dfdot.open .dfbg,.bsvg .dfdot:hover .dfbg,.bsvg .dfdot:focus-visible .dfbg{stroke:var(--gold-hi);stroke-width:3}
+  .bsvg .shape.dfdim{opacity:.3}
+  .bsvg .shape.dfglow .bbody{stroke:var(--gold-hi);stroke-width:3.5;filter:drop-shadow(0 0 6px rgba(255,217,138,.7))}
+  .dfgroup{border:0;margin:0 0 10px;padding:0}
+  .dfgroup legend{font:800 11px/1.2 var(--ui);letter-spacing:.14em;text-transform:uppercase;color:var(--gold-hi);text-shadow:var(--hard);margin-bottom:5px}
+  .dfchoice{display:block;width:100%;text-align:left;font-weight:400;line-height:1.35;margin:0 0 5px;padding:6px 9px;min-height:0}
+  .dfchoice b{font-weight:750}
+  .dfadds{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+  .dfchoice[aria-pressed="true"] .dfadds{color:#cfe9ff}
+  .dfhow{margin:2px 0 0;color:var(--muted)}
+  .dfassume{font-size:12.5px;margin:0 0 8px}
+  .dfassume.off > b{text-decoration:line-through}
+  .dfmini{padding:3px 7px;min-height:0;font-size:12px;margin-left:4px}
+  .dflist{margin:0;padding:0 0 0 2px;list-style:none;font-size:12.5px}
+  .dflist li{margin:0 0 6px}
+  .dflink{padding:3px 7px;min-height:0;font-size:12.5px;margin-right:4px}
+  .dfapart{margin:0 0 6px}
+  .dffoot{margin-top:10px}
   body.calm *,body.calm *::before,body.calm *::after{animation-duration:0s !important;animation-iteration-count:1 !important;transition:none !important}
   body.calm .steps button.now{transform:none}
   body.calm .assistant::after{opacity:1}
@@ -528,18 +562,19 @@
       <div><h1>Physics <span>Lens</span></h1><small>mechanics workbench · you cast the physics, it keeps the books</small></div>
     </div>
     <div class="tools" style="grid-column:3;grid-row:1">
-      <button id="bankBtn" class="go" title="Practice problems: text only, you set them up">Practice bank</button>
+      <div id="modeBtn" class="seg" role="group" aria-label="Mode" title="Remembered on this device; choosing Drawing first again forgets it"><button data-mode="draw" aria-pressed="true" title="Draw the problem, then set each part">Drawing first</button><button data-mode="guided" aria-pressed="false" title="Step by step: stages, sheet, Hint and Show me">Guided</button></div>
+      <button id="bankBtn" class="go guided-only" title="Practice problems: text only, you set them up">Practice bank</button>
       <button id="calmBtn" aria-pressed="false" title="Freeze the background field and turn off animations">Calm mode</button>
       <button id="soundBtn" aria-pressed="false" title="Soft blips (off by default)">Sound</button>
     </div>
-    <div class="steps" id="steps"></div>
+    <div class="steps guided-only" id="steps"></div>
     <div class="assistant" aria-live="polite"><span class="aicon" aria-hidden="true">i</span><div id="bubble"></div></div>
   </div>
 </header>
 
 <main class="ws">
   <div class="ws-left">
-    <section class="card prob">
+    <section class="card prob guided-only">
       <div class="probtop">
         <div class="topics" id="chPick"></div>
         <div class="row" id="checkRow" style="display:none"><button class="go" id="checkSetup">✔ Check my setup</button><span class="small muted" id="bankTitle"></span></div>
@@ -547,7 +582,7 @@
       <textarea id="problem" rows="2" placeholder="Type or paste your problem here, or open the Practice bank."></textarea>
     </section>
 
-    <section class="card strip">
+    <section class="card strip guided-only">
       <div class="striprow kindrow" id="kindRow" hidden></div>
       <div class="striprow">
         <span class="lbl">Givens</span>
@@ -564,11 +599,14 @@
 
     <section class="card canvascard" id="diagramCard">
       <div class="ctool">
-        <div class="dtabs" role="tablist"><button data-dtab="build" aria-pressed="true" title="Draw the setup: shapes and their properties">1 · Setup</button><button data-dtab="forces" aria-pressed="false" title="Draw the forces on the setup">2 · Forces</button><button data-dtab="motion" aria-pressed="false" title="Replay the motion">Motion</button></div>
+        <div class="dtabs guided-only" role="tablist"><button data-dtab="build" aria-pressed="true" title="Draw the setup: shapes and their properties">1 · Setup</button><button data-dtab="forces" aria-pressed="false" title="Draw the forces on the setup">2 · Forces</button><button data-dtab="motion" aria-pressed="false" title="Replay the motion">Motion</button></div>
+        <button class="go draw-only" id="doneDraw" title="Every part gets a dot: press it to set what the picture can’t show">Done drawing</button>
+        <button class="draw-only" id="dfSumBtn" hidden title="Every choice, what is assumed, and any conflicts">Summary</button>
+        <span class="small draw-only" id="dfCount" aria-live="polite"></span>
         <button class="go" id="replayBtn">▶ Replay</button>
-        <span class="small muted" id="dgNote"></span>
+        <span class="small muted guided-only" id="dgNote"></span>
         <button id="diagBtn" aria-expanded="false" title="Open the diagram library: every drawing component and what it means">Diagrams</button>
-        <button id="libBtn" aria-expanded="false" title="Open the equation library">Library</button>
+        <button id="libBtn" class="guided-only" aria-expanded="false" title="Open the equation library">Library</button>
       </div>
       <div class="dpane" id="paneMotion" hidden><div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div></div>
       <div class="dpane" id="paneBuild">
@@ -580,6 +618,7 @@
   </div>
 
   <aside class="ws-right">
+    <section class="card draw-only" id="dfCard" aria-live="polite"></section>
     <section class="card" id="condCard" data-stage="2">
       <div class="titlebar"><h2>Conditions</h2><button id="condOk">✓ These conditions are right</button></div>
       <div class="body"><div class="calc" id="calcCond"></div><div id="conds"></div></div>
