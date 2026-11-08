@@ -155,11 +155,14 @@ Sessions (decided 2026-11-08): four build sessions, grouped so each reads shared
 
 ## Phase 8a: the algebra workspace
 **Start with:** `Do phase 8a in ROADMAP.md.` Read plan sections 7 and 8.
-- [ ] Formula-sheet popup with search, neutral (no suggestions). New: I = Σmr² with as many terms as there are masses.
-- [ ] Lines of algebra on one line each (no stacked fractions), kept in the student's form; every operation exact (`js/algebra.js`, built on `expr.js` trees).
-- [ ] Tap a term → menu (divide, multiply, add, subtract, square, square-root, substitute what it equals); Shift applies it to both sides; without Shift it applies to that term only, even when that makes the equation untrue.
-- [ ] Typed lines and operations with Python-style names (`m_1`, `I_cm`, `theta`, `**`, `sqrt()`); autocomplete offers only defined symbols. Undo; going back greys later lines.
-- [ ] Gate (`tests/drawfirst-algebra.test.js`): from I = Σmr² with the knowns substituted to I = mL²/2, once by mouse only and once by keyboard only; a one-sided division is written as asked.
+- [x] Formula-sheet popup with search, neutral (no suggestions). New: I = Σmr² with as many terms as there are masses.
+- [x] Lines of algebra on one line each (no stacked fractions), kept in the student's form; every operation exact (`js/algebra.js`, built on `expr.js` trees).
+- [x] Tap a term → menu (divide, multiply, add, subtract, square, square-root, substitute what it equals); Shift applies it to both sides; without Shift it applies to that term only, even when that makes the equation untrue.
+- [x] Typed lines and operations with Python-style names (`m_1`, `I_cm`, `theta`, `**`, `sqrt()`); autocomplete offers only defined symbols. Undo; going back greys later lines.
+- [x] Gate (`tests/drawfirst-algebra.test.js`): from I = Σmr² with the knowns substituted to I = mL²/2, once by mouse only and once by keyboard only; a one-sided division is written as asked.
+
+- What changed (8a): new `js/algebra.js` (`createWorkspace`, card `#dfWork`, popups `#algSheet` and `#algMenu`). Its own tree keeps the student's form; operations are structural and exact; Simplify (one term, or both sides with Shift) goes through `expr.js` (`toRat` → `toText` → parse), with sample values added by the new `expr.addSamples` under a `ws:` prefix. The sheet is every library relationship whose `sub` parses, grouped by section title, plus I = Σ m r² (terms = blocks in the drawing, ± stepper); nothing is marked until the student searches. Names must already be defined (knowns, targets, active lines), so a typo is refused with a suggestion. Lines: Enter on a typed line adds it; Enter on an op (/ 2, * m, ^2, sqrt, simplify, r_1 = L/2 in the term menu) applies to the picked term, Shift+Enter to both sides; `/` in the empty line box opens the sheet. Undo greys later lines; "Back to here" moves either way; a new step drops the greyed lines. Gate: `tests/drawfirst-algebra.test.js` (3). 113 tests.
+  Note for 8b: Simplify of a whole term or both sides is already here (the gate needs it); 8b adds selecting a group inside a term.
 
 ## Phase 8b: condensing, checks, numbers, rewards
 **Start with:** `Do phases 8b and 9 in ROADMAP.md.` (session 4) Read plan sections 8 (condensing), 9 and 10.

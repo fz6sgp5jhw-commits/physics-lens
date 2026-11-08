@@ -557,6 +557,23 @@
   #dfKnowns .kn.target b{color:#ff6bd6}
   #dfKnowns .kn.unknown b{color:#9aa0b8}
   #dfKnowns .kn.off{opacity:.45;text-decoration:line-through}
+  #dfWork .alglines{padding-left:24px;margin:0 0 8px;font:15px/1.7 var(--mono)}
+  #dfWork .algline{margin:2px 0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+  #dfWork .algline:not(.grey) [data-back]{opacity:0} #dfWork .algline:hover [data-back],#dfWork .algline:focus-within [data-back]{opacity:1}
+  #dfWork .algline.grey{opacity:.4}
+  #dfWork .algline.cur .algeq{color:var(--text)}
+  .algterm{font:inherit;color:inherit;background:none;border:1px dashed transparent;border-image:none;padding:0 3px;margin:0;box-shadow:none;cursor:pointer;text-shadow:none}
+  button.algterm:hover,button.algterm:focus-visible,.algterm.on{border-color:var(--gold-hi);background:rgba(255,209,102,.08)}
+  span.algterm{cursor:default}
+  .alghow{margin-left:auto;font-family:var(--ui)}
+  .algrow input{flex:1;min-width:0;font-family:var(--mono)}
+  .algac{display:flex;flex-wrap:wrap;gap:4px}
+  .algmono{font-family:var(--mono)}
+  .algpop{width:370px}
+  #algSheet{width:min(580px,calc(100vw - 32px));left:50%;top:9vh;transform:translateX(-50%)}
+  .algsheet{overflow:auto;max-height:64vh}
+  .algse{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0}
+  .algpick{font:14px var(--mono)} .algpick.on{outline:2px solid var(--gold-hi)}
   .dfname{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
   .dfname input{width:11em}
   #dfCount{align-self:center;margin-bottom:5px;color:var(--gold-hi);white-space:nowrap}
@@ -676,6 +693,7 @@
   <aside class="ws-right">
     <section class="card draw-only" id="dfCard" aria-live="polite"></section>
     <section class="card draw-only" id="dfKnowns"></section>
+    <section class="card draw-only" id="dfWork"></section>
     <section class="card" id="condCard" data-stage="2">
       <div class="titlebar"><h2>Conditions</h2><button id="condOk">✓ These conditions are right</button></div>
       <div class="body"><div class="calc" id="calcCond"></div><div id="conds"></div></div>

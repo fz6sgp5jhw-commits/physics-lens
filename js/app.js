@@ -8,6 +8,7 @@ import { createKnowns } from './knowns.js';
 import { createTools } from './tools.js';
 import { createConnect } from './connect.js';
 import { createToolkit } from './toolkit.js';
+import { createWorkspace } from './algebra.js';
 
 const $ = (id) => document.getElementById(id);
 // text the student typed or pasted is escaped before it goes into HTML
@@ -1672,7 +1673,7 @@ function stepPulse(){ if (calm()) return; const r = $('workWin').getBoundingClie
 // ---------- toggles ----------
 $('calmBtn').onclick = () => { const on = !calm(); document.body.classList.toggle('calm', on); $('calmBtn').setAttribute('aria-pressed', String(on)); field.setCalm(on); try { localStorage.setItem('rl-calm', on ? '1' : '0'); } catch {} draw(); };
 $('soundBtn').onclick = () => { S.sound = !S.sound; $('soundBtn').setAttribute('aria-pressed', String(S.sound)); beep(660, 0.08); };
-$('clearBtn').onclick = async () => { if (S.busy || !await beforeClearing('Clear all')) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); S.fbd = { body: null, forces: {} }; renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
+$('clearBtn').onclick = async () => { if (S.busy || !await beforeClearing('Clear all')) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); WS.clear(); S.fbd = { body: null, forces: {} }; renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
 
 // ---------- general system detection: two sheet equations with the same two unknowns ----------
 // Any equation can be written as Z = 0: generated ones carry Z; for library ones it comes from a solver's template.
@@ -1860,6 +1861,8 @@ TOOLS = S.tools = createTools({ svg: $('bd'), wrap: $('bd').parentElement, bar: 
 CN = createConnect({ build: S.build, tools: TOOLS, say });
 TK = S.tk = createToolkit({ build: S.build, tools: TOOLS, hit: CN.hit, say, setup: () => DF, bar: $('dfTools') });
 KN.addSource(TK.knowns);
+const WS = S.ws = createWorkspace({ panel: $('dfWork'), knowns: () => KN, masses: () => S.build.shapes.filter(s => s.kind === 'block' || s.kind === 'particle').length, say });
+WS.render();
 
 // ---------- modes: drawing-first (the default) or guided (today's stages, sheet, Hint and Show me) ----------
 // Guided is remembered as pl-mode on this device; choosing drawing-first again forgets it.

@@ -167,6 +167,7 @@ const denPoly = (d) => d.reduce((acc, f) => { for (let j = 0; j < f.k; j++) acc 
 // and a coefficient so the remaining sum has small whole coefficients and is positive at the sample point.
 let SAMPLE = {}; // id → number, used to choose signs and branches the way a physicist would
 export function setSamples(s){ SAMPLE = s; }
+export function addSamples(s){ for (const k in s) if (!(k in SAMPLE)) SAMPLE[k] = s[k]; }
 function content(P){
   if (!P.length) return { m: { c: 0, e: {} }, rest: [] };
   const keys = new Set(P.flatMap(m => Object.keys(m.e)));
