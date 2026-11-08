@@ -3,6 +3,7 @@
 A guided problem-solving lens for intro calculus-based mechanics, used in classrooms. The student makes every physics decision (draw the setup, forces, axes, conditions, which equations); the app does the bookkeeping, checks the reasoning, and shows every algebra step, symbols first, numbers last. Goal: reasoning skill for new students, still useful to anyone analysing a physical system.
 
 **Current work: see `ROADMAP.md`.** Do only the phase you are asked to do; tick its boxes when done.
+**Drawing first (phases 6a–9):** the design is `docs/drawing-first-plan.md`; read only the sections your phase names. Drawing-first is the default mode and guided mode (stages, sheet, Show me) stays behind a toggle. New code goes in new files (`js/setup.js` part cards and vocabulary, `js/algebra.js` the workspace), not into `app.js`.
 **How the code works** (state, solvers, templates, path finding, tests in detail): `docs/architecture.md`. Read the section you need, not the whole file.
 
 ## Stack (keep it this way)
@@ -13,6 +14,7 @@ Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dep
 
 ## Tests
 - Run: `node --test tests/*.test.js` (101 tests). Show only the summary: `… 2>&1 | grep -E "^✖|ℹ (pass|fail)"`.
+- From phase 6a, `openApp` in `tests/helpers.js` opens guided mode unless given `mode: 'draw'`. While working, run only your phase's test file; run the full suite once before committing.
 - All tests pass before every commit. Change a test only when the roadmap phase you are doing changes that behaviour on purpose, and say so in the commit message.
 - Layout check: at 1440×900 after solving, the problem, canvas, conditions and latest solved card are visible without scrolling (`tests/workspace.test.js`).
 

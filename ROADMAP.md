@@ -1,7 +1,7 @@
 # Physics Lens roadmap
 
 One phase per Claude Code session. Start a session with the line under **Start with**, run `/clear` when the phase is done. A phase is done when its boxes are ticked, all tests pass, and this file says what changed.
-Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3; 4b smooths what 3 and 4 built; 5 (torque) comes before the new look (6), decided 2026-11-07.
+Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3; 4b smooths what 3 and 4 built; 5 (torque) comes before the new look, decided 2026-11-07. Phases 6a–9 (drawing first) come before the new look (10), decided 2026-11-08.
 
 ---
 
@@ -111,8 +111,59 @@ Problems seen in class (end of the torque and rotational-motion homework): beams
 
 ---
 
-## Phase 6: the new look
-**Start with:** `Do phase 6 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
+## Drawing first (phases 6a–9)
+Design: `docs/drawing-first-plan.md`, decided with the user on 2026-11-08. Each phase names the plan sections to read; read only those. First scope: the torque unit and a rod with point masses (worked example: three blocks of mass m clamped at the ends and centre of a light rod of length L; I about the centre = mL²/2, about one end = 5mL²/4).
+Ground rules for every phase: drawing-first is the default and guided mode (today's flow) stays behind a toggle, unchanged; new code goes in new files (`js/setup.js`, `js/algebra.js`), not into `app.js`; the student does the physics and the algebra, and the code only carries out and checks exactly what they ask. During a session, run only the phase's own test file; run the full suite once before committing.
+
+## Phase 6a: modes, part cards, summary
+**Start with:** `Do phase 6a in ROADMAP.md.` Read plan sections 1, 2 and 3.
+- [ ] Mode toggle in the app bar: drawing-first (default) and guided mode (today's stages, sheet, Hint, Show me). Stored as `pl-mode` (with a visible way to reset it). `openApp` in `tests/helpers.js` gets a `mode` option and opens in guided mode by default, so the existing tests keep passing unchanged.
+- [ ] **Done drawing** button; after it, a pressable dot with a title on every part ("Rod", "Block 1"); a counter ("3 of 5 parts set").
+- [ ] Part cards driven by one data table in `js/setup.js`: the draft-2 vocabulary (groups, choices with the term and a plain line, what each adds, assumed defaults with the words that overturn them, conflict rules). Only groups that fit what's drawn are shown (no vectors: stationary groups only). Conditions are clicked, never typed.
+- [ ] Summary: every choice, the assumed defaults (changeable), and conflicts named with their reason; it closes only when there are none.
+- [ ] Gate (`tests/drawfirst-setup.test.js`, written first): rod and three blocks drawn; every card answered (rod negligible mass; each block a point mass); a block marked free while drawn on the rod is named as a conflict; guided mode still opens today's flow.
+
+## Phase 6b: connections, names, knowns, counter
+**Start with:** `Do phase 6b in ROADMAP.md.` Read plan sections 3 (connections and strings), 4 and 6.
+- [ ] Connect tool: drag from one part to another; the connector gets a dot and a card (clamped, resting on, hangs by a string, sliding along); a connection to a rod adds a tick. Strings drawn with the same tool, through pulleys and off a disc's rim.
+- [ ] Per-part names (m₁, m₂, L_rod, T₁): "has mass" → typed symbol or number with units writes m₁ = m; a value of the wrong kind is refused. Numbers stay with their symbol.
+- [ ] Knowns list with each entry's source (drawing, card, assumed); targets; "not needed" greys an entry out.
+- [ ] Freedoms per body (fixed, slide x, slide y, turn θ); constraints remove them; a counter of unknowns against relationships, which never says which relationship is missing.
+- [ ] Gate (`tests/drawfirst-knowns.test.js`): the three blocks connected and clamped, each "has mass m" → knowns m₁ = m, m₂ = m, m₃ = m, L_rod = L, M_rod = 0; target I; counter 1 unknown, 0 relationships. A disc's shape card adds its I_cm.
+
+## Phase 7: the toolkit
+**Start with:** `Do phase 7 in ROADMAP.md.` Read plan section 5.
+- [ ] One set of x–y axes: drag the origin, turn by a handle, snaps to meaningful directions, the angle can be named.
+- [ ] Split a force onto the axes: dashed projections the student labels (W sin θ …); labels are checked only when a check is used (phase 8b).
+- [ ] Rod ticks at every point of interest (ends, centre, connections, pivot, ones the student adds); gap labels as dimension lines; optional point letters (A, B, C).
+- [ ] Coordinates typed on points; the rotation-axis marker (⊙ or a dashed line); the fade control for the setup lines.
+- [ ] Gate (`tests/drawfirst-toolkit.test.js`): the blocks get x = −L/2, 0, L/2 on axes through the rod's centre, gaps labelled L/2 and L/2, axis ⊙ at the centre; on a ramp, W is split onto tilted axes and labelled.
+
+## Phase 8a: the algebra workspace
+**Start with:** `Do phase 8a in ROADMAP.md.` Read plan sections 7 and 8.
+- [ ] Formula-sheet popup with search, neutral (no suggestions). New: I = Σmr² with as many terms as there are masses.
+- [ ] Lines of algebra on one line each (no stacked fractions), kept in the student's form; every operation exact (`js/algebra.js`, built on `expr.js` trees).
+- [ ] Tap a term → menu (divide, multiply, add, subtract, square, square-root, substitute what it equals); Shift applies it to both sides; without Shift it applies to that term only, even when that makes the equation untrue.
+- [ ] Typed lines and operations with Python-style names (`m_1`, `I_cm`, `theta`, `**`, `sqrt()`); autocomplete offers only defined symbols. Undo; going back greys later lines.
+- [ ] Gate (`tests/drawfirst-algebra.test.js`): from I = Σmr² with the knowns substituted to I = mL²/2, once by mouse only and once by keyboard only; a one-sided division is written as asked.
+
+## Phase 8b: condensing, checks, numbers, rewards
+**Start with:** `Do phase 8b in ROADMAP.md.` Read plan sections 8 (condensing), 9 and 10.
+- [ ] Condensing: name a selected piece (A = …, expandable), work a piece out in numbers, simplify a selected part (each its own line).
+- [ ] The code's own answer for the setup (the first scope: I = Σmr² from the clamped point masses and their positions; beams and discs through `torque.js`), used only by the checks.
+- [ ] Two checks the student can use whenever before the answer, and a final check: pass or something to look at; revise, or ask for a correction (names the first line that doesn't follow and why, never writes it). After a failed check the formula sheet can highlight the group to look in.
+- [ ] Numbers last with units and the unit check; a star per passed check, SOLVED only at the final one.
+- [ ] Gate (`tests/drawfirst-checks.test.js`): parts A (mL²/2) and B (5mL²/4) end to end; a planted sign slip is found by a check with its line named; a swapped sin/cos label on a split force is flagged.
+
+## Phase 9: drag shortcuts (optional)
+**Start with:** `Do phase 9 in ROADMAP.md.` Read plan section 8.
+- [ ] Drag a term across = (its sign flips, or it moves from top to bottom of a fraction), and drag a known onto a symbol to substitute it. Both are shortcuts for what the tap menu already does.
+- [ ] Gate: the phase 8a mouse route redone with drags.
+
+---
+
+## Phase 10: the new look
+**Start with:** `Do phase 10 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
 
 Mood: late-'90s/early-2000s TV and film animation and science shows: bold outlines, flat cel colour, playful science-show energy, a hint of anime-era mecha UI panels and handheld-game menus. These are mood references only. Draw nothing from those shows: no characters, logos, title lettering or recognisable designs.
 - [ ] Palette: soft pastels, like a 2020s K-pop album cover (sky blue, bubblegum pink, cream, soft lilac), with one bright accent. The four variable-state colours keep their meanings and stay readable (checked for contrast).
