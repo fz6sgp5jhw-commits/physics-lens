@@ -13,7 +13,7 @@ Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dep
 - Files: `js/data.js` physics content, solvers and the diagram library · `js/expr.js` expression engine · `js/app.js` state, UI, solving, checking · `js/torque.js` beam/disc free-body math (lever arms, Στ) · `js/build.js` drawing canvas · `js/recognize.js` freehand-stroke rules · `js/field.js` animated background · `tests/` Node test runner + playwright-core (drives installed Chrome; app state is `window.__rl`).
 
 ## Tests
-- Run: `node --test tests/*.test.js` (104 tests). Show only the summary: `… 2>&1 | grep -E "^✖|ℹ (pass|fail)"`.
+- Run: `node --test tests/*.test.js` (110 tests). Show only the summary: `… 2>&1 | grep -E "^✖|ℹ (pass|fail)"`.
 - From phase 6a, `openApp` in `tests/helpers.js` opens guided mode unless given `mode: 'draw'`. While working, run only your phase's test file; run the full suite once before committing.
 - All tests pass before every commit. Change a test only when the roadmap phase you are doing changes that behaviour on purpose, and say so in the commit message.
 - Layout check: at 1440×900 after solving, the problem, canvas, conditions and latest solved card are visible without scrolling (`tests/workspace.test.js`).

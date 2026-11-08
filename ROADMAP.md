@@ -136,19 +136,22 @@ Sessions (decided 2026-11-08): four build sessions, grouped so each reads shared
 
 ## Phase 6b: connections, names, knowns, counter
 **Start with:** `Do phases 6b and 7 in ROADMAP.md.` (session 2) Read plan sections 3 (connections and strings), 4 and 6.
-- [ ] Connect tool: drag from one part to another; the connector gets a dot and a card (clamped, resting on, hangs by a string, sliding along); a connection to a rod adds a tick. Strings drawn with the same tool, through pulleys and off a disc's rim.
-- [ ] Per-part names (m₁, m₂, L_rod, T₁): "has mass" → typed symbol or number with units writes m₁ = m; a value of the wrong kind is refused. Numbers stay with their symbol.
-- [ ] Knowns list with each entry's source (drawing, card, assumed); targets; "not needed" greys an entry out.
-- [ ] Freedoms per body (fixed, slide x, slide y, turn θ); constraints remove them; a counter of unknowns against relationships, which never says which relationship is missing.
-- [ ] Gate (`tests/drawfirst-knowns.test.js`): the three blocks connected and clamped, each "has mass m" → knowns m₁ = m, m₂ = m, m₃ = m, L_rod = L, M_rod = 0; target I; counter 1 unknown, 0 relationships. A disc's shape card adds its I_cm.
+- [x] Connect tool: drag from one part to another; the connector gets a dot and a card (clamped, resting on, hangs by a string, sliding along); a connection to a rod adds a tick. Strings drawn with the same tool, through pulleys and off a disc's rim.
+- [x] Per-part names (m₁, m₂, L_rod, T₁): "has mass" → typed symbol or number with units writes m₁ = m; a value of the wrong kind is refused. Numbers stay with their symbol.
+- [x] Knowns list with each entry's source (drawing, card, assumed); targets; "not needed" greys an entry out.
+- [x] Freedoms per body (fixed, slide x, slide y, turn θ); constraints remove them; a counter of unknowns against relationships, which never says which relationship is missing.
+- [x] Gate (`tests/drawfirst-knowns.test.js`): the three blocks connected and clamped, each "has mass m" → knowns m₁ = m, m₂ = m, m₃ = m, L_rod = L, M_rod = 0; target I; counter 1 unknown, 0 relationships. A disc's shape card adds its I_cm.
+
+- What changed (6b): new `js/tools.js` (active tool, pointer plumbing, the `ask` question box), `js/connect.js` (connect tool; connectors are shapes of kind `conn`; strings reuse the `string` shape), `js/knowns.js` (names with kind checks, knowns list with sources, targets, not-needed, freedoms, counter). `build.js` gained kinds `conn`/`tk` and `addRaw`, `touch`, `shape`. `setup.js` gained the Connection card and an `ext` hook. Right column `#dfKnowns`; toolbar `#dfTools`. Counter: unknowns = targets + tensions not given + remaining freedoms when the system is not in equilibrium; relationships = ideal-string links + no-slip; it never names what is missing. Cache `physics-lens-v15`.
 
 ## Phase 7: the toolkit
 **Start with:** done in session 2, after 6b. Read plan section 5.
-- [ ] One set of x–y axes: drag the origin, turn by a handle, snaps to meaningful directions, the angle can be named.
-- [ ] Split a force onto the axes: dashed projections the student labels (W sin θ …); labels are checked only when a check is used (phase 8b).
-- [ ] Rod ticks at every point of interest (ends, centre, connections, pivot, ones the student adds); gap labels as dimension lines; optional point letters (A, B, C).
-- [ ] Coordinates typed on points; the rotation-axis marker (⊙ or a dashed line); the fade control for the setup lines.
-- [ ] Gate (`tests/drawfirst-toolkit.test.js`): the blocks get x = −L/2, 0, L/2 on axes through the rod's centre, gaps labelled L/2 and L/2, axis ⊙ at the centre; on a ramp, W is split onto tilted axes and labelled.
+- [x] One set of x–y axes: drag the origin, turn by a handle, snaps to meaningful directions, the angle can be named.
+- [x] Split a force onto the axes: dashed projections the student labels (W sin θ …); labels are checked only when a check is used (phase 8b).
+- [x] Rod ticks at every point of interest (ends, centre, connections, pivot, ones the student adds); gap labels as dimension lines; optional point letters (A, B, C).
+- [x] Coordinates typed on points; the rotation-axis marker (⊙ or a dashed line); the fade control for the setup lines.
+- [x] Gate (`tests/drawfirst-toolkit.test.js`): the blocks get x = −L/2, 0, L/2 on axes through the rod's centre, gaps labelled L/2 and L/2, axis ⊙ at the centre; on a ramp, W is split onto tilted axes and labelled.
+- What changed (7): new `js/toolkit.js`, all stored in one hidden `tk` shape (so undo and Clear cover it): axes (drag origin, turn by handle, snaps to horizontal, ramp, rod, string; angle nameable), force arrows drawn in drawing-first mode and split onto the axes with student labels (unchecked until 8b), rod ticks (ends, centre, pivot, connections, added), gap labels as dimension lines, coordinates, rotation-axis marker (⊙, then dashed line), optional A/B/C letters, fade slider. Coordinates and gaps feed the knowns list (source `toolkit`). Gate: `tests/drawfirst-toolkit.test.js` (3); 6b gate `tests/drawfirst-knowns.test.js` (3). 110 tests.
 
 ## Phase 8a: the algebra workspace
 **Start with:** `Do phase 8a in ROADMAP.md.` Read plan sections 7 and 8.

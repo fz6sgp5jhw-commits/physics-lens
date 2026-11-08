@@ -4,6 +4,7 @@
 // groups, choices (the term, one plain line, what it adds), assumed defaults with the words that overturn them,
 // and the conflict rules (`needs` / `clash` name a fact read from the drawing in CTX).
 // Design: docs/drawing-first-plan.md, section 3.
+import { connEnds } from './connect.js';
 
 // facts read from the drawing, per part: `yes` / `no` finish a conflict sentence ("Block 2 is drawn on the rod")
 const CTX = {
@@ -19,7 +20,7 @@ const CTX = {
 };
 
 // "Not sure" is offered in every group: `unsure` says how to tell from the problem text
-const PART_ORDER = ['rod', 'block', 'particle', 'wheel', 'pivot', 'string', 'pulley'];
+const PART_ORDER = ['rod', 'block', 'particle', 'wheel', 'pivot', 'string', 'pulley', 'conn'];
 export const VOCAB = {
   rod: { title: 'Rod', groups: [
     { key: 'mass', q: 'Mass', unsure: 'Look for “light”, “massless” or “negligible mass”: then its mass is left out. A mass given for the rod itself means it has one.', choices: [
@@ -92,6 +93,14 @@ export const VOCAB = {
         needs: ['disc', 'An axle holds a disc at its centre. Drop a disc onto it, or pick another choice.'] } ] }],
     assumed: [{ key: 'smooth', term: 'Frictionless', plain: 'it turns freely.', adds: 'no torque from the pivot itself.', overturn: '“a rusty hinge”, “friction at the pivot”' }] },
 
+  // a connection drawn with the connect tool: what joins the two parts
+  conn: { title: 'Connection', numbered: true, groups: [
+    { key: 'kind', q: 'Connection', unsure: '“Fixed”, “attached” or “clamped” means clamped. “Rests on” means resting. “Hangs from” means a string. A bead or ring “on” a rod slides.', choices: [
+      { key: 'clamped', term: 'Clamped', as: 'clamped', plain: 'it can’t slide or turn; the two move as one.', adds: 'no freedom of its own: it shares the rod’s turn.' },
+      { key: 'rests', term: 'Resting on', as: 'resting on', plain: 'held only by its weight, pushing on what it sits on.', adds: 'a normal force between them.' },
+      { key: 'string', term: 'Hangs by a string', as: 'hanging by a string', plain: 'a light string joins them.', adds: 'a tension along the string.' },
+      { key: 'slides', term: 'Sliding along', as: 'sliding along', plain: 'it can slide along the other part.', adds: 'a freedom along it.' } ] }] },
+
   pulley: { title: 'Pulley', groups: [],
     assumed: [
       { key: 'light', term: 'Massless', plain: 'turning it takes no torque.', adds: 'the tension is the same on both sides.', overturn: '“a pulley of mass M”' },
@@ -130,7 +139,8 @@ const isSet = (part, ctx) => groupsFor(part.kind, ctx).every(g => part.answers[g
 // ---- the drawing-first setup panel, dots and summary
 // build: the canvas API; svg: its element; panel: the card's container; count / doneBtn / sumBtn: the canvas bar; say(html): the assistant line;
 // active(): true in drawing-first mode (the dots show only then)
-export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say, active }){
+// ext: { cardHTML(part), click(button, part) → true to redraw, refresh() } — names, freedoms and the knowns card (knowns.js)
+export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say, active, ext = {} }){
   const st = { done: false, parts: {}, view: null, closed: false, allSet: false };
 
   // ---- facts read from the drawing
@@ -157,7 +167,8 @@ export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say,
     return c;
   }
   // the parts on show, in the popup's order: bodies (rod, then blocks left to right), the rest, then the whole system
-  const list = () => [...Object.values(st.parts).filter(p => p.id !== 'system' && shapeOf(p.id))
+  const alive = (p) => { const s = shapeOf(p.id); return s && (s.kind !== 'conn' || connEnds(B, s)); };
+  const list = () => [...Object.values(st.parts).filter(p => p.id !== 'system' && alive(p))
     .sort((a, b) => PART_ORDER.indexOf(a.kind) - PART_ORDER.indexOf(b.kind) || a.n - b.n), ...(st.parts.system ? [st.parts.system] : [])];
   const ctx = (p) => p.id === 'system' ? new Set() : ctxOf(p.id);
   const allConflicts = () => list().flatMap(p => conflictsOf(p, ctx(p)));
@@ -165,7 +176,7 @@ export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say,
 
   // ---- Done drawing: every part without a dot gets one (new parts are marked new); numbering is left to right
   function done(){
-    const fresh = B.shapes.filter(s => VOCAB[s.kind] && !(st.parts[s.id] && st.parts[s.id].kind === s.kind)).sort((a, b) => PART_ORDER.indexOf(a.kind) - PART_ORDER.indexOf(b.kind) || a.x - b.x);
+    const fresh = B.shapes.filter(s => VOCAB[s.kind] && alive({ id: s.id }) && !(st.parts[s.id] && st.parts[s.id].kind === s.kind)).sort((a, b) => PART_ORDER.indexOf(a.kind) - PART_ORDER.indexOf(b.kind) || a.x - b.x);
     if (!fresh.length && !list().some(p => p.id !== 'system')){ say('Draw the problem first: a rod, the blocks on it, a pivot or a string. Then press <b>Done drawing</b>.'); return; }
     const again = st.done;
     for (const p of Object.values(st.parts)) p.isNew = false;
@@ -196,9 +207,9 @@ export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say,
     const all = list(), i = all.indexOf(p), groups = groupsFor(p.kind, ctx(p));
     const body = groups.map(g => `<fieldset class="dfgroup" data-group="${g.key}"><legend>${g.q}</legend>${g.choices.map(c => choiceHTML(p, g, c)).join('')}
       ${choiceHTML(p, g, { key: UNSURE, term: 'Not sure', plain: 'leave it open for now.' })}${p.answers[g.key] === UNSURE ? `<p class="small dfhow">How to tell: ${g.unsure}</p>` : ''}</fieldset>`).join('');
-    const conf = conflictsOf(p, ctx(p)).map(c => `<p class="small warn">${c.text}</p>`).join('');
+    const conf = conflictsOf(p, ctx(p)).map(c => `<p class="small warn">${c.text}</p>`).join(''), extra = ext.cardHTML ? ext.cardHTML(p) : '';
     return `<div class="titlebar"><h2>${p.title}</h2><span class="small muted">Part ${i + 1} of ${all.length}</span><button class="x" data-dfx title="Close">×</button></div>
-      <div class="body">${groups.length ? '' : '<p class="small muted">Nothing to ask here: what this part does comes from the drawing.</p>'}${body}${conf}${assumedHTML(p)}
+      <div class="body">${groups.length ? '' : '<p class="small muted">Nothing to ask here: what this part does comes from the drawing.</p>'}${body}${extra}${conf}${assumedHTML(p)}
       <div class="row dffoot"><button data-next>Next part →</button><button data-sum>Summary</button></div></div>`;
   }
   function summaryHTML(){
@@ -233,7 +244,7 @@ export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say,
     const all = st.done && total > 0 && n === total;
     if (all && !st.allSet && st.view !== 'summary'){ st.view = 'summary'; say('Every part is set. Check the summary: your choices, what is assumed, and anything that doesn’t fit the drawing.'); }
     st.allSet = all;
-    renderPanel(); B.render();
+    renderPanel(); B.render(); if (ext.refresh) ext.refresh();
   }
 
   // ---- dots on the drawing (called after every canvas render); the open part glows, the rest dims
@@ -244,6 +255,7 @@ export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say,
     const s = shapeOf(p.id);
     if (s.kind === 'rod'){ const q = B.rodAt(s.id, 0.25); return { x: q.x, y: q.y + s.h / 2 + 22 }; }
     if (s.kind === 'pivot') return { x: s.x, y: s.y + 26 };
+    if (s.kind === 'conn'){ const c = connEnds(B, s); return c ? { x: (c.a.x + c.b.x) / 2 + 14, y: (c.a.y + c.b.y) / 2 + 18 } : { x: 0, y: 0 }; }
     if (s.kind === 'string'){ const [a, b] = (s.ends || []).map(shapeOf).filter(Boolean); return a && b ? { x: (a.x + b.x) / 2 + 10, y: (a.y + b.y) / 2 } : { x: s.x, y: s.y }; }
     const top = s.kind === 'block' ? s.h / 2 : (s.r || 18);
     return { x: s.x - 10, y: s.y - top - 18 };
@@ -273,6 +285,7 @@ export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say,
   panel.addEventListener('click', (e) => {
     const t = e.target.closest('button'); if (!t) return;
     const p = st.parts[st.view];
+    if (ext.click && p && ext.click(t, p)){ refresh(); return; }
     if (t.dataset.choice && p){ const g = t.closest('[data-group]').dataset.group; p.answers[g] = t.dataset.choice; refresh(); return; }
     if (t.dataset.assume){ const [id, k] = t.dataset.assume.split(':'), q = st.parts[id]; q.off[k] = !q.off[k]; refresh(); return; }
     if (t.dataset.open){ open(t.dataset.open); return; }
@@ -290,8 +303,8 @@ export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say,
   return {
     decorate, render: renderPanel,
     // the drawing changed: parts that were erased drop out (undo brings them back with their answers)
-    changed(){ if (!st.done) return; if (!list().some(p => p.id !== 'system')){ st.done = false; st.view = null; st.allSet = false; } else if (st.parts[st.view] && st.view !== 'system' && !shapeOf(st.view)) st.view = null; refresh(); },
+    changed(){ if (!st.done){ if (ext.refresh) ext.refresh(); return; } if (!list().some(p => p.id !== 'system')){ st.done = false; st.view = null; st.allSet = false; } else if (st.parts[st.view] && st.view !== 'system' && !shapeOf(st.view)) st.view = null; refresh(); },
     get done(){ return st.done; }, get closed(){ return st.closed; }, get parts(){ return st.parts; }, get view(){ return st.view; },
-    conflicts: allConflicts,
+    conflicts: allConflicts, list, ctxOf: ctx, show: open,
   };
 }

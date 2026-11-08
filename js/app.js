@@ -4,6 +4,10 @@ import * as X from './expr.js';
 import { createField } from './field.js';
 import * as TQ from './torque.js';
 import { createSetup } from './setup.js';
+import { createKnowns } from './knowns.js';
+import { createTools } from './tools.js';
+import { createConnect } from './connect.js';
+import { createToolkit } from './toolkit.js';
 
 const $ = (id) => document.getElementById(id);
 // text the student typed or pasted is escaped before it goes into HTML
@@ -1787,9 +1791,9 @@ function showTab(t){
 document.querySelectorAll('[data-dtab]').forEach(b => b.onclick = () => { const t = b.dataset.dtab; if (t === 'motion') showTab(t); else openStage(t === 'forces' ? 1 : 0); });
 
 // ---------- build canvas ----------
-let DF = null; // the drawing-first setup (part dots, cards, summary), created just after the canvas
+let DF = null, TOOLS = null, CN = null, TK = null; // the drawing-first setup (part dots, cards, summary), its tools and toolkit, created just after the canvas
 S.build = createBuild($('bd'), {
-  afterRender: (svg) => DF?.decorate(svg),
+  afterRender: (svg) => { if (S.mode === 'draw'){ CN?.render(svg); TK?.render(svg); } DF?.decorate(svg); },
   onChange: () => {
     DF?.changed();
     const sel = S.build && S.build.selected();
@@ -1849,7 +1853,13 @@ S.build = createBuild($('bd'), {
     if (S.pointView) say('A point P on the rim: <b>v</b> along its path, <b>aₜ = rα</b> along its path too, <b>a꜀ = ω²r</b> toward the centre. Their equations are under the drawing.');
   },
 });
-DF = S.df = createSetup({ build: S.build, svg: $('bd'), panel: $('dfCard'), count: $('dfCount'), doneBtn: $('doneDraw'), sumBtn: $('dfSumBtn'), say, active: () => S.mode === 'draw' });
+const KN = S.kn = createKnowns({ panel: $('dfKnowns'), setup: () => DF, build: S.build, say });
+DF = S.df = createSetup({ build: S.build, svg: $('bd'), panel: $('dfCard'), count: $('dfCount'), doneBtn: $('doneDraw'), sumBtn: $('dfSumBtn'), say, active: () => S.mode === 'draw',
+  ext: { cardHTML: KN.cardHTML, click: KN.click, refresh: KN.render } });
+TOOLS = S.tools = createTools({ svg: $('bd'), wrap: $('bd').parentElement, bar: $('dfTools'), build: S.build });
+CN = createConnect({ build: S.build, tools: TOOLS, say });
+TK = S.tk = createToolkit({ build: S.build, tools: TOOLS, hit: CN.hit, say, setup: () => DF, bar: $('dfTools') });
+KN.addSource(TK.knowns);
 
 // ---------- modes: drawing-first (the default) or guided (today's stages, sheet, Hint and Show me) ----------
 // Guided is remembered as pl-mode on this device; choosing drawing-first again forgets it.
@@ -1861,7 +1871,8 @@ function setMode(m, remember = true){
   if (remember) try { if (m === 'guided') localStorage.setItem('pl-mode', 'guided'); else localStorage.removeItem('pl-mode'); } catch {}
   // drawing-first covers the torque unit for now (a rod and point masses)
   if (m === 'draw'){ if (S.ch !== 'torque'){ switchChapter('torque'); renderAll(); } showTab('build'); }
-  DF.render(); S.build.render();
+  if (m !== 'draw') TOOLS.use('select');
+  DF.render(); KN.render(); S.build.render();
 }
 $('modeBtn').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
   if (b.dataset.mode === S.mode) return;

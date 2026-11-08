@@ -26,6 +26,8 @@ const KINDS = {
   string: { label: 'String', props: {} },
   spring: { label: 'Spring', props: {} },
   pivot:  { label: 'Pivot', props: {} },
+  conn:   { label: 'Connection', props: {} },   // drawing-first: a link between two parts (js/connect.js)
+  tk:     { label: 'Toolkit', props: {} },      // drawing-first: axes, ticks, dimensions, coordinates (js/toolkit.js)
 };
 export const PALETTE = ['ramp', 'block', 'ball', 'wheel', 'particle', 'rod', 'table', 'floor', 'pulley', 'string', 'spring', 'pivot'];
 // motion vectors a student can put on a body: velocity and acceleration
@@ -599,6 +601,10 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     // a point a fraction u along a rod, on screen (for tests)
     rodScreen: (id, u) => { const q = rodPoint(shape(id), u); return api.toScreen(q.x, q.y); },
     rodAt: (id, u) => rodPoint(shape(id), u),
+    // drawing-first tools (js/tools.js): add a shape of any kind, redraw after editing one, find a shape
+    addRaw: (kind, o) => { checkpoint(); const s = make(kind, o); st.shapes.push(s); return s; },
+    touch: () => { render(); onChange(); },
+    shape,
     setVec: (id, k, key) => { const s = shape(id), b = bodyOf(id), d = b && dirVec(b, key); if (!s || !d || !s[k]) return; s[k] = { ...s[k], x: d.x, y: d.y, key }; render(); },
     get theta(){ return st.theta; }, set theta(v){ st.theta = v; snapAll(); render(); },
     get shapes(){ return st.shapes; },

@@ -516,6 +516,49 @@
   body.mode-draw .canvascard .bsvg{height:64vh;max-height:64vh}
   .seg{display:flex}
   .seg button{padding:7px 9px}
+  /* drawing-first tools and toolkit */
+  #dfTools{flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
+  #dfTools button{min-height:30px;padding:3px 10px;font-size:12.5px}
+  #dfTools input[type=range]{width:90px;vertical-align:middle}
+  .bsvg[data-dftool]:not([data-dftool="select"]){cursor:crosshair}
+  .bsvg .setup{opacity:var(--dffade,1)}
+  .bsvg .dfconn{stroke:var(--gold-hi);stroke-width:4;stroke-linecap:round}
+  .bsvg .dfconn.drag{stroke-dasharray:6 6;opacity:.8}
+  .bsvg .dftick{stroke:var(--text);stroke-width:2.5}
+  .bsvg .dftick.mine{stroke:#ffd166}
+  .bsvg .dfletter{font:700 15px var(--ui);fill:var(--gold-hi)}
+  .bsvg .dfdimline,.bsvg .dfext{stroke:#9fb0ff;stroke-width:2}
+  .bsvg .dfext{stroke-dasharray:3 4;opacity:.7}
+  .bsvg .dfdimtxt,.bsvg .dfcoord{font:700 15px var(--ui);fill:#4fd1ff}
+  .bsvg .dfaxis{stroke:#cfd8ff;stroke-width:2.5;fill:none}
+  .bsvg .dfaxis.head{fill:#cfd8ff}
+  .bsvg .dfaxlab,.bsvg .dfaxang{font:700 16px var(--ui);fill:#cfd8ff}
+  .bsvg .dfaxang{cursor:pointer}
+  .bsvg .dfaxarc{fill:none;stroke:#cfd8ff;stroke-width:1.5}
+  .bsvg .dfhandle{fill:var(--gold-hi);stroke:#000;stroke-width:1.5;cursor:grab}
+  .bsvg .dffline{stroke:#ff6bd6;stroke-width:3.5;fill:none}
+  .bsvg .dffline.head{fill:#ff6bd6}
+  .bsvg .dffline.prev{opacity:.6}
+  .bsvg .dfflab{font:700 17px var(--ui);fill:#ff6bd6}
+  .bsvg .dfproj{stroke:#ff6bd6;stroke-width:2.5;stroke-dasharray:7 5}
+  .bsvg .dfguide{stroke:#ff6bd6;stroke-width:1;stroke-dasharray:2 5;opacity:.6}
+  .bsvg .dfprojlab{font:700 15px var(--ui);fill:#ffd166;cursor:pointer}
+  .bsvg .dfprojlab.empty{fill:var(--muted)}
+  .bsvg .dfrotdot{fill:none;stroke:var(--gold-hi);stroke-width:3}
+  .bsvg .dfrotpip{fill:var(--gold-hi)}
+  .bsvg .dfrotaxis{stroke:var(--gold-hi);stroke-width:2.5;stroke-dasharray:10 6}
+  .bsvg .dfpoi{fill:none;stroke:var(--gold-hi);stroke-width:2;opacity:.8}
+  .dfpop{position:absolute;z-index:6;display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:240px;padding:8px;background:var(--panel,#10163f);border:2px solid var(--line-hi)}
+  .dfpop label{flex:1 0 100%;font-size:12.5px}
+  .dfpop input{flex:1;min-width:0}
+  #dfKnowns .kn{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0;list-style:none}
+  #dfKnowns .dfklist{padding:0;margin:0 0 8px}
+  #dfKnowns .kn.given b{color:#4fd1ff}
+  #dfKnowns .kn.target b{color:#ff6bd6}
+  #dfKnowns .kn.unknown b{color:#9aa0b8}
+  #dfKnowns .kn.off{opacity:.45;text-decoration:line-through}
+  .dfname{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:6px 0}
+  .dfname input{width:11em}
   #dfCount{align-self:center;margin-bottom:5px;color:var(--gold-hi);white-space:nowrap}
   /* drawing-first setup: a dot and title on every part; the open part glows, the rest dims */
   .bsvg .dfdot{cursor:pointer;shape-rendering:auto}
@@ -608,6 +651,19 @@
         <button id="diagBtn" aria-expanded="false" title="Open the diagram library: every drawing component and what it means">Diagrams</button>
         <button id="libBtn" class="guided-only" aria-expanded="false" title="Open the equation library">Library</button>
       </div>
+      <div class="ctool draw-only" id="dfTools" role="toolbar" aria-label="Drawing-first tools">
+        <button data-dftool="select" aria-pressed="true" title="Move and select parts">Select</button>
+        <button data-dftool="connect" aria-pressed="false" title="Drag from one part to another to connect them; over a pulley to run a string">Connect</button>
+        <button data-dftool="axes" aria-pressed="false" title="Place the x–y axes; drag the origin, turn by the square handle">Axes</button>
+        <button data-dftool="force" aria-pressed="false" title="Draw a force arrow from a body">Force</button>
+        <button data-dftool="split" aria-pressed="false" title="Split a force onto the axes">Split</button>
+        <button data-dftool="tick" aria-pressed="false" title="Add a tick on the rod">Tick</button>
+        <button data-dftool="dim" aria-pressed="false" title="Label the gap between two points">Gap</button>
+        <button data-dftool="coord" aria-pressed="false" title="Type a coordinate on a point">Coordinate</button>
+        <button data-dftool="axis" aria-pressed="false" title="Mark the axis of rotation">Rotation axis</button>
+        <button id="dfLetters" aria-pressed="false" title="Letter the rod’s points A, B, C">Letters</button>
+        <label class="small">Fade <input type="range" id="dfFade" min="0" max="100" value="100" title="How see-through the setup lines are"></label>
+      </div>
       <div class="dpane" id="paneMotion" hidden><div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div></div>
       <div class="dpane" id="paneBuild">
         <div class="bwrap"><div class="bpal" id="bpal" role="toolbar" aria-label="Drawing tools" aria-orientation="vertical"></div>
@@ -619,6 +675,7 @@
 
   <aside class="ws-right">
     <section class="card draw-only" id="dfCard" aria-live="polite"></section>
+    <section class="card draw-only" id="dfKnowns"></section>
     <section class="card" id="condCard" data-stage="2">
       <div class="titlebar"><h2>Conditions</h2><button id="condOk">✓ These conditions are right</button></div>
       <div class="body"><div class="calc" id="calcCond"></div><div id="conds"></div></div>
