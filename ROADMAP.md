@@ -1,7 +1,7 @@
 # Physics Lens roadmap
 
 One phase per Claude Code session. Start a session with the line under **Start with**, run `/clear` when the phase is done. A phase is done when its boxes are ticked, all tests pass, and this file says what changed.
-Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3; 4b smooths what 3 and 4 built; 5 (torque) comes before the new look, decided 2026-11-07. Phases 6a–9 (drawing first) come before the new look (10), decided 2026-11-08.
+Order: function first, style last. Phases 1–3 are in priority order; 4 builds on 3; 4b smooths what 3 and 4 built; 5 (torque) comes before the new look, decided 2026-11-07. Phases 6a–9 (drawing first) come before the new look (10), decided 2026-11-08. **Current order (decided 2026-11-09): C1–C5 (core rebuild and course, below), then 8b and 9, then 10.** 8b waits for C1 because its checks need the code's own answer, which one-line equations make simpler.
 
 ---
 
@@ -168,7 +168,7 @@ Sessions (decided 2026-11-08): four build sessions, grouped so each reads shared
 **Start with:** `Do phases 8b and 9 in ROADMAP.md.` (session 4) Read plan sections 8 (condensing), 9 and 10.
 - [ ] Condensing: name a selected piece (A = …, expandable), work a piece out in numbers, simplify a selected part (each its own line).
 - [ ] The code's own answer for the setup (the first scope: I = Σmr² from the clamped point masses and their positions; beams and discs through `torque.js`), used only by the checks.
-- [ ] Two checks the student can use whenever before the answer, and a final check: pass or something to look at; revise, or ask for a correction (names the first line that doesn't follow and why, never writes it). After a failed check the formula sheet can highlight the group to look in.
+- [ ] Two checks the student can use whenever before the answer, and a final check (technique: two-point numeric checking, `docs/core-plan.md` section 3): pass or something to look at; revise, or ask for a correction (names the first line that doesn't follow and why, never writes it). After a failed check the formula sheet can highlight the group to look in.
 - [ ] Numbers last with units and the unit check; a star per passed check, SOLVED only at the final one.
 - [ ] Gate (`tests/drawfirst-checks.test.js`): parts A (mL²/2) and B (5mL²/4) end to end; a planted sign slip is found by a check with its line named; a swapped sin/cos label on a split force is flagged.
 
@@ -176,6 +176,69 @@ Sessions (decided 2026-11-08): four build sessions, grouped so each reads shared
 **Start with:** done in session 4, after 8b (skip it if the stop rule triggers first). Read plan section 8.
 - [ ] Drag a term across = (its sign flips, or it moves from top to bottom of a fraction), and drag a known onto a symbol to substitute it. Both are shortcuts for what the tap menu already does.
 - [ ] Gate: the phase 8a mouse route redone with drags.
+
+---
+
+## Core rebuild and course (phases C1–C5)
+Design: `docs/core-plan.md`, decided with the user on 2026-11-09. The app has to last through rotation, fluids and thermo, then Physics 2 (E&M, AC circuits, optics and waves), and hold homework problems with or without a drawing. C1–C2 settle the data formats so later subjects are mostly data; they add nothing visible. C3–C5 add the next section's physics, a homework notebook with a board, and a course of lessons.
+Token rules for these phases (plan section 11): read only the sections each phase names; run tests through the `test-runner` subagent and find code with `code-scout` (both in `.claude/agents/`, on Haiku); commit after each ticked box; the usage stop rule in `CLAUDE.md` applies.
+
+| Session | Phase | Start with | Model | Effort |
+|---|---|---|---|---|
+| 1 | C1 (starts with the test tooling) | `Do phase C1 in ROADMAP.md.` | Opus | High |
+| 2 | C2 and C3 (C3's equations go straight into the new mechanics pack) | `Do phases C2 and C3 in ROADMAP.md.` | Opus | High |
+| 3 | C4 | `Do phase C4 in ROADMAP.md.` | Opus | Medium |
+| 4 | C5 | `Do phase C5 in ROADMAP.md. Ask me for the lesson problems first.` | Opus | Medium |
+| later | C6 hints, only if the C5 pilot shows they're worth it | `Do phase C6 in ROADMAP.md.` | Opus | Medium |
+Grouped by the code each session reads (decided 2026-11-09), so shared code is read once; if a grouped session hits the usage stop rule, the next starts from its `Resume from` note. If the next section's homework starts before C1–C2 are done, C3 can run first in the old format (some rework later).
+Testing in every C phase: while working, run `npm run test:fast` (Node-only, seconds) and the box's own test; ask `test-runner` to rerun only failing tests by name; run the browser tests and the full suite once before committing.
+
+## Phase C1: one-line equations and engine additions
+**Start with:** `Do phase C1 in ROADMAP.md.` Read plan sections 1, 2, 3 and 11; `docs/architecture.md` "Conventions and internals".
+- [ ] Test tooling first (plan section 11): `package.json` scripts `test:fast` (Node-only files: engine, units, solvers, recognition, setup data) and `test:browser` (files that open Chrome; today 17 of 20), with `test` running both; a seeded random helper (`tests/rand.js`) used by every test that draws random values, printing its seed on failure (`SEED=… npm run test:fast` replays it); data-table cases report their id, inputs, expected and actual; a snapshot `tests/fixtures/solvers.json` of all 188 current hand-solver results at seeded values, made **before** any solver changes (old code checking new code, so it doesn't break the "answers from outside the app" rule, which is for physics answers).
+- [ ] Gate first (`tests/core-equations.test.js`): for every existing equation and every variable with a hand solver, `isolate` gives the same number at random sample values (relative error < 1e-9) and the same branch where a `pick` exists; an equation that can't be rearranged fails at load with its id and variable. A computer-algebra oracle checks each rearrangement in this test only: SymPy run from the test with `python3`, or nerdamer-prime (MIT) as a **devDependency**; it confirms the result satisfies the original equation, not that its form matches (plan section 13). It is never loaded by the app.
+- [ ] `isolate(eq, id)` in `expr.js`: undo operations when the variable appears once (with a plain `why` per step), linear or quadratic otherwise.
+- [ ] Equations become one line (`eq`) with `kind` (law / rel / def) and `cue`; `solve` keeps only `pick`, `guard`, `alt`, `note` and hand `steps` where the automatic wording reads badly. Remove each hand solver only once it agrees.
+- [ ] Units: bases m, kg, s, A, K, mol; named J, W, Pa, C, V, Ω, F, T, H, Hz, L, atm, eV; prefixes n, μ, m, c, k, M (written from the SI definitions; Compute Engine's MIT unit tables as a reference, copied only if open question 3 allows). Test: PV = nRT and Q = CV check, mm and μF convert.
+- [ ] `exp` / `ln` as atoms (parse, evaluate, simplify, unit check: the argument has no unit). Test: W = nRT ln(V₂/V₁) round trip; q = Q₀e^(−t/RC) solved for t.
+- [ ] Systems by matching + strongly connected components + exact elimination per block, in path finding and Combine (replaces pairs/triples) (plan section 3). Test: a 4-equation system in a test-only fixture. (Missing/redundant-equation hints from the same graph come in C5.)
+- [ ] All existing tests pass (solver count stays 188; tests change only to use the seeded helper). Cache bumped. One line here on what changed.
+
+## Phase C2: subject packs and one rule for diagrams
+**Start with:** `Do phases C2 and C3 in ROADMAP.md.` (session 2) Read plan sections 4 and 5; ask `code-scout` for every `S.ch ===` / `ch ===` branch in `app.js` before reading it.
+- [ ] Gate first (`tests/core-packs.test.js`): a test pack (`tests/fixtures/demo-pack.js`, P = P₀ + ρgh) loads, shows in the library and solves with Show me, with no `app.js` change; an id collision between packs is refused at load; no unit name (`'incline'`, `'pulley'`, `'rotation'`, `'torque'`, `'blocks'`) appears in `app.js`.
+- [ ] Pack registry (`js/packs/index.js`); mechanics moves to `js/packs/mech.js` (quantities with `py` and `sample`, equations, chapters, components, diagrams, practice). Mechanics ids stay bare; new packs prefix theirs.
+- [ ] The unit branches in `app.js` listed, grouped by what they decide, and each group made one hook with a default.
+- [ ] The free-body builder and `torque.js` wrapped as diagrams `{ kind, pack, equations(state), check(state) }`; behaviour unchanged.
+- [ ] Packs carry `license` (code, content) and every practice or lesson problem a `source` (work, edition, licence, url, problem) or `original: true`; an attribution list is built from them (plan section 4). Existing practice problems get their sources.
+- [ ] A short function index for `app.js` in `docs/architecture.md`. All tests pass. Cache bumped. One line here on what changed.
+
+## Phase C3: the next section (energy with rotation, rolling, angular momentum)
+**Start with:** done in session 2, after C2. Read plan section 9. The new entries go straight into `js/packs/mech.js`.
+- [ ] Gate first (`tests/rolling.test.js`), classic forms solved with symbols: rolling down a ramp a = (5/7)g sin θ (solid sphere), (3/5)g sin θ (hollow sphere), (2/3)g sin θ (disc); v = √(10gh/7) for a solid sphere from height h; K_rot / K = 2/7 for a solid sphere; disc and hanging mass by energy v = √(2mgh / (m + M/2)), the same as by forces; a turntable of diameter D: M = 16K / (D²ω²); a skater ω₂ = ω₁I₁/I₂ with "no outside torque", and refused (with the reason) when an outside torque is present. Numeric checks against the textbook's answers when the user supplies them.
+- [ ] Library entries (plan section 9) as one-line equations with kinds and cues, in a "Rolling and angular momentum" unit; conditions rolls without slipping, fixed axis, no outside torque, rough axle does work W_f.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+## Phase C4: the notebook and the board
+**Start with:** `Do phase C4 in ROADMAP.md.` Read plan sections 6, 7 and the board row of 13 (layered layout, written in our own code).
+- [ ] Gate first (`tests/notebook.test.js`): save a problem with a drawing and one without; reload; search by chapter and by law; export → Clear notebook → import restores both; a version-0 fixture record is migrated on load; a solved path builds a board given → equation → found → target with the state colours; a note card is added and kept.
+- [ ] Notebook (`js/notebook.js`, key `pl-notebook`, versioned records, validated on read, `esc()` for typed text, export/import as a file, Clear with a confirm).
+- [ ] Board (`js/board.js`): quantity, equation, note and state cards, arrows, the pathway layout from a solved path; stored in the problem record.
+- [ ] Layout check at 1440×900 still passes. All tests pass. Cache bumped. One line here on what changed.
+
+## Phase C5: the course engine and a two-lesson pilot
+**Start with:** `Do phase C5 in ROADMAP.md. Ask me for the lesson problems first.` Read plan section 8 (hints, lesson content and licences) and the step-checking paragraph of section 3.
+- [ ] Gate first (`tests/course.test.js`): the map is always open; both pilot lessons run end to end (long → twin → transfer); the route card grades a right and a wrong choice (wrong is explained, not blocked); the kind tap is asked before an equation is added in a lesson; Show me and glow are off in the twin; progress is saved in `pl-course` and cleared by its button. One looping test applies every lesson's answer key, solves and compares with stored answers.
+- [ ] Course engine (`js/course.js`): Course button and map drawer, lesson data in packs, prompts on the hint line, help switches, route card, kind tap, recap.
+- [ ] Hints, pilot size: pointing → teaching → bottom-out (only bottom-out costs a star); "What's wrong?" error handlers as data with just two handlers (sin/cos swap, sign flip); missing/redundant-equation hints from the Dulmage–Mendelsohn split of C1's graph ("you still need an equation with X", "this adds nothing new"). Test: each handler names its slip; one unknown short → the hint names that unknown; a redundant equation is named.
+- [ ] Pilot lessons: disc and hanging mass (Στ = Iα with a = αR; second route by energy) and rolling down a ramp (solid vs hollow sphere), with problems from the user or from CC BY / CC BY-SA sources (not current OpenStax, which is CC BY-NC-SA), each with its `source`; textbook answers compared within their significant figures.
+- [ ] All tests pass. Cache bumped. One line here on what changed; decide with the user whether to write the rest of the course and whether C6 is needed.
+
+## Phase C6: fuller hints (only if the pilot shows they're worth it)
+**Start with:** `Do phase C6 in ROADMAP.md.` Read plan section 8 (hints).
+- [ ] "Next step": what is sought → which principle → the route with the most steps already done (Andes's rule).
+- [ ] More "What's wrong?" handlers, mined from the slips seen in the pilot (dropped term, wrong component, unit slip, …), each with its test.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
 
 ---
 

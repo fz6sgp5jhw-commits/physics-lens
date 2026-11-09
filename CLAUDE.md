@@ -4,6 +4,8 @@ A guided problem-solving lens for intro calculus-based mechanics, used in classr
 
 **Current work: see `ROADMAP.md`.** Do only the phase you are asked to do; tick its boxes when done.
 **Drawing first (phases 6a–9):** the design is `docs/drawing-first-plan.md`; read only the sections your phase names. Drawing-first is the default mode and guided mode (stages, sheet, Show me) stays behind a toggle. New code goes in new files (`js/setup.js` part cards and vocabulary, `js/algebra.js` the workspace), not into `app.js`.
+**Core rebuild and course (phases C1–C5, next in order):** the design is `docs/core-plan.md`; read only the sections your phase names. The app will grow into fluids, thermo and Physics 2 through subject packs (`js/packs/`), so formats come first.
+**Subagents (save tokens):** run tests with the `test-runner` agent and find code with `code-scout` (`.claude/agents/`, both Haiku), so long output and whole-file reads stay out of the main conversation.
 **How the code works** (state, solvers, templates, path finding, tests in detail): `docs/architecture.md`. Read the section you need, not the whole file.
 
 ## Stack (keep it this way)
