@@ -99,6 +99,7 @@ export function evalNum(n, v, sign = 1, name = (id) => id){
       if (n.f === 'sin') return Math.sin(x * D2R);
       if (n.f === 'cos') return Math.cos(x * D2R);
       if (n.f === 'tan') return Math.tan(x * D2R);
+      if (n.f === 'atan') return Math.atan(x) / D2R;
       if (Math.abs(x) > 1 + 1e-12) throw new MathError(`${n.f === 'asin' ? 'sin⁻¹' : 'cos⁻¹'} needs a number between −1 and 1.`);
       return (n.f === 'asin' ? Math.asin(Math.max(-1, Math.min(1, x))) : Math.acos(Math.max(-1, Math.min(1, x)))) / D2R;
     }
@@ -605,6 +606,104 @@ export function solveLinear(Z, id, name = id){
   return tidyRoots(mulR(negR(p[0]), invR(p[1])));
 }
 export const zeroOf = (lhs, rhs) => addR(lhs, negR(rhs));
+
+// ---------------------------------------------------------------- one-line equations and isolate()
+// "{W} = {m}{g}" → { lhs, rhs } trees.
+export function parseEq(src){
+  const k = src.indexOf('=');
+  if (k < 0 || src.indexOf('=', k + 1) >= 0) throw new Error(`parseEq: need exactly one = in "${src}"`);
+  return { lhs: parse(src.slice(0, k).trim()), rhs: parse(src.slice(k + 1).trim()) };
+}
+const kids = (n) => n.t === 'add' || n.t === 'mul' ? n.a : n.t === 'div' ? [n.n, n.d] : n.t === 'pow' ? [n.b] : n.t === 'pm' ? [n.a, n.b] : n.a ? [n.a] : [];
+const countOf = (n, id) => n.t === 'var' ? +(n.id === id) : kids(n).reduce((s, c) => s + countOf(c, id), 0);
+// a + (b + c) → a + b + c and a(bc) → abc, so each undo sees every term or factor at once
+const flat = (n, t) => n.t === t ? n.a.flatMap(x => flat(x, t)) : [n];
+const nodeOf = (t, xs) => xs.length === 1 ? xs[0] : { t, a: xs };
+const negOf = (n) => n.t === 'neg' ? n.a : n.t === 'num' ? { t: 'num', v: -n.v } : { t: 'neg', a: n };
+const INV = { sin: 'asin', cos: 'acos', tan: 'atan', asin: 'sin', acos: 'cos', atan: 'tan', exp: 'ln', ln: 'exp' };
+const fnName = (f) => f.startsWith('a') ? f.slice(1) + '⁻¹' : f;
+
+// a canonical rational back to a template tree (so evalNum and the unit check can read it)
+function ratToTree(r){
+  const atom = (k) => { const a = ATOMS.get(k); return a.kind === 'sym' ? { t: 'var', id: a.id } : a.kind === 'sqrt' ? { t: 'sqrt', a: ratToTree(a.base) } : { t: 'fn', f: a.f, a: ratToTree(a.arg) }; };
+  const pw = (b, p) => p === 1 ? b : { t: 'pow', b, e: p };
+  const mono = (m) => {
+    const top = [], bot = [];
+    for (const [k, p] of Object.entries(m.e)) (p > 0 ? top : bot).push(pw(atom(k), Math.abs(p)));
+    const c = Math.abs(m.c);
+    if (Math.abs(c - 1) > 1e-12 || !top.length) top.unshift({ t: 'num', v: c });
+    const t = bot.length ? { t: 'div', n: nodeOf('mul', top), d: nodeOf('mul', bot) } : nodeOf('mul', top);
+    return m.c < 0 ? { t: 'neg', a: t } : t;
+  };
+  const poly = (p) => p.length ? nodeOf('add', p.map(mono)) : { t: 'num', v: 0 };
+  const top = poly(r.n);
+  return r.d.length ? { t: 'div', n: top, d: nodeOf('mul', r.d.map(f => pw(poly(f.p), f.k))) } : top;
+}
+
+// Rearrange an equation for one variable. Returns { tree, steps: [{ lhs, rhs, why }], method }.
+// Once: undo each operation around it, outermost first, with a plain why per step (method 'undo').
+// More than once: collect powers of it; linear or quadratic only (the quadratic's ± is left for a pick).
+// opts: { name(id) → plain name, roots: 'pm' (default: a square root gives ±) | 'positive' }.
+// Throws MathError naming the variable when it can't be done.
+export function isolate(eq, id, opts = {}){
+  const name = opts.name || ((x) => x), say = (n) => plainTree(n, name), nm = name(id);
+  const inL = countOf(eq.lhs, id), inR = countOf(eq.rhs, id);
+  if (!inL && !inR) throw new MathError(`${nm} isn’t in this equation.`);
+  if (inL + inR > 1) return collect(eq, id, name);
+  let L = inL ? eq.lhs : eq.rhs, R = inL ? eq.rhs : eq.lhs;
+  const steps = [];
+  const step = (l, r, why) => { L = l; R = r; steps.push({ lhs: L, rhs: R, why }); };
+  for (let guard = 0; L.t !== 'var'; guard++){
+    if (guard > 60) throw new MathError(`${nm} can’t be isolated here.`);
+    if (L.t === 'add'){
+      const ts = flat(L, 'add'), keep = ts.find(x => countOf(x, id)), move = ts.filter(x => x !== keep);
+      const words = move.map(x => x.t === 'neg' ? `add ${say(x.a)} to` : `subtract ${say(x)} from`);
+      step(keep, nodeOf('add', [...flat(R, 'add'), ...move.map(negOf)]), move.length === 1 ? `${words[0]} both sides` : `move ${move.map(x => say(x.t === 'neg' ? x.a : x)).join(' and ')} to the other side`);
+    } else if (L.t === 'neg'){
+      step(L.a, negOf(R), 'multiply both sides by −1');
+    } else if (L.t === 'mul'){
+      const fs = flat(L, 'mul'), keep = fs.find(x => countOf(x, id)), by = nodeOf('mul', fs.filter(x => x !== keep));
+      const inv = by.t === 'num' && Number.isInteger(1 / by.v) ? 1 / by.v : null; // ½ → × 2
+      step(keep, inv ? { t: 'mul', a: [{ t: 'num', v: inv }, R] } : { t: 'div', n: R, d: by }, inv ? `multiply both sides by ${inv}` : `divide both sides by ${say(by)}`);
+    } else if (L.t === 'div'){
+      if (countOf(L.n, id)) step(L.n, { t: 'mul', a: [R, L.d] }, `multiply both sides by ${say(L.d)}`);
+      else step(L.d, { t: 'div', n: L.n, d: R }, `multiply both sides by ${say(L.d)}, then divide by ${say(R)}`);
+    } else if (L.t === 'pow' && L.e === 2){
+      const root = { t: 'sqrt', a: R };
+      step(L.b, opts.roots === 'positive' ? root : { t: 'pm', a: { t: 'num', v: 0 }, b: root }, opts.roots === 'positive' ? 'take the square root of both sides (a size, so the positive root)' : 'take the square root of both sides: two roots, ±');
+    } else if (L.t === 'sqrt'){
+      step(L.a, { t: 'pow', b: R, e: 2 }, 'square both sides');
+    } else if (L.t === 'fn' && INV[L.f]){
+      step(L.a, { t: 'fn', f: INV[L.f], a: R }, `take ${fnName(INV[L.f])} of both sides`);
+    } else throw new MathError(`${nm} sits inside ${L.t === 'pow' ? 'a power other than ²' : 'something that can’t be undone'}, so it can’t be isolated here.`);
+  }
+  return { tree: R, steps, method: 'undo' };
+}
+// the variable appears more than once: Z = lhs − rhs as a polynomial in it (negative powers cleared)
+function collect(eq, id, name){
+  const nm = name(id), ids = new Set();
+  const visit = (n) => { if (n.t === 'var') ids.add(n.id); kids(n).forEach(visit); };
+  visit(eq.lhs); visit(eq.rhs);
+  const env = Object.fromEntries([...ids].map(x => [x, symbol(x)]));
+  const Z = addR(build(eq.lhs, env, 1), negR(build(eq.rhs, env, 1)));
+  const key = 'v:' + id, lo = Math.min(0, ...Z.n.map(m => m.e[key] || 0));
+  let p = ratToPolyIn({ n: lo < 0 ? pScale(Z.n, 1, { [key]: -lo }) : Z.n, d: [] }, id);
+  if (!p) throw new MathError(`${nm} appears more than once, once inside a root, sin, cos or similar, so it can’t be isolated here.`);
+  if (p.length === 2){
+    const tree = ratToTree(tidyRoots(mulR(negR(p[0]), invR(p[1]))));
+    return { tree, method: 'linear', steps: [{ lhs: { t: 'var', id }, rhs: tree, why: `collect the terms with ${nm} on one side, then divide by what multiplies ${nm}` }] };
+  }
+  if (p.length !== 3) throw new MathError(p.length > 3 ? `${nm} appears cubed or higher, so it can’t be isolated exactly here.` : `${nm} cancels out of this equation.`);
+  if (evalRat(p[2], SAMPLE) < 0) p = p.map(negR);
+  const [c, b, a] = p, T = ratToTree;
+  const disc = addR(mulR(b, b), scale(mulR(a, c), -4));
+  const tree = { t: 'div', n: { t: 'pm', a: T(negR(b)), b: { t: 'sqrt', a: T(disc) } }, d: T(scale(a, 2)) };
+  const x = { t: 'var', id }, zero = { t: 'num', v: 0 };
+  const quad = { t: 'add', a: [{ t: 'mul', a: [T(a), { t: 'pow', b: x, e: 2 }] }, { t: 'mul', a: [T(b), x] }, T(c)] };
+  return { tree, method: 'quadratic', steps: [
+    { lhs: quad, rhs: zero, why: `move everything to one side: it’s a quadratic in ${nm}` },
+    { lhs: x, rhs: tree, why: `quadratic formula (a = ${plainTree(T(a), name)}, b = ${plainTree(T(b), name)}, c = ${plainTree(T(c), name)})` }] };
+}
 
 // ---------------------------------------------------------------- limiting cases
 // The limit of r as the symbol id → 0 or → ∞, exactly, for rational expressions (no roots or trig of id).

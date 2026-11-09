@@ -22,7 +22,6 @@ const S = window.__rl = {
   field,
   printOpts: { plain: (id) => VARS[id].plain, html: (id) => V(id), order: PRINT_ORDER, spaced: (id) => /[A-Za-zα-ω_]{2,}/.test(VARS[id].plain), fmt },
 };
-X.setSamples(SAMPLE);
 S.isKnown = (id) => known(id);
 S.sampleOf = (id) => sampleOf(id);
 S.eqText = (id) => EQS[id].text || '';

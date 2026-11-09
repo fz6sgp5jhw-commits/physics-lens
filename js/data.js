@@ -1,7 +1,7 @@
 // Physics Lens — physics data: variables, equations with hand-checked isolation steps, setups.
 // All values are stored in SI units. Every solver is written out by hand so each step is exact.
 
-import { parse, hasPM, evalNum, MathError, parseUnit, dimOf, dimEq, dimStr } from './expr.js';
+import { parse, hasPM, evalNum, MathError, parseUnit, dimOf, dimEq, dimStr, setSamples } from './expr.js';
 
 const TAU = 2 * Math.PI;
 
@@ -115,6 +115,7 @@ function kinematics(prefix, k, words){
   };
   return {
     [prefix + '1']: {
+      eq: `{${u}} = {${u0}} + {${a}}{${t}}`, kind: 'rel', cue: `constant ${P(a)}`,
       applies: c => !c.varA, needs: 'constant acceleration',
       vars: [u, u0, a, t], form: `${Vu} = ${Vu0} + ${Va}${Vt}`,
       meaning: words.m1, condition: `constant ${P(a)}`, calc: `Integrate ${P(a)} = d${P(u)}/dt from 0 to t with ${P(a)} constant: ${P(u)} − ${P(u0)} = ${P(a)}t.`,
@@ -128,6 +129,7 @@ function kinematics(prefix, k, words){
       },
     },
     [prefix + '2']: {
+      eq: `{${p}} = {${u0}}{${t}} + ½{${a}}{${t}}²`, kind: 'rel', cue: `constant ${P(a)}`,
       applies: c => !c.varA, needs: 'constant acceleration',
       vars: [p, u0, a, t], form: `${Vp} = ${Vu0}${Vt} + ½${Va}${Vt}²`,
       meaning: words.m2, condition: `constant ${P(a)}`, calc: `Integrate ${P(u)}(t) = ${P(u0)} + ${P(a)}t from 0 to t: ${P(p)} = ${P(u0)}t + ½${P(a)}t².`,
@@ -146,6 +148,7 @@ function kinematics(prefix, k, words){
       },
     },
     [prefix + '3']: {
+      eq: `{${u}}² = {${u0}}² + 2{${a}}{${p}}`, kind: 'rel', cue: `constant ${P(a)}`,
       applies: c => !c.varA, needs: 'constant acceleration',
       vars: [u, u0, a, p], form: `${Vu}² = ${Vu0}² + 2${Va}${Vp}`,
       meaning: words.m3, condition: `constant ${P(a)}`, calc: `Eliminate t between the first two equations (or use ${P(a)} = ${P(u)} d${P(u)}/d${P(p)} and integrate).`,
@@ -170,6 +173,7 @@ function kinematics(prefix, k, words){
       },
     },
     [prefix + '4']: {
+      eq: `{${p}} = ½({${u0}} + {${u}}){${t}}`, kind: 'rel', cue: `constant ${P(a)}`,
       applies: c => !c.varA, needs: 'constant acceleration',
       vars: [p, u0, u, t], form: `${Vp} = ½(${Vu0} + ${Vu})${Vt}`,
       meaning: words.m4, condition: `constant ${P(a)}`, calc: `With ${P(a)} constant, velocity changes linearly, so its average over the interval is (${P(u0)} + ${P(u)})/2.`,
@@ -184,6 +188,7 @@ function kinematics(prefix, k, words){
       },
     },
     [prefix + '5']: {
+      eq: `{${p}} = {${u}}{${t}} − ½{${a}}{${t}}²`, kind: 'rel', cue: `constant ${P(a)}`,
       applies: c => !c.varA, needs: 'constant acceleration',
       vars: [p, u, a, t], form: `${Vp} = ${Vu}${Vt} − ½${Va}${Vt}²`,
       meaning: words.m5, condition: `constant ${P(a)}`, calc: `Substitute ${P(u0)} = ${P(u)} − ${P(a)}t into the second equation.`,
@@ -860,6 +865,7 @@ export const SAMPLE = {
   dth: 8, dtrav: 8, nrev: 1.27, wavg: 4, aavg: 1.5,
   L: 2, M: 1.5, R: 0.2, Hx: 5, Hy: 5, dP: 0.3, dm: 0.3, dT: 0.4, dF: 0.5, phi: 30, beta: 20, xh: 0.4, hc: 0.12, tau: 5, rt: 0.5, tnet: 5, I: 0.4, Icm: 0.1, dpa: 0.35,
 };
+setSamples(SAMPLE); // the engine picks signs and roots at these values
 // Order symbols are written in a product: coefficient-like first (μk m g), then the rest.
 export const PRINT_ORDER = ['mu', 'mus', 'r', 'rt', 'R', 'm', 'M', 'm1', 'm2', 'mA', 'mB', 'g', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'NA', 'NB', 'f', 'fA', 'fB', 'F', 'Fp', 'P', 'Tn', 'inc',
   'Hx', 'Hy', 'tau', 'tnet', 'I', 'Icm', 'dpa', 'L', 'dP', 'dm', 'dT', 'dF', 'xh', 'hc', 'phi', 'beta',
