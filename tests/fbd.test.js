@@ -7,6 +7,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, openApp, setCondition, confirmConditions, addTarget, addGiven, addFunction } from './helpers.js';
 import { gather } from './helpers.js';
+import { rand, seedNote } from './rand.js';
 
 let env;
 before(async () => { env = await launch(); });
@@ -69,20 +70,21 @@ test('ramp pushed by F = kt: a(t), t*, v(t), N(t) (gate)', async () => {
     assert.equal(await text(page, 'fn:vf'), '(k cos θ / (2m))t² − g sin θ·t');
     assert.equal(await text(page, 'fn:N'), 'mg cos θ + k sin θ·t');
     // still sliding down at t* (v < 0 with + up the slope), and it stops at 2t*
-    const check = await page.evaluate(async () => {
+    const draws = Array.from({ length: 5 }, () => [rand(), rand(), rand()]);
+    const check = await page.evaluate(async (draws) => {
       const X = await import('./js/expr.js'), S = window.__rl;
       const out = [];
-      for (let i = 0; i < 5; i++){
-        const vals = { m: 1 + 4 * Math.random(), g: 9.81, inc: 10 + 60 * Math.random(), c_k: 0.5 + 5 * Math.random() }; // k is stored as c_k
+      for (const [r1, r2, r3] of draws){
+        const vals = { m: 1 + 4 * r1, g: 9.81, inc: 10 + 60 * r2, c_k: 0.5 + 5 * r3 }; // k is stored as c_k
         const tStar = X.evalRat(S.found.t.expr, vals), vAt = X.evalRat(S.found.vf.expr, vals);
         const vNum = S.funcs.vf.poly.map(c => X.evalRat(c, vals));
         const stop = X.polySolve(X.polyFromNumbers(vNum), X.number(0)).roots.map(r => r.x).filter(x => x > 1e-9);
         out.push({ tStar, want: vals.m * vals.g * Math.tan(vals.inc * Math.PI / 180) / vals.c_k, vAt, stop });
       }
       return out;
-    });
+    }, draws);
     for (const c of check){
-      assert.ok(Math.abs(c.tStar - c.want) < 1e-9 * c.want, `t* = ${c.tStar}, want ${c.want}`);
+      assert.ok(Math.abs(c.tStar - c.want) < 1e-9 * c.want, `t* = ${c.tStar}, want ${c.want} ${seedNote}`);
       assert.ok(c.vAt < 0, 'still sliding down at t*');
       assert.equal(c.stop.length, 1);
       assert.ok(Math.abs(c.stop[0] - 2 * c.tStar) < 1e-9 * c.tStar, `stops at ${c.stop[0]}, want 2t* = ${2 * c.tStar}`);

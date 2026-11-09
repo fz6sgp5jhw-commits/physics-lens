@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as X from '../js/expr.js';
 import { EQS, VARS, SAMPLE, PRINT_ORDER, DIMS } from '../js/data.js';
+import { rand, seedNote } from './rand.js';
 
 X.setSamples(SAMPLE);
 const o = { plain: (id) => VARS[id].plain, order: PRINT_ORDER, spaced: (id) => /[A-Za-zα-ω]{2,}/.test(VARS[id].plain), fmt: (x) => String(+x.toPrecision(4)) };
@@ -54,18 +55,18 @@ test('every template: simplified symbolic answer = plain numeric evaluation, at 
   for (const [id, eq] of Object.entries(EQS)) for (const [x, sol] of Object.entries(eq.solve)){
     for (let k = 0; k < 20; k++){
       const vals = {};
-      for (const y of eq.vars) if (y !== x) vals[y] = y === 'inc' ? 10 + 60 * Math.random() : SAMPLE[y] * (0.5 + Math.random());
+      for (const y of eq.vars) if (y !== x) vals[y] = y === 'inc' ? 10 + 60 * rand() : SAMPLE[y] * (0.5 + rand());
       for (const sign of X.hasPM(sol.tree) ? [1, -1] : [1]){
         let want; try { want = X.evalNum(sol.tree, vals, sign); } catch { continue; }
         if (!isFinite(want)) continue;
         const R = X.toRat(sol.tree, sym, sign), got = X.evalRat(R, vals);
         n++;
-        if (!(Math.abs(got - want) <= 1e-7 * Math.max(1, Math.abs(want)))) bad.push(`${id} → ${x} (${sign > 0 ? '+' : '−'}): ${X.toText(R, o)} gives ${got}, template gives ${want}`);
+        if (!(Math.abs(got - want) <= 1e-7 * Math.max(1, Math.abs(want)))) bad.push(`${id} → ${x} (${sign > 0 ? '+' : '−'}) at ${JSON.stringify(vals)}: ${X.toText(R, o)} gives ${got}, template gives ${want}`);
       }
     }
   }
   assert.ok(n > 2000, `only ${n} cases ran`);
-  assert.deepEqual(bad.slice(0, 10), []);
+  assert.deepEqual(bad.slice(0, 10), [], seedNote);
 });
 
 test('numeric evaluation: ± branches, degrees, division by zero', () => {
