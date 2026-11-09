@@ -473,24 +473,54 @@ export const toText = (r, o) => printRat(r, { ...o, html: false, sym: o.plain ||
 export const toHTML = (r, o) => printRat(r, { ...o, html: true, sym: o.html || ((id) => id) });
 
 // ---------------------------------------------------------------- units
-// A unit string like "m/s²" or "kg" → dimension vector { m, kg, s }. Angles (°, rad, rev) are dimensionless.
-const BASE = { m: { m: 1 }, s: { s: 1 }, kg: { kg: 1 }, N: { kg: 1, m: 1, s: -2 }, rad: {}, '°': {}, rev: {}, '': {}, 'no unit': {}, g: { kg: 1 }, cm: { m: 1 }, min: { s: 1 }, h: { s: 1 }, km: { m: 1 }, rpm: { s: -1 } };
-export function parseUnit(u){
-  const out = {};
-  const [top, ...bots] = u.split('/');
+// A unit string like "m/s²", "J/(mol·K)" or "μF" → dimension vector over the SI bases m, kg, s, A, K, mol.
+// Angles (°, rad, rev) are dimensionless. Every unit also has its size in SI units (unitFactor), written from the
+// SI definitions; a prefix (n μ m c k M) works on any unit marked p. Conversions shown to students stay per quantity.
+const BASES = ['m', 'kg', 's', 'A', 'K', 'mol'];
+const U = (dim, f = 1, p = true) => ({ dim, f, p });
+const J = { kg: 1, m: 2, s: -2 }, Cd = { A: 1, s: 1 }, Vd = { kg: 1, m: 2, s: -3, A: -1 };
+const UNITS = {
+  m: U({ m: 1 }), s: U({ s: 1 }), g: U({ kg: 1 }, 1e-3), A: U({ A: 1 }), K: U({ K: 1 }), mol: U({ mol: 1 }),
+  N: U({ kg: 1, m: 1, s: -2 }), J: U(J), W: U({ kg: 1, m: 2, s: -3 }), Pa: U({ kg: 1, m: -1, s: -2 }),
+  C: U(Cd), V: U(Vd), 'Ω': U({ kg: 1, m: 2, s: -3, A: -2 }), F: U({ kg: -1, m: -2, s: 4, A: 2 }),
+  T: U({ kg: 1, s: -2, A: -1 }), H: U({ kg: 1, m: 2, s: -2, A: -2 }), Hz: U({ s: -1 }),
+  L: U({ m: 3 }, 1e-3), eV: U(J, 1.602176634e-19), atm: U({ kg: 1, m: -1, s: -2 }, 101325, false),
+  rad: U({}, 1, false), '°': U({}, Math.PI / 180, false), rev: U({}, 2 * Math.PI, false),
+  min: U({ s: 1 }, 60, false), h: U({ s: 1 }, 3600, false), rpm: U({ s: -1 }, 1 / 60, false),
+};
+const PREFIX = { n: 1e-9, 'μ': 1e-6, m: 1e-3, c: 1e-2, k: 1e3, M: 1e6 };
+const ALIAS = { '\u00b5': '\u03bc', '\u2126': '\u03a9' }; // micro sign and ohm sign typed from a keyboard
+const SUPU = { ...SUP, '¹': 1 };
+// one unit token without its power: an exact unit first (min, mol, Pa), then a prefix on a unit that takes one (mm, μF, kPa)
+function unitTok(tok){
+  if (UNITS[tok]) return UNITS[tok];
+  const u = UNITS[tok.slice(1)], k = PREFIX[tok[0]];
+  if (u && u.p && k) return { dim: u.dim, f: k * u.f };
+  return null;
+}
+function readUnit(u){
+  const src = String(u).replace(/[\u00b5\u2126]/g, c => ALIAS[c]);
+  const out = {}; let f = 1;
+  const [top, ...bots] = src.split('/');
   const addPart = (part, sgn) => {
-    for (const tok of part.trim().split(/[·*\s]+/).filter(Boolean)){
-      const m = /^(.+?)([²³]?)$/.exec(tok); const base = BASE[m[1]];
-      if (!base) throw new Error(`unknown unit ${m[1]} in ${u}`);
-      const p = (m[2] ? SUP[m[2]] : 1) * sgn;
-      for (const [k, x] of Object.entries(base)) out[k] = (out[k] || 0) + x * p;
+    for (const tok of part.replace(/[()]/g, ' ').trim().split(/[·*\s]+/).filter(Boolean)){
+      const m = /^(.+?)(⁻?)([¹²³⁴⁵]?)$/.exec(tok), base = unitTok(m[1]);
+      if (!base || (m[2] && !m[3])) throw new Error(`unknown unit ${m[1]} in ${u}`);
+      const p = (m[3] ? SUPU[m[3]] : 1) * (m[2] ? -1 : 1) * sgn;
+      for (const [k, x] of Object.entries(base.dim)) out[k] = (out[k] || 0) + x * p;
+      f *= base.f ** p;
     }
   };
   addPart(top === '1' ? '' : top, 1); bots.forEach(b => addPart(b, -1));
-  return cleanE(out);
+  return { dim: cleanE(out), f };
 }
-const dimEq = (a, b) => ['m', 'kg', 's'].every(k => Math.abs((a[k] || 0) - (b[k] || 0)) < 1e-9);
-const NAMED = [[{ kg: 1, m: 1, s: -2 }, 'N'], [{ kg: 1, m: 1, s: -3 }, 'N/s'], [{ kg: 1, m: 2, s: -2 }, 'J']];
+export const parseUnit = (u) => (u === '' || u === 'no unit') ? {} : readUnit(u).dim;
+// how many SI units one of this unit is: unitFactor('mm') = 0.001, unitFactor('μF') = 1e-6, unitFactor('L') = 0.001 (m³)
+export const unitFactor = (u) => (u === '' || u === 'no unit') ? 1 : readUnit(u).f;
+const dimEq = (a, b) => BASES.every(k => Math.abs((a[k] || 0) - (b[k] || 0)) < 1e-9);
+// names for a dimension when a result is printed (torque's N·m is set by data.js; 1/s stays 1/s, not Hz)
+const NAMED = [[{ kg: 1, m: 1, s: -2 }, 'N'], [{ kg: 1, m: 1, s: -3 }, 'N/s'], [J, 'J'],
+  ...['W', 'Pa', 'C', 'V', 'Ω', 'F', 'T', 'H'].map(n => [UNITS[n].dim, n])];
 export const dimStr = (d) => { const parts = Object.entries(cleanE(d)); if (!parts.length) return 'no unit'; const nm = NAMED.find(([u]) => dimEq(u, d) && Object.keys(cleanE(d)).length === Object.keys(u).length); if (nm) return nm[1]; const top = parts.filter(([, p]) => p > 0).map(([k, p]) => k + powStr(p)).join('·') || '1', bot = parts.filter(([, p]) => p < 0).map(([k, p]) => k + powStr(-p)).join('·'); return bot ? `${top}/${bot}` : top; };
 // dimension of a template tree; throws if two terms of a sum disagree. dims: id → dimension vector.
 export function dimOf(n, dims){

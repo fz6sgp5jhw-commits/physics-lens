@@ -5,7 +5,7 @@
 // marks targets and anything "not needed" (greyed, never dropped). Freedoms per body (fixed, slide x, slide y, turn θ) and the
 // constraints from the cards feed a counter of unknowns against relationships, which never says which relationship is missing.
 // Design: docs/drawing-first-plan.md, sections 3, 4 and 6. No arithmetic here: the counter only counts.
-import { parseUnit } from './expr.js';
+import { parseUnit, dimEq } from './expr.js';
 
 const SUB = '₀₁₂₃₄₅₆₇₈₉';
 const sub = (n) => String(n).split('').map(d => SUB[+d]).join('');
@@ -14,7 +14,7 @@ const esc = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt
 // what each kind of quantity is measured in
 const QTY = { mass: { units: 'kg or g', dim: { kg: 1 } }, length: { units: 'm or cm', dim: { m: 1 } }, force: { units: 'N', dim: { kg: 1, m: 1, s: -2 } } };
 const WHAT = [['mass', 'mass'], ['length', 'length'], ['force', 'force'], ['time', 'time']];
-const sameDim = (a, b) => ['kg', 'm', 's'].every(k => (a[k] || 0) === (b[k] || 0));
+const sameDim = dimEq;
 const dimWord = (d) => (WHAT.find(([k]) => QTY[k] && sameDim(QTY[k].dim, d)) || (sameDim({ s: 1 }, d) ? [0, 'time'] : sameDim({ m: 1, s: -1 }, d) ? [0, 'speed'] : [0, 'something else']))[1];
 
 // the quantities a part can name: key, the name the part gives it (base + number), the kind of quantity, and when the card asks
