@@ -106,22 +106,41 @@ export function evalNum(n, v, sign = 1, name = (id) => id){
   }
   throw new Error('evalNum: bad node ' + n.t);
 }
-// a tree printed back as plain text (for messages)
-function plainTree(n, name){
-  const p = (x) => (x.t === 'add' || x.t === 'pm') ? `(${plainTree(x, name)})` : plainTree(x, name);
+// A tree printed back in template syntax. sym(id) writes a symbol: `{id}` gives a template that parse() reads
+// back to the same value; VARS names give plain text (messages); V(id) gives the HTML the UI shows.
+// Brackets only where parse() needs them: a sum inside a product, a product under / or after sin, a root raised to a power.
+const SUPN = { 2: '²', 3: '³', 4: '⁴', 5: '⁵' };
+const isAtom = (n) => n.t === 'var' || (n.t === 'num' && n.v >= 0) || n.t === 'sqrt';
+export function showTree(n, sym = (id) => id){
+  const s = (x) => showTree(x, sym), br = (x) => `(${s(x)})`;
+  const factor = (x) => x.t === 'add' || x.t === 'pm' || x.t === 'neg' || x.t === 'div' ? br(x) : s(x);
   switch (n.t){
-    case 'num': return n.v === 0.5 ? '½' : String(n.v);
-    case 'var': return name(n.id);
-    case 'neg': return '−' + p(n.a);
-    case 'add': return n.a.map((x, k) => k && x.t === 'neg' ? ' − ' + p(x.a) : (k ? ' + ' : '') + plainTree(x, name)).join('');
-    case 'mul': return n.a.map(p).join('');
-    case 'pm': return `${plainTree(n.a, name)} ± ${p(n.b)}`;
-    case 'pow': return p(n.b) + (n.e === 2 ? '²' : n.e === 3 ? '³' : '^' + n.e);
-    case 'div': return `${p(n.n)} / ${p(n.d)}`;
-    case 'sqrt': return `√(${plainTree(n.a, name)})`;
-    case 'fn': return `${n.f.startsWith('a') ? n.f.slice(1) + '⁻¹' : n.f} ${p(n.a)}`;
+    case 'num': {
+      if (n.v < 0) return '−' + s({ t: 'num', v: -n.v });
+      if (n.v === 0.5) return '½';
+      if (Number.isInteger(n.v)) return String(n.v);
+      for (let q = 2; q <= 12; q++){ const p = Math.round(n.v * q); if (Math.abs(p / q - n.v) < 1e-12) return `${p}/${q}`; }
+      return String(n.v);
+    }
+    case 'var': return sym(n.id);
+    case 'neg': return '−' + (n.a.t === 'add' || n.a.t === 'pm' ? br(n.a) : s(n.a));
+    case 'add': return n.a.map((x, k) => {
+      if (x.t === 'num' && x.v < 0) x = { t: 'neg', a: { t: 'num', v: -x.v } };
+      return x.t === 'neg' ? (k ? ' − ' : '−') + (x.a.t === 'add' || x.a.t === 'pm' ? br(x.a) : s(x.a)) : (k ? ' + ' : '') + (x.t === 'pm' ? br(x) : s(x));
+    }).join('');
+    case 'pm': return n.a.t === 'num' && n.a.v === 0 ? `±${factor(n.b)}` : `${s(n.a)} ± ${factor(n.b)}`;
+    case 'mul': { // numbers first: 12{I}, not {I}12; a fraction like 1/12 in brackets
+      const fs = [...n.a.filter(x => x.t === 'num'), ...n.a.filter(x => x.t !== 'num' && x.t !== 'fn'), ...n.a.filter(x => x.t === 'fn')];
+      return fs.map((x, k) => x.t === 'num' && !Number.isInteger(x.v) && x.v !== 0.5 ? br(x) : x.t === 'fn' ? (k ? ' ' : '') + (k < fs.length - 1 ? br(x) : s(x)) : factor(x)).join('');
+    }
+    case 'div': return `${n.n.t === 'add' || n.n.t === 'pm' || n.n.t === 'neg' ? br(n.n) : s(n.n)} / ${isAtom(n.d) || n.d.t === 'pow' || n.d.t === 'fn' ? s(n.d) : br(n.d)}`;
+    case 'pow': return (n.b.t === 'var' || (n.b.t === 'num' && n.b.v >= 0 && Number.isInteger(n.b.v)) ? s(n.b) : br(n.b)) + (SUPN[n.e] || '^' + n.e);
+    case 'sqrt': return `√(${s(n.a)})`;
+    case 'fn': return `${fnName(n.f)}${n.a.t === 'var' ? ' ' + s(n.a) : br(n.a)}`;
   }
+  throw new Error('showTree: bad node ' + n.t);
 }
+const plainTree = (n, name) => showTree(n, name);
 
 // ---------------------------------------------------------------- symbols: canonical rational form
 // Mono = { c: number, e: { atomKey: integer power } }. Poly = Mono[]. Rat = { n: Poly, d: [{ p: Poly, k }] }.
@@ -619,7 +638,8 @@ const countOf = (n, id) => n.t === 'var' ? +(n.id === id) : kids(n).reduce((s, c
 // a + (b + c) → a + b + c and a(bc) → abc, so each undo sees every term or factor at once
 const flat = (n, t) => n.t === t ? n.a.flatMap(x => flat(x, t)) : [n];
 const nodeOf = (t, xs) => xs.length === 1 ? xs[0] : { t, a: xs };
-const negOf = (n) => n.t === 'neg' ? n.a : n.t === 'num' ? { t: 'num', v: -n.v } : { t: 'neg', a: n };
+const negOf = (n) => n.t === 'neg' ? n.a : n.t === 'num' ? { t: 'num', v: -n.v } : n.t === 'add' ? { t: 'add', a: n.a.map(negOf) } : { t: 'neg', a: n };
+const isZero0 = (n) => n.t === 'num' && n.v === 0;
 const INV = { sin: 'asin', cos: 'acos', tan: 'atan', asin: 'sin', acos: 'cos', atan: 'tan', exp: 'ln', ln: 'exp' };
 const fnName = (f) => f.startsWith('a') ? f.slice(1) + '⁻¹' : f;
 
@@ -630,23 +650,39 @@ function ratToTree(r){
   const mono = (m) => {
     const top = [], bot = [];
     for (const [k, p] of Object.entries(m.e)) (p > 0 ? top : bot).push(pw(atom(k), Math.abs(p)));
-    const c = Math.abs(m.c);
+    const fr = fracOf(Math.abs(m.c)), [c, q] = fr || [Math.abs(m.c), 1]; // ⅖ → 2 on top, 5 below
     if (Math.abs(c - 1) > 1e-12 || !top.length) top.unshift({ t: 'num', v: c });
+    if (q > 1) bot.unshift({ t: 'num', v: q });
     const t = bot.length ? { t: 'div', n: nodeOf('mul', top), d: nodeOf('mul', bot) } : nodeOf('mul', top);
     return m.c < 0 ? { t: 'neg', a: t } : t;
   };
-  const poly = (p) => p.length ? nodeOf('add', p.map(mono)) : { t: 'num', v: 0 };
-  const top = poly(r.n);
-  return r.d.length ? { t: 'div', n: top, d: nodeOf('mul', r.d.map(f => pw(poly(f.p), f.k))) } : top;
+  // a sum: positive terms first (simplest first), and a factor common to every term taken out front (m₂(g − a), not −am₂ + gm₂)
+  const poly = (p) => {
+    if (!p.length) return { t: 'num', v: 0 };
+    const common = {};
+    if (p.length > 1) for (const k of Object.keys(p[0].e)){ const lo = Math.min(...p.map(m => m.e[k] > 0 ? m.e[k] : 0)); if (lo > 0) common[k] = lo; }
+    const atoms = (m) => Object.keys(m.e).length, byAtoms = (x, y) => atoms(x) - atoms(y); // v₀² + 2aΔx
+    const sum = nodeOf('add', [...p.filter(m => m.c > 0).sort(byAtoms), ...p.filter(m => m.c <= 0).sort(byAtoms)].map(m => mono(Object.keys(common).length ? { c: m.c, e: cleanE(Object.fromEntries(Object.entries(m.e).map(([k, q]) => [k, q - (common[k] || 0)]))) } : m)));
+    return Object.keys(common).length ? { t: 'mul', a: [...Object.entries(common).map(([k, q]) => pw(atom(k), q)), sum] } : sum;
+  };
+  // divisors shared by the terms go below one bar: m₂(g − a) / a, not m₂(g/a − 1); aI / (R²(g − a)), not aI / R² / (g − a)
+  const low = {};
+  if (r.n.length) for (const k of new Set(r.n.flatMap(m => Object.keys(m.e)))){ const lo = Math.min(...r.n.map(m => m.e[k] || 0)); if (lo < 0) low[k] = lo; }
+  const bot = [...Object.entries(low).map(([k, q]) => pw(atom(k), -q)), ...r.d.map(f => pw(poly(f.p), f.k))];
+  if (!bot.length) return poly(r.n);
+  const n = r.n.map(m => ({ c: m.c, e: cleanE(Object.fromEntries(Object.keys({ ...m.e, ...low }).map(k => [k, (m.e[k] || 0) - (low[k] || 0)]))) }));
+  return { t: 'div', n: poly(n), d: nodeOf('mul', bot) };
 }
+const size = (n) => 1 + kids(n).reduce((s, c) => s + size(c), 0);
 
 // Rearrange an equation for one variable. Returns { tree, steps: [{ lhs, rhs, why }], method }.
 // Once: undo each operation around it, outermost first, with a plain why per step (method 'undo').
 // More than once: collect powers of it; linear or quadratic only (the quadratic's ± is left for a pick).
+// A last 'simplify' step is added when the simplified form is clearly shorter.
 // opts: { name(id) → plain name, roots: 'pm' (default: a square root gives ±) | 'positive' }.
 // Throws MathError naming the variable when it can't be done.
 export function isolate(eq, id, opts = {}){
-  const name = opts.name || ((x) => x), say = (n) => plainTree(n, name), nm = name(id);
+  const name = opts.name || ((x) => x), say = (n) => n.t === 'add' || n.t === 'pm' ? `(${plainTree(n, name)})` : plainTree(n, name), nm = name(id);
   const inL = countOf(eq.lhs, id), inR = countOf(eq.rhs, id);
   if (!inL && !inR) throw new MathError(`${nm} isn’t in this equation.`);
   if (inL + inR > 1) return collect(eq, id, name);
@@ -657,14 +693,23 @@ export function isolate(eq, id, opts = {}){
     if (guard > 60) throw new MathError(`${nm} can’t be isolated here.`);
     if (L.t === 'add'){
       const ts = flat(L, 'add'), keep = ts.find(x => countOf(x, id)), move = ts.filter(x => x !== keep);
+      if (keep.t === 'neg'){ // A − x = R  →  x = A − R in one step
+        const rest = isZero0(R) ? move : [...move, ...flat(negOf(R), 'add')];
+        step(keep.a, nodeOf('add', rest), isZero0(R) ? `add ${say(keep.a)} to both sides` : `add ${say(keep.a)} and subtract ${say(R)} on both sides`);
+        continue;
+      }
       const words = move.map(x => x.t === 'neg' ? `add ${say(x.a)} to` : `subtract ${say(x)} from`);
       step(keep, nodeOf('add', [...flat(R, 'add'), ...move.map(negOf)]), move.length === 1 ? `${words[0]} both sides` : `move ${move.map(x => say(x.t === 'neg' ? x.a : x)).join(' and ')} to the other side`);
     } else if (L.t === 'neg'){
       step(L.a, negOf(R), 'multiply both sides by −1');
     } else if (L.t === 'mul'){
-      const fs = flat(L, 'mul'), keep = fs.find(x => countOf(x, id)), by = nodeOf('mul', fs.filter(x => x !== keep));
-      const inv = by.t === 'num' && Number.isInteger(1 / by.v) ? 1 / by.v : null; // ½ → × 2
-      step(keep, inv ? { t: 'mul', a: [{ t: 'num', v: inv }, R] } : { t: 'div', n: R, d: by }, inv ? `multiply both sides by ${inv}` : `divide both sides by ${say(by)}`);
+      const fs = flat(L, 'mul'), keep = fs.find(x => countOf(x, id)), others = fs.filter(x => x !== keep);
+      const c = others.filter(x => x.t === 'num').reduce((q, x) => q * x.v, 1), rest = others.filter(x => x.t !== 'num');
+      const inv = c !== 1 && Number.isInteger(1 / c) ? 1 / c : null; // ½ → multiply by 2
+      if (inv){
+        const top = { t: 'mul', a: [{ t: 'num', v: inv }, R] };
+        step(keep, rest.length ? { t: 'div', n: top, d: nodeOf('mul', rest) } : top, `multiply both sides by ${inv}${rest.length ? `, then divide by ${say(nodeOf('mul', rest))}` : ''}`);
+      } else { const by = nodeOf('mul', others); step(keep, { t: 'div', n: R, d: by }, `divide both sides by ${say(by)}`); }
     } else if (L.t === 'div'){
       if (countOf(L.n, id)) step(L.n, { t: 'mul', a: [R, L.d] }, `multiply both sides by ${say(L.d)}`);
       else step(L.d, { t: 'div', n: L.n, d: R }, `multiply both sides by ${say(L.d)}, then divide by ${say(R)}`);
@@ -676,6 +721,14 @@ export function isolate(eq, id, opts = {}){
     } else if (L.t === 'fn' && INV[L.f]){
       step(L.a, { t: 'fn', f: INV[L.f], a: R }, `take ${fnName(INV[L.f])} of both sides`);
     } else throw new MathError(`${nm} sits inside ${L.t === 'pow' ? 'a power other than ²' : 'something that can’t be undone'}, so it can’t be isolated here.`);
+  }
+  // a last tidy-up when a fraction sits inside another and the simplified form is no longer
+  // (mR²(g − a) / a, not (mg / a − m)R²)
+  const nested = (n, inside) => (n.t === 'div' && inside) || kids(n).some(c => nested(c, inside || n.t === 'div' || n.t === 'mul' || n.t === 'add'));
+  if (!hasPM(R) && nested(R, false)){
+    const ids = new Set(); const visit = (n) => { if (n.t === 'var') ids.add(n.id); kids(n).forEach(visit); }; visit(R);
+    const T = ratToTree(toRat(R, Object.fromEntries([...ids].map(x => [x, symbol(x)]))));
+    if (size(T) <= size(R)) steps.push({ lhs: L, rhs: T, why: 'simplify' }), R = T;
   }
   return { tree: R, steps, method: 'undo' };
 }

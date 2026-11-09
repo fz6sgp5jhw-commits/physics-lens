@@ -14,7 +14,7 @@ const library = Object.entries(EQS).filter(([, e]) => !e.generated);
 const sample = (y) => y === 'inc' || y === 'phi' || y === 'beta' ? 10 + 60 * rand() : SAMPLE[y] * (0.5 + rand());
 const close = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(b));
 
-test('every library equation is one line (eq) with a kind and a cue', { todo: 'C1 box 4 converts the rest' }, () => {
+test('every library equation is one line (eq) with a kind and a cue', () => {
   const missing = library.filter(([, e]) => !e.eq || !['law', 'rel', 'def'].includes(e.kind) || !e.cue).map(([id]) => id);
   assert.deepEqual(missing, []);
 });
@@ -23,15 +23,15 @@ test('every library equation is one line (eq) with a kind and a cue', { todo: 'C
 const cases = [];
 for (const [id, e] of library){
   if (!e.eq) continue;
-  for (const x of e.vars) cases.push({ id, x, e, iso: X.isolate(X.parseEq(e.eq), x) });
+  for (const x of e.vars) if (e.solve[x]) cases.push({ id, x, e, iso: X.isolate(X.parseEq(e.eq), x) }); // solve[x] = null: never solved for x
 }
 
-test('isolate agrees with every hand solver it replaces (numbers and the chosen root)', () => {
+test('isolate agrees with every hand solver it replaces (numbers and the chosen root)', (t) => {
   const bad = [];
   let n = 0;
   for (const { id, x, e, iso } of cases){
     const sol = e.solve[x];
-    if (!sol || !sol.sub) continue; // no hand solver left: tests/solver-snapshot.test.js holds the old answers
+    if (!sol || sol.auto) continue; // made by isolate itself: tests/solver-snapshot.test.js holds the old hand answers
     for (let k = 0; k < 10; k++){
       const v = {};
       for (const y of e.vars) if (y !== x) v[y] = sample(y);
@@ -44,7 +44,7 @@ test('isolate agrees with every hand solver it replaces (numbers and the chosen 
       if (!close(got, hand.value)) bad.push(`${id} → ${x} at ${JSON.stringify(v)}: isolate gives ${got} (candidates ${cands}), hand solver ${hand.value}`);
     }
   }
-  assert.ok(n > 0, 'no cases ran');
+  t.diagnostic(`${n} hand-solver cases compared (0 once every hand template is gone)`);
   assert.deepEqual(bad.slice(0, 10), [], `${bad.length} disagree ${seedNote}`);
 });
 
