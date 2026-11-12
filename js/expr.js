@@ -45,7 +45,17 @@ export function parse(src){
   }
   function factor(){
     let node = primary();
-    for (;;){ const c = peek(); if (c in SUP){ i++; node = { t: 'pow', b: node, e: SUP[c] }; } else return node; }
+    for (;;){
+      const c = peek();
+      if (c in SUP){ i++; node = { t: 'pow', b: node, e: SUP[c] }; }
+      else if (c === '^'){ // ^2, ^(5/3), ^(−1), ^{γ}, ^({γ} − 1): a number folds to e, an expression with symbols stays x
+        i++; ws();
+        let x;
+        if (s[i] === '−' || s[i] === '-'){ i++; x = { t: 'neg', a: primary() }; } else x = primary();
+        node = hasVar(x) ? { t: 'pow', b: node, x } : { t: 'pow', b: node, e: evalNum(x, {}) };
+      }
+      else return node;
+    }
   }
   function primary(){
     const c = peek();
@@ -70,6 +80,7 @@ export function parse(src){
   return tree;
 }
 
+const hasVar = (n) => n.t === 'var' || kids(n).some(hasVar);
 export const hasPM = (n) => n.t === 'pm' || (n.a && (Array.isArray(n.a) ? n.a.some(hasPM) : hasPM(n.a))) || (n.b && hasPM(n.b)) || (n.n && hasPM(n.n)) || (n.d && hasPM(n.d));
 
 // ---------------------------------------------------------------- numbers
@@ -85,7 +96,11 @@ export function evalNum(n, v, sign = 1, name = (id) => id){
     case 'add': return n.a.reduce((s, x) => s + evalNum(x, v, sign, name), 0);
     case 'mul': return n.a.reduce((s, x) => s * evalNum(x, v, sign, name), 1);
     case 'pm': return evalNum(n.a, v, sign, name) + sign * evalNum(n.b, v, sign, name);
-    case 'pow': return evalNum(n.b, v, sign, name) ** n.e;
+    case 'pow': {
+      const b = evalNum(n.b, v, sign, name), e = n.x ? evalNum(n.x, v, sign, name) : n.e;
+      if (b < 0 && !Number.isInteger(e)) throw new MathError(`${plainTree(n.b, name)} is negative, so it can’t be raised to a power that isn’t a whole number.`);
+      return b ** e;
+    }
     case 'div': {
       const d = evalNum(n.d, v, sign, name);
       if (Math.abs(d) < 1e-12) throw new MathError(`${plainTree(n.d, name)} is zero, so you can’t divide by it.`);
@@ -138,7 +153,8 @@ export function showTree(n, sym = (id) => id){
       return fs.map((x, k) => x.t === 'num' && !Number.isInteger(x.v) && x.v !== 0.5 ? br(x) : x.t === 'fn' ? (k ? ' ' : '') + (k < fs.length - 1 ? br(x) : s(x)) : factor(x)).join('');
     }
     case 'div': return `${n.n.t === 'add' || n.n.t === 'pm' || n.n.t === 'neg' ? br(n.n) : s(n.n)} / ${isAtom(n.d) || n.d.t === 'pow' || n.d.t === 'fn' ? s(n.d) : br(n.d)}`;
-    case 'pow': return (n.b.t === 'var' || (n.b.t === 'num' && n.b.v >= 0 && Number.isInteger(n.b.v)) ? s(n.b) : br(n.b)) + (SUPN[n.e] || '^' + n.e);
+    case 'pow': return (n.b.t === 'var' || (n.b.t === 'num' && n.b.v >= 0 && Number.isInteger(n.b.v)) ? s(n.b) : br(n.b))
+      + (n.x ? '^' + (n.x.t === 'var' ? s(n.x) : br(n.x)) : Number.isInteger(n.e) && n.e > 0 ? SUPN[n.e] || '^' + n.e : `^(${s({ t: 'num', v: n.e })})`);
     case 'sqrt': return `√(${s(n.a)})`;
     case 'fn': return n.f === 'exp' ? `e^${br(n.a)}` : `${fnName(n.f)}${n.a.t === 'var' ? ' ' + s(n.a) : br(n.a)}`;
   }
@@ -315,6 +331,24 @@ function fnR(f, a){
   return atomRat(key);
 }
 
+// b^x for any exponent: whole numbers expand exactly (powR), ½ is a square root, anything else is an atom
+// 'p:<base>^<exponent>' (V^(5/3), (V₁/V₂)^γ), so nothing is guessed.
+function powAny(b, x){
+  if (isNumeric(x)){
+    const k = numValue(x);
+    if (Math.abs(k - Math.round(k)) < 1e-12) return powR(b, Math.round(k));
+    if (Math.abs(k - 0.5) < 1e-12) return sqrtR(b);
+  }
+  if (isNumeric(b) && isNumeric(x)){
+    const v = numValue(b);
+    if (v < 0) throw new MathError('A negative number can’t be raised to a power that isn’t a whole number.');
+    return num(v ** numValue(x));
+  }
+  if (isNumeric(b) && numValue(b) === 1) return num(1);
+  const key = 'p:' + ratKey(b) + '^' + ratKey(x);
+  if (!ATOMS.has(key)) ATOMS.set(key, { kind: 'pow', base: b, exp: x });
+  return atomRat(key);
+}
 // Evaluate a template tree with known values given as rationals (symbols or numbers).
 // env: id → Rat. sign: branch for ±.
 export function toRat(n, env, sign = 1){ return tidyRoots(build(n, env, sign)); }
@@ -327,7 +361,7 @@ function build(n, env, sign){
     case 'add': return n.a.reduce((s, x) => addR(s, toRat(x, env, sign)), num(0));
     case 'mul': return n.a.reduce((s, x) => mulR(s, toRat(x, env, sign)), num(1));
     case 'pm': return addR(toRat(n.a, env, sign), sign < 0 ? negR(toRat(n.b, env, sign)) : toRat(n.b, env, sign));
-    case 'pow': return powR(toRat(n.b, env, sign), n.e);
+    case 'pow': return powAny(toRat(n.b, env, sign), n.x ? toRat(n.x, env, sign) : num(n.e));
     case 'div': return mulR(toRat(n.n, env, sign), invR(toRat(n.d, env, sign)));
     case 'sqrt': return sqrtR(toRat(n.a, env, sign));
     case 'fn': return fnR(n.f, toRat(n.a, env, sign));
@@ -363,6 +397,7 @@ function atomVal(key, vals){
   const a = ATOMS.get(key);
   if (a.kind === 'sym'){ if (!(a.id in vals)) throw new MathError(`no value for ${a.id}`); return vals[a.id]; }
   if (a.kind === 'sqrt') return Math.sqrt(Math.max(0, evalRat(a.base, vals)));
+  if (a.kind === 'pow') return evalNum({ t: 'pow', b: { t: 'num', v: evalRat(a.base, vals) }, e: evalRat(a.exp, vals) }, {});
   return evalNum({ t: 'fn', f: a.f, a: { t: 'num', v: evalRat(a.arg, vals) } }, {});
 }
 function polyEval(p, vals){
@@ -376,7 +411,7 @@ export function evalRat(r, vals){
 }
 // the symbols a rational depends on
 export function symbolsOf(r, out = new Set()){
-  const visit = (p) => { for (const m of p) for (const k of Object.keys(m.e)){ const a = ATOMS.get(k); if (a.kind === 'sym') out.add(a.id); else symbolsOf(a.kind === 'sqrt' ? a.base : a.arg, out); } };
+  const visit = (p) => { for (const m of p) for (const k of Object.keys(m.e)){ const a = ATOMS.get(k); if (a.kind === 'sym') out.add(a.id); else if (a.kind === 'pow'){ symbolsOf(a.base, out); symbolsOf(a.exp, out); } else symbolsOf(a.kind === 'sqrt' ? a.base : a.arg, out); } };
   visit(r.n); r.d.forEach(f => visit(f.p));
   return out;
 }
@@ -409,6 +444,15 @@ function atomStr(key, o, p = 1){
   if (a.kind === 'sym') return o.sym(a.id);
   if (a.kind === 'sqrt') return `√(${printRat(a.base, o)})`;
   if (a.f === 'exp'){ const x = printRat(p === 1 ? a.arg : scale(a.arg, p), o); return o.html ? `e<sup>${x}</sup>` : `e^(${x})`; }
+  if (a.kind === 'pow'){
+    const one = (r) => r.n.length === 1 && !r.d.length && Math.abs(r.n[0].c) === 1 && Object.keys(r.n[0].e).length === 1 && Object.values(r.n[0].e)[0] === 1;
+    const x = p === 1 ? a.exp : scale(a.exp, p), b = printRat(a.base, o);
+    let xs;
+    if (isNumeric(x)){ const k = numValue(x), f = fracOf(Math.abs(k)); xs = (k < 0 ? '−' : '') + (f ? (f[1] === 1 ? String(f[0]) : `${f[0]}/${f[1]}`) : o.fmt(Math.abs(k))); }
+    else xs = printRat(x, o);
+    const B = one(a.base) && a.base.n[0].c === 1 ? b : `(${b})`;
+    return o.html ? `${B}<sup>${xs}</sup>` : `${B}^${one(x) && x.n[0].c === 1 ? xs : `(${xs})`}`;
+  }
   const name = a.f.startsWith('a') ? a.f.slice(1) + '⁻¹' : a.f;
   const arg = a.arg, single = arg.n.length === 1 && !arg.d.length && arg.n[0].c === 1 && Object.keys(arg.n[0].e).length === 1 && Object.values(arg.n[0].e)[0] === 1;
   return single ? `${name} ${printRat(arg, o)}` : `${name}(${printRat(arg, o)})`;
@@ -421,7 +465,7 @@ function atomsStr(e, o){
   let s = '';
   keys.forEach((k, j) => {
     const a = ATOMS.get(k);
-    let part = a.f === 'exp' ? atomStr(k, o, e[k]) : atomStr(k, o) + powStr(e[k]);
+    let part = a.f === 'exp' || a.kind === 'pow' ? atomStr(k, o, e[k]) : atomStr(k, o) + powStr(e[k]);
     if (a.kind === 'fn' && a.f !== 'exp' && e[k] > 1) part = `${atomStr(k, o).replace(/^(\S+) /, `$1${powStr(e[k])} `)}`; // sin² θ
     if (j && (isWordy(k, o) || isWordy(keys[j - 1], o))) s += ' ';
     s += part;
@@ -548,7 +592,18 @@ export function dimOf(n, dims){
     }
     case 'mul': return n.a.reduce((s, x) => mul(s, dimOf(x, dims)), {});
     case 'div': return mul(dimOf(n.n, dims), dimOf(n.d, dims), -1);
-    case 'pow': return Object.fromEntries(Object.entries(dimOf(n.b, dims)).map(([k, p]) => [k, p * n.e]));
+    case 'pow': {
+      const d = dimOf(n.b, dims);
+      if (n.x){
+        const dx = dimOf(n.x, dims);
+        if (Object.keys(dx).length) throw new MathError(`A power needs a pure number with no unit, not ${dimStr(dx)}.`);
+        if (Object.keys(d).length) throw new MathError(`Raising ${dimStr(d)} to the power ${showTree(n.x)} would give a unit that changes with ${showTree(n.x)}, so the base needs no unit: write a ratio, like (V₁/V₂)^γ.`);
+        return {};
+      }
+      const out = Object.fromEntries(Object.entries(d).map(([k, p]) => [k, p * n.e]));
+      if (Object.values(out).some(p => Math.abs(p - Math.round(p)) > 1e-9)) throw new MathError(`${dimStr(d)} to the power ${showTree({ t: 'num', v: n.e })} isn’t a whole unit: write a ratio, like (V₁/V₂)^${showTree({ t: 'num', v: n.e })}.`);
+      return Object.fromEntries(Object.entries(out).map(([k, p]) => [k, Math.round(p)]));
+    }
     case 'sqrt': return Object.fromEntries(Object.entries(dimOf(n.a, dims)).map(([k, p]) => [k, p / 2]));
     case 'fn': {
       const d = dimOf(n.a, dims);
@@ -657,6 +712,7 @@ export function substRat(r, map){
     const a = ATOMS.get(key);
     if (a.kind === 'sym') return a.id in map ? map[a.id] : atomRat(key);
     if (a.kind === 'sqrt') return sqrtR(substRat(a.base, map));
+    if (a.kind === 'pow') return powAny(substRat(a.base, map), substRat(a.exp, map));
     return fnR(a.f, substRat(a.arg, map));
   };
   const poly = (p) => p.reduce((acc, m) => addR(acc, Object.entries(m.e).reduce((t, [k, e]) => mulR(t, powR(atom(k), e)), num(m.c))), num(0));
@@ -680,7 +736,7 @@ export function parseEq(src){
   if (k < 0 || src.indexOf('=', k + 1) >= 0) throw new Error(`parseEq: need exactly one = in "${src}"`);
   return { lhs: parse(src.slice(0, k).trim()), rhs: parse(src.slice(k + 1).trim()) };
 }
-const kids = (n) => n.t === 'add' || n.t === 'mul' ? n.a : n.t === 'div' ? [n.n, n.d] : n.t === 'pow' ? [n.b] : n.t === 'pm' ? [n.a, n.b] : n.a ? [n.a] : [];
+const kids = (n) => n.t === 'add' || n.t === 'mul' ? n.a : n.t === 'div' ? [n.n, n.d] : n.t === 'pow' ? (n.x ? [n.b, n.x] : [n.b]) : n.t === 'pm' ? [n.a, n.b] : n.a ? [n.a] : [];
 const countOf = (n, id) => n.t === 'var' ? +(n.id === id) : kids(n).reduce((s, c) => s + countOf(c, id), 0);
 // a + (b + c) → a + b + c and a(bc) → abc, so each undo sees every term or factor at once
 const flat = (n, t) => n.t === t ? n.a.flatMap(x => flat(x, t)) : [n];
@@ -692,7 +748,9 @@ const fnName = (f) => f.startsWith('a') ? f.slice(1) + '⁻¹' : f;
 
 // a canonical rational back to a template tree (so evalNum and the unit check can read it)
 function ratToTree(r){
-  const atom = (k) => { const a = ATOMS.get(k); return a.kind === 'sym' ? { t: 'var', id: a.id } : a.kind === 'sqrt' ? { t: 'sqrt', a: ratToTree(a.base) } : { t: 'fn', f: a.f, a: ratToTree(a.arg) }; };
+  const atom = (k) => { const a = ATOMS.get(k); return a.kind === 'sym' ? { t: 'var', id: a.id } : a.kind === 'sqrt' ? { t: 'sqrt', a: ratToTree(a.base) }
+    : a.kind === 'pow' ? (isNumeric(a.exp) ? { t: 'pow', b: ratToTree(a.base), e: numValue(a.exp) } : { t: 'pow', b: ratToTree(a.base), x: ratToTree(a.exp) })
+    : { t: 'fn', f: a.f, a: ratToTree(a.arg) }; };
   const pw = (b, p) => p === 1 ? b : { t: 'pow', b, e: p };
   const mono = (m) => {
     const top = [], bot = [];
@@ -760,6 +818,10 @@ export function isolate(eq, id, opts = {}){
     } else if (L.t === 'div'){
       if (countOf(L.n, id)) step(L.n, { t: 'mul', a: [R, L.d] }, `multiply both sides by ${say(L.d)}`);
       else step(L.d, { t: 'div', n: L.n, d: R }, `multiply both sides by ${say(L.d)}, then divide by ${say(R)}`);
+    } else if (L.t === 'pow' && (L.x || L.e !== 2)){
+      if (L.x && !countOf(L.b, id)) step({ t: 'mul', a: [L.x, { t: 'fn', f: 'ln', a: L.b }] }, { t: 'fn', f: 'ln', a: R }, 'take ln of both sides (ln aˣ = x ln a)');
+      else if (L.x) step(L.b, { t: 'pow', b: R, x: { t: 'div', n: { t: 'num', v: 1 }, d: L.x } }, `raise both sides to the power 1/${say(L.x)}`);
+      else { const k = 1 / L.e; step(L.b, { t: 'pow', b: R, e: k }, L.e === 3 ? 'take the cube root of both sides' : `raise both sides to the power ${showTree({ t: 'num', v: k })}${Number.isInteger(L.e) && L.e % 2 === 0 ? ' (a size, so the positive root)' : ''}`); }
     } else if (L.t === 'pow' && L.e === 2){
       const root = { t: 'sqrt', a: R };
       step(L.b, opts.roots === 'positive' ? root : { t: 'pm', a: { t: 'num', v: 0 }, b: root }, opts.roots === 'positive' ? 'take the square root of both sides (a size, so the positive root)' : 'take the square root of both sides: two roots, ±');
@@ -767,7 +829,7 @@ export function isolate(eq, id, opts = {}){
       step(L.a, { t: 'pow', b: R, e: 2 }, 'square both sides');
     } else if (L.t === 'fn' && INV[L.f]){
       step(L.a, { t: 'fn', f: INV[L.f], a: R }, L.f === 'ln' ? 'raise e to the power of each side (e^(ln x) = x)' : L.f === 'exp' ? 'take ln of both sides (ln e^x = x)' : `take ${fnName(INV[L.f])} of both sides`);
-    } else throw new MathError(`${nm} sits inside ${L.t === 'pow' ? 'a power other than ²' : 'something that can’t be undone'}, so it can’t be isolated here.`);
+    } else throw new MathError(`${nm} sits inside something that can’t be undone, so it can’t be isolated here.`);
   }
   // a last tidy-up when a fraction sits inside another and the simplified form is no longer
   // (mR²(g − a) / a, not (mg / a − m)R²)
@@ -775,7 +837,7 @@ export function isolate(eq, id, opts = {}){
   if (!hasPM(R) && nested(R, false)){
     const ids = new Set(); const visit = (n) => { if (n.t === 'var') ids.add(n.id); kids(n).forEach(visit); }; visit(R);
     const T = ratToTree(toRat(R, Object.fromEntries([...ids].map(x => [x, symbol(x)]))));
-    if (size(T) <= size(R)) steps.push({ lhs: L, rhs: T, why: 'simplify' }), R = T;
+    if (size(T) <= size(R) && showTree(T) !== showTree(R)) steps.push({ lhs: L, rhs: T, why: 'simplify' }), R = T;
   }
   return { tree: R, steps, method: 'undo' };
 }

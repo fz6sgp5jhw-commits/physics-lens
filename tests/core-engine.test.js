@@ -37,6 +37,8 @@ test('units: prefixes convert (mm, μF, kPa, mL, keV) and exact units win over p
 
 // ---------------------------------------------------------------- exp and ln
 // Put an isolated variable back into the equation: both sides agree at random values (positive sizes).
+// fixture symbols get typical values, as library quantities do (the engine reads signs from them)
+X.addSamples({ W: 1000, n: 1, R: 8.314, T: 300, V1: 1, V2: 2, q: 1, Q0: 2, t: 1, C: 1e-3, P1: 1, P2: 1, T1: 300, T2: 300, gamma: 1.4, V: 1, a: 1, P: 1, g: 1.4, b: 1 });
 const ids = (eq) => [...new Set([...eq.matchAll(/\{([^}]+)\}/g)].map(m => m[1]))];
 function roundTrip(src, vals, opts = {}){
   const eq = X.parseEq(src), bad = [];
@@ -97,4 +99,47 @@ test('exp and ln: q = Q₀e^(−t/RC) solved for t gives RC ln(Q₀/q)', () => {
     const R = between(100, 5000), C = between(1e-6, 1e-3);
     return { q: between(0.1, 2), Q0: between(2, 5), t: between(0.1, 3) * R * C, R, C };
   });
+});
+
+// ---------------------------------------------------------------- powers that aren't whole numbers
+test('powers: Final A Q7, helium compressed adiabatically… expanded to 4 × its volume from 1.20 atm ends at 0.119 atm', () => {
+  const P2 = X.evalNum(X.parse('{P1}({V1}/{V2})^{gamma}'), { P1: 1.20, V1: 1, V2: 4, gamma: 5 / 3 });
+  assert.ok(Math.abs(P2 - 0.119) < 0.0005, `P₂ = ${P2} atm, the exam's answer is 0.119 atm`);
+  const iso = X.isolate(X.parseEq('{P1}{V1}^(5/3) = {P2}{V2}^(5/3)'), 'P2');
+  assert.ok(Math.abs(X.evalNum(iso.tree, { P1: 1.20, V1: 1, V2: 4 }) - 0.119) < 0.0005, 'the same with PV^γ written out');
+});
+
+test('powers: P₂ = P₁(V₁/V₂)^γ and T₂ = T₁(V₁/V₂)^(γ−1) round trip, including for γ', () => {
+  const gas = () => ({ P1: between(0.5, 3), P2: between(0.5, 3), V1: between(1, 5), V2: between(1, 5), T1: between(250, 600), T2: between(250, 600), gamma: between(1.2, 1.7) });
+  roundTrip('{P2} = {P1}({V1}/{V2})^{gamma}', gas, { only: ['P2', 'P1', 'V2', 'V1'] });
+  roundTrip('{T2} = {T1}({V1}/{V2})^({gamma} − 1)', gas, { only: ['T2', 'T1', 'V2'] });
+  roundTrip('{P1}{V1}^(5/3) = {P2}{V2}^(5/3)', gas);
+  roundTrip('{V} = {a}³', () => ({ V: between(1, 9), a: between(1, 3) }));
+  // solving for γ needs data where γ comes out as it went in: P₂ made from γ, then γ read back
+  for (const [src, out] of [['{P2} = {P1}({V1}/{V2})^{gamma}', 'P2'], ['{T2} = {T1}({V1}/{V2})^({gamma} − 1)', 'T2']]){
+    const eq = X.parseEq(src), iso = X.isolate(eq, 'gamma'), v = gas();
+    v[out] = X.evalNum(eq.rhs, v);
+    assert.ok(close(X.evalNum(iso.tree, v), v.gamma), `${src} → γ ${seedNote}`);
+    assert.ok(iso.steps.some(s => /ln/.test(s.why)), 'γ comes down with ln');
+  }
+});
+
+test('powers: units multiply by a numeric exponent; a symbol exponent needs a base with no unit', () => {
+  const d = dims({ P: 'Pa', V: 'm³', V1: 'm³', gamma: '' });
+  assert.ok(X.dimEq(X.dimOf(X.parse('{P}{V}^(5/3)'), d), X.parseUnit('Pa·m⁵')));
+  assert.deepEqual(X.dimOf(X.parse('({V1}/{V})^{gamma}'), d), {});
+  assert.throws(() => X.dimOf(X.parse('{V}^{gamma}'), d), /base needs no unit.*ratio/);
+  assert.throws(() => X.dimOf(X.parse('{V}^(7/5)'), d), /isn’t a whole unit/);
+  assert.throws(() => X.dimOf(X.parse('2^{V}'), d), /pure number/);
+  assert.throws(() => X.evalNum(X.parse('({a} − 2)^(1/3)'), { a: 1 }), /negative/);
+});
+
+test('powers: simplify and print as atoms', () => {
+  const s = (src) => { const env = Object.fromEntries(ids(src).map(x => [x, X.symbol(x)])); return X.toText(X.toRat(X.parse(src), env), { fmt: String, order: [] }); };
+  assert.equal(s('{P}({a}/{b})^{g}'), 'P (a / b)^g');
+  assert.equal(s('{P}{V}^(5/3)'), 'P V^(5/3)');
+  assert.equal(s('{V}^(5/3) {V}^(5/3)'), 'V^(10/3)');
+  assert.equal(s('{V}^(1/2)'), s('√({V})'));
+  assert.equal(s('8^(1/3)'), '2');
+  assert.equal(s('{V}^(4/2)'), 'V²');
 });
