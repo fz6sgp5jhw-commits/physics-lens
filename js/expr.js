@@ -9,13 +9,14 @@
 
 // ---------------------------------------------------------------- parsing
 const SUP = { '²': 2, '³': 3, '⁴': 4, '⁵': 5 };
+const FNS = ['sin', 'cos', 'tan', 'exp', 'ln']; // exp(…) can also be written e^(…)
 
 export function parse(src){
   let i = 0;
   const s = src;
   const ws = () => { while (i < s.length && s[i] === ' ') i++; };
   const peek = () => { ws(); return s[i]; };
-  const startsFactor = () => { const c = peek(); return c !== undefined && (/[0-9.½{(\[√]/.test(c) || s.startsWith('sin', i) || s.startsWith('cos', i) || s.startsWith('tan', i)); };
+  const startsFactor = () => { const c = peek(); return c !== undefined && (/[0-9.½{(\[√]/.test(c) || FNS.some(f => s.startsWith(f, i)) || s.startsWith('e^', i)); };
 
   function expr(){
     ws();
@@ -53,11 +54,12 @@ export function parse(src){
     if (c === '{'){ const j = s.indexOf('}', i); const id = s.slice(i + 1, j); i = j + 1; return { t: 'var', id }; }
     if (c === '(' || c === '['){ const close = c === '(' ? ')' : ']'; i++; const e = expr(); if (peek() !== close) throw new Error(`parse: expected ${close} at ${i} in "${s}"`); i++; return e; }
     if (c === '√'){ i++; return { t: 'sqrt', a: factor() }; }
-    for (const f of ['sin', 'cos', 'tan']){
+    if (s.startsWith('e^', i)){ i += 2; return { t: 'fn', f: 'exp', a: primary() }; } // e^(…): the bracket is the exponent
+    for (const f of FNS){
       if (s.startsWith(f, i)){
-        i += 3;
+        i += f.length;
         let name = f;
-        if (s.startsWith('⁻¹', i)){ i += 2; name = 'a' + f; }
+        if (f !== 'exp' && f !== 'ln' && s.startsWith('⁻¹', i)){ i += 2; name = 'a' + f; }
         return { t: 'fn', f: name, a: factor() };
       }
     }
@@ -100,6 +102,8 @@ export function evalNum(n, v, sign = 1, name = (id) => id){
       if (n.f === 'cos') return Math.cos(x * D2R);
       if (n.f === 'tan') return Math.tan(x * D2R);
       if (n.f === 'atan') return Math.atan(x) / D2R;
+      if (n.f === 'exp') return Math.exp(x);
+      if (n.f === 'ln'){ if (x <= 0) throw new MathError(`ln needs a positive number, and ${plainTree(n.a, name)} isn’t positive here.`); return Math.log(x); }
       if (Math.abs(x) > 1 + 1e-12) throw new MathError(`${n.f === 'asin' ? 'sin⁻¹' : 'cos⁻¹'} needs a number between −1 and 1.`);
       return (n.f === 'asin' ? Math.asin(Math.max(-1, Math.min(1, x))) : Math.acos(Math.max(-1, Math.min(1, x)))) / D2R;
     }
@@ -136,7 +140,7 @@ export function showTree(n, sym = (id) => id){
     case 'div': return `${n.n.t === 'add' || n.n.t === 'pm' || n.n.t === 'neg' ? br(n.n) : s(n.n)} / ${isAtom(n.d) || n.d.t === 'pow' || n.d.t === 'fn' ? s(n.d) : br(n.d)}`;
     case 'pow': return (n.b.t === 'var' || (n.b.t === 'num' && n.b.v >= 0 && Number.isInteger(n.b.v)) ? s(n.b) : br(n.b)) + (SUPN[n.e] || '^' + n.e);
     case 'sqrt': return `√(${s(n.a)})`;
-    case 'fn': return `${fnName(n.f)}${n.a.t === 'var' ? ' ' + s(n.a) : br(n.a)}`;
+    case 'fn': return n.f === 'exp' ? `e^${br(n.a)}` : `${fnName(n.f)}${n.a.t === 'var' ? ' ' + s(n.a) : br(n.a)}`;
   }
   throw new Error('showTree: bad node ' + n.t);
 }
@@ -301,6 +305,11 @@ function fnR(f, a){
     const x = numValue(a);
     return num(evalNum({ t: 'fn', f, a: { t: 'num', v: x } }, {}));
   }
+  if (f === 'exp' || f === 'ln'){ // ln(e^x) = x and e^(ln x) = x
+    const m = a.n.length === 1 && !a.d.length && a.n[0].c === 1 ? Object.entries(a.n[0].e) : [];
+    const in1 = m.length === 1 && m[0][1] === 1 && ATOMS.get(m[0][0]);
+    if (in1 && in1.kind === 'fn' && in1.f === INV[f]) return in1.arg;
+  }
   const key = `f:${f}:` + ratKey(a);
   if (!ATOMS.has(key)) ATOMS.set(key, { kind: 'fn', f, arg: a });
   return atomRat(key);
@@ -394,10 +403,12 @@ function tanify(e){
   }
   return cleanE(e);
 }
-function atomStr(key, o){
+// p: the atom's power, folded into the exponent where a power is written as one: (e^x)² = e^(2x)
+function atomStr(key, o, p = 1){
   const a = ATOMS.get(key);
   if (a.kind === 'sym') return o.sym(a.id);
   if (a.kind === 'sqrt') return `√(${printRat(a.base, o)})`;
+  if (a.f === 'exp'){ const x = printRat(p === 1 ? a.arg : scale(a.arg, p), o); return o.html ? `e<sup>${x}</sup>` : `e^(${x})`; }
   const name = a.f.startsWith('a') ? a.f.slice(1) + '⁻¹' : a.f;
   const arg = a.arg, single = arg.n.length === 1 && !arg.d.length && arg.n[0].c === 1 && Object.keys(arg.n[0].e).length === 1 && Object.values(arg.n[0].e)[0] === 1;
   return single ? `${name} ${printRat(arg, o)}` : `${name}(${printRat(arg, o)})`;
@@ -409,9 +420,9 @@ function atomsStr(e, o){
   const keys = Object.keys(e).filter(k => e[k] > 0).sort((a, b) => atomRank(a, o.order) - atomRank(b, o.order) || (a < b ? -1 : 1));
   let s = '';
   keys.forEach((k, j) => {
-    let part = atomStr(k, o) + powStr(e[k]);
     const a = ATOMS.get(k);
-    if (a.kind === 'fn' && e[k] > 1) part = `${atomStr(k, o).replace(/^(\S+) /, `$1${powStr(e[k])} `)}`; // sin² θ
+    let part = a.f === 'exp' ? atomStr(k, o, e[k]) : atomStr(k, o) + powStr(e[k]);
+    if (a.kind === 'fn' && a.f !== 'exp' && e[k] > 1) part = `${atomStr(k, o).replace(/^(\S+) /, `$1${powStr(e[k])} `)}`; // sin² θ
     if (j && (isWordy(k, o) || isWordy(keys[j - 1], o))) s += ' ';
     s += part;
   });
@@ -539,7 +550,13 @@ export function dimOf(n, dims){
     case 'div': return mul(dimOf(n.n, dims), dimOf(n.d, dims), -1);
     case 'pow': return Object.fromEntries(Object.entries(dimOf(n.b, dims)).map(([k, p]) => [k, p * n.e]));
     case 'sqrt': return Object.fromEntries(Object.entries(dimOf(n.a, dims)).map(([k, p]) => [k, p / 2]));
-    case 'fn': { const d = dimOf(n.a, dims); if (Object.keys(d).length) throw new MathError(`${n.f} needs an angle or a pure number, not ${dimStr(d)}`); return {}; }
+    case 'fn': {
+      const d = dimOf(n.a, dims);
+      if (Object.keys(d).length) throw new MathError(n.f === 'exp' || n.f === 'ln'
+        ? `${n.f === 'ln' ? 'ln' : 'e^'} needs a pure number with no unit, not ${dimStr(d)}: write a ratio of two like quantities, like V₂/V₁.`
+        : `${n.f} needs an angle or a pure number, not ${dimStr(d)}`);
+      return {};
+    }
   }
 }
 export { dimEq };
@@ -749,7 +766,7 @@ export function isolate(eq, id, opts = {}){
     } else if (L.t === 'sqrt'){
       step(L.a, { t: 'pow', b: R, e: 2 }, 'square both sides');
     } else if (L.t === 'fn' && INV[L.f]){
-      step(L.a, { t: 'fn', f: INV[L.f], a: R }, `take ${fnName(INV[L.f])} of both sides`);
+      step(L.a, { t: 'fn', f: INV[L.f], a: R }, L.f === 'ln' ? 'raise e to the power of each side (e^(ln x) = x)' : L.f === 'exp' ? 'take ln of both sides (ln e^x = x)' : `take ${fnName(INV[L.f])} of both sides`);
     } else throw new MathError(`${nm} sits inside ${L.t === 'pow' ? 'a power other than ²' : 'something that can’t be undone'}, so it can’t be isolated here.`);
   }
   // a last tidy-up when a fraction sits inside another and the simplified form is no longer
