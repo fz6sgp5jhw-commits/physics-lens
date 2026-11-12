@@ -77,6 +77,25 @@ const VARS = {
   I:     { sym: 'I', plain: 'I', name: 'moment of inertia about the rotation axis', unit: 'kg·m²', units: { 'kg·m²': 1 } },
   Icm:   { sym: 'I<sub>cm</sub>', plain: 'I_cm', name: 'moment of inertia about a parallel axis through the centre of mass', unit: 'kg·m²', units: { 'kg·m²': 1 } },
   dpa:   { sym: 'd', plain: 'd', name: 'distance between the rotation axis and the parallel axis through the centre of mass', unit: 'm', units: { m: 1, cm: 0.01 } },
+  // energy with rotation, rolling and angular momentum (phase C3). Start values carry 0 (K₀, U₀) or 1 (L₁, I₁, ω₁),
+  // like v₀; heights are measured from where the body ends, so U = 0 there unless the problem says otherwise.
+  K:     { sym: 'K', plain: 'K', name: 'kinetic energy at the end (moving and turning together)', unit: 'J', units: { J: 1, kJ: 1000 } },
+  K0:    { sym: 'K<sub>0</sub>', plain: 'K₀', name: 'kinetic energy at the start', unit: 'J', units: { J: 1, kJ: 1000 } },
+  U:     { sym: 'U', plain: 'U', name: 'potential energy at the end', unit: 'J', units: { J: 1, kJ: 1000 } },
+  U0:    { sym: 'U<sub>0</sub>', plain: 'U₀', name: 'potential energy at the start (mgh)', unit: 'J', units: { J: 1, kJ: 1000 } },
+  Wnc:   { sym: 'W<sub>nc</sub>', plain: 'W_nc', name: 'work by friction (a rough axle) or another non-conservative force', unit: 'J', units: { J: 1 }, dir: ['adds energy (a push)', 'takes energy out (friction)'] },
+  Wnet:  { sym: 'W<sub>net</sub>', plain: 'W_net', name: 'net work by all the forces and torques', unit: 'J', units: { J: 1 }, dir: ['speeds it up', 'slows it down'] },
+  Ktr:   { sym: 'K<sub>tr</sub>', plain: 'K_tr', name: 'kinetic energy of the centre moving (½Mv²)', unit: 'J', units: { J: 1 } },
+  Krot:  { sym: 'K<sub>rot</sub>', plain: 'K_rot', name: 'kinetic energy of turning (½Iω²)', unit: 'J', units: { J: 1 } },
+  h:     { sym: 'h', plain: 'h', name: 'height the falling body starts above where it ends', unit: 'm', units: { m: 1, cm: 0.01 }, dir: ['starts above where it ends', 'starts below where it ends'] },
+  fs:    { sym: 'f<sub>s</sub>', plain: 'f_s', name: 'static friction from the ground on the rolling body (size)', unit: 'N', units: { N: 1 } },
+  D:     { sym: 'D', plain: 'D', name: 'diameter of the disc or wheel', unit: 'm', units: { m: 1, cm: 0.01 } },
+  Li:    { sym: 'L<sub>1</sub>', plain: 'L₁', name: 'angular momentum before', unit: 'kg·m²/s', units: { 'kg·m²/s': 1 }, dir: ['counterclockwise', 'clockwise'] },
+  Lf:    { sym: 'L<sub>2</sub>', plain: 'L₂', name: 'angular momentum after', unit: 'kg·m²/s', units: { 'kg·m²/s': 1 }, dir: ['counterclockwise', 'clockwise'] },
+  Ii:    { sym: 'I<sub>1</sub>', plain: 'I₁', name: 'moment of inertia before', unit: 'kg·m²', units: { 'kg·m²': 1 } },
+  If:    { sym: 'I<sub>2</sub>', plain: 'I₂', name: 'moment of inertia after', unit: 'kg·m²', units: { 'kg·m²': 1 } },
+  wi:    { sym: 'ω<sub>1</sub>', plain: 'ω₁', name: 'angular velocity before', unit: 'rad/s', units: { 'rad/s': 1, rpm: TAU / 60, 'rev/s': TAU }, dir: ['counterclockwise', 'clockwise'] },
+  wf:    { sym: 'ω<sub>2</sub>', plain: 'ω₂', name: 'angular velocity after', unit: 'rad/s', units: { 'rad/s': 1, rpm: TAU / 60, 'rev/s': TAU }, dir: ['counterclockwise', 'clockwise'] },
 };
 
 const V = (id) => `<span class="sym" data-v="${id}">${VARS[id].sym}</span>`;
@@ -509,6 +528,142 @@ const EQS = {
       beta: { guard: v => v.hc > v.dT ? err('h can’t be longer than d_T: the drop is one side of the triangle, d_T the longest.') : null },
     },
   },
+
+  // ---- energy with rotation (phase C3) ----
+  EN1: {
+    label: 'E1', eq: '{K0} + {U0} + {Wnc} = {K} + {U}', kind: 'law', cue: 'heights and speeds at two moments, with no time asked',
+    meaning: 'Energy is conserved: what it starts with, plus the work friction or a push does, is what it ends with. K counts moving and turning.',
+    condition: 'gravity the only other force that does work', calc: 'The work–energy theorem with gravity’s work written as −ΔU: W_nc + W_grav = ΔK and W_grav = U₀ − U.',
+  },
+  EN2: {
+    label: 'E2', eq: '{Wnet} = {K} − {K0}', kind: 'law', cue: 'the work done by every force and torque together',
+    meaning: 'The work–energy theorem, now with rotation: the net work (forces moving the centre and torques turning the body) is the change in all the kinetic energy.',
+    condition: 'K includes ½Iω²', calc: 'Add ∫F·dx for the centre and ∫τ dθ for the turning: each equals the change in its own kinetic energy.',
+  },
+  EN3: {
+    label: 'E3', eq: '{U0} = {M}{g}{h}', kind: 'def', cue: 'the rolling body starts higher up',
+    meaning: 'Gravitational potential energy of the rolling body, measured from where it ends.', condition: 'h measured from where it ends (U = 0 there)',
+    applies: c => c.body === 'roll', needs: 'a rolling body (the body: rolls without slipping)', calc: 'Gravity’s work on the way down is Mgh, stored as U₀.',
+  },
+  EN4: {
+    label: 'E4', eq: '{U0} = {m}{g}{h}', kind: 'def', cue: 'the hanging mass starts higher up',
+    meaning: 'Gravitational potential energy of the hanging mass, measured from where it ends. The disc’s centre doesn’t move, so its U doesn’t change.',
+    condition: 'h measured from where the mass ends (U = 0 there)', applies: c => c.body === 'hang', needs: 'a hanging mass turning a disc (the body: turned by a hanging mass)',
+    calc: 'Gravity’s work on the falling mass is mgh, stored as U₀.',
+  },
+  EN5: {
+    label: 'E5', eq: '{Krot} = ½{I}{w}²', kind: 'def', cue: 'a body turning has energy too',
+    meaning: 'Kinetic energy of turning: every bit moves at rω, so ½Σmv² = ½(Σmr²)ω² = ½Iω².', condition: 'I about the axis it turns about',
+    calc: 'Add ½ m v² over the body with v = rω: ½(Σ m r²)ω² = ½Iω².',
+    solve: { w: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the spin rate, not the direction, so the positive root is kept. If it turns clockwise, ω is the negative of this.' }) } },
+  },
+  EN6: {
+    label: 'E6', eq: '{Ktr} = ½{M}{v}²', kind: 'def', cue: 'the centre of a rolling body moves',
+    meaning: 'Kinetic energy of the centre of mass moving, as if all the mass were there.', condition: 'v is the speed of the centre of mass',
+    applies: c => c.body === 'roll', needs: 'a rolling body', calc: 'The usual ½mv², for the motion of the centre of mass.',
+  },
+  EN7: {
+    label: 'E7', eq: '{K} = {Ktr} + {Krot}', kind: 'def', cue: 'a body that moves and turns at once',
+    meaning: 'A rolling body has both: kinetic energy of its centre moving and of its turning about the centre.',
+    condition: 'K_rot about the centre of mass', applies: c => c.body === 'roll', needs: 'a rolling body',
+    calc: 'Each bit’s velocity is v_cm plus its velocity around the centre; squared and added, the cross term averages to zero.',
+  },
+  EN8: {
+    label: 'E8', eq: '{K} = ½{I}{w}²', kind: 'rel', cue: 'a body spinning in place on a fixed axis',
+    meaning: 'On a fixed axis with nothing else moving, all the kinetic energy is turning.', condition: 'fixed axis, nothing else moves',
+    applies: c => c.body === 'spin', needs: 'a body spinning on a fixed axis with nothing else moving', calc: 'K_tr = 0 because the centre stays put, so K = K_rot.',
+    solve: { w: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the spin rate, not the direction, so the positive root is kept. If it turns clockwise, ω is the negative of this.' }) } },
+  },
+  // ---- rolling without slipping, and a string that doesn't slip on a disc ----
+  RO1: {
+    label: 'V1', eq: '{v} = {R}{w}', kind: 'rel', cue: 'rolls without slipping (or a string unwinds without slipping)',
+    meaning: 'Rolling without slipping: the point touching the ground is at rest, so the centre moves at v = Rω. A string that doesn’t slip moves with the rim, so the same holds.',
+    condition: 'rolls without slipping, or the string doesn’t slip', applies: c => c.body !== 'spin', needs: 'rolling, or a hanging mass on a string',
+    calc: 'In one turn the body rolls its circumference 2πR forward, so distance = Rθ; differentiate: v = Rω.',
+  },
+  RO2: {
+    label: 'V2', eq: '{a} = {R}{alpha}', kind: 'rel', cue: 'rolls without slipping and speeds up',
+    meaning: 'Rolling without slipping, differentiated once more: the centre’s acceleration is a = Rα.', condition: 'rolls without slipping, or the string doesn’t slip',
+    applies: c => c.body !== 'spin', needs: 'rolling, or a hanging mass on a string', calc: 'Differentiate v = Rω: a = Rα.',
+  },
+  RO3: {
+    label: 'V3', eq: '{K} = ½{M}{v}² + ½{Icm}{w}²', kind: 'rel', cue: 'the kinetic energy of a rolling body',
+    meaning: 'Rolling: the centre moves at v and the body turns at ω about it, so K is the sum of the two energies.',
+    condition: 'rolls without slipping', applies: c => c.body === 'roll', needs: 'a rolling body',
+    calc: 'K = K_tr + K_rot, with K_rot about the centre of mass.',
+    solve: { v: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) },
+             w: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the spin rate, not the direction, so the positive root is kept.' }) } },
+  },
+  RO4: {
+    label: 'V4', eq: '{K} = ½({M} + {Icm} / {R}²){v}²', kind: 'rel', cue: 'a rolling body’s energy from its speed alone',
+    meaning: 'Shortcut: put ω = v/R into K = ½Mv² + ½I_cmω². Turning acts like an extra mass I_cm/R².',
+    condition: 'rolls without slipping', applies: c => c.body === 'roll', needs: 'a rolling body',
+    calc: '½I_cm(v/R)² = ½(I_cm/R²)v², added to ½Mv².',
+    solve: { v: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) }, R: null },
+  },
+  RO5: {
+    label: 'V5', eq: '{K} = ½{m}{v}² + ½{I}{w}²', kind: 'rel', cue: 'a falling mass spins a disc on a string',
+    meaning: 'The hanging mass moves and the disc turns: K counts both.', condition: 'the disc turns on a fixed axle',
+    applies: c => c.body === 'hang', needs: 'a hanging mass turning a disc',
+    calc: 'The mass has ½mv²; the disc’s centre stays put, so it has only ½Iω².',
+    solve: { v: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) },
+             w: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the spin rate, not the direction, so the positive root is kept.' }) } },
+  },
+  RO6: {
+    label: 'V6', eq: '{K} = ½({m} + {I} / {R}²){v}²', kind: 'rel', cue: 'the mass and the disc’s energy from the mass’s speed',
+    meaning: 'Shortcut: put ω = v/R into K = ½mv² + ½Iω². The disc acts like an extra mass I/R².',
+    condition: 'string doesn’t slip, fixed axle', applies: c => c.body === 'hang', needs: 'a hanging mass turning a disc',
+    calc: '½I(v/R)² = ½(I/R²)v², added to ½mv².',
+    solve: { v: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) }, R: null },
+  },
+  // ---- rolling down a ramp by forces (+ is down the slope) ----
+  RF1: {
+    label: 'D7', eq: '{M}{g} sin {inc} − {fs} = {M}{a}', kind: 'law', cue: 'a body rolling down a ramp: forces along the slope',
+    meaning: 'Along the slope: the weight’s part down the slope minus static friction up the slope accelerates the centre.',
+    condition: '+ down the slope, friction up the slope', applies: c => c.body === 'roll', needs: 'a rolling body',
+    calc: 'Newton’s second law for the centre of mass, along the slope. N and W⊥ cancel across it.',
+  },
+  RF2: {
+    label: 'D8', eq: '{fs}{R} = {Icm}{alpha}', kind: 'law', cue: 'what turns a rolling body about its centre',
+    meaning: 'About the centre, only friction has a lever arm (R); the weight and the normal force act through the centre or along a radius.',
+    condition: 'rolls without slipping, torques about the centre of mass', applies: c => c.body === 'roll', needs: 'a rolling body',
+    calc: 'Στ = I_cm α about the centre of mass, which holds even though the centre accelerates.',
+  },
+  GEO3: {
+    label: 'G3', eq: '{D} = 2{R}', kind: 'def', cue: 'the problem gives a diameter', meaning: 'The diameter is twice the radius.',
+    condition: 'a circle', calc: 'The diameter runs through the centre, one radius each side.',
+  },
+  // ---- angular momentum (+ is counterclockwise) ----
+  AM1: {
+    label: 'A1', eq: '{Li} = {Ii}{wi}', kind: 'def', cue: 'a body turning, before', meaning: 'Angular momentum of a body turning about a fixed axis: L = Iω.',
+    condition: 'I about the same axis', calc: 'Add r × p over the body: each bit has r(m r ω), so L = (Σ m r²)ω.',
+  },
+  AM2: {
+    label: 'A2', eq: '{Lf} = {If}{wf}', kind: 'def', cue: 'a body turning, after', meaning: 'The same L = Iω, after: I can change when the mass moves in or out.',
+    condition: 'I about the same axis', calc: 'L = Iω at the second moment.',
+  },
+  AM3: {
+    label: 'A3', eq: '{Li} = {rt}{m}{v} sin {phi}', kind: 'def', cue: 'a particle moving past the axis (it may then stick)',
+    meaning: 'A particle has angular momentum about an axis too: L = rp sin φ, with p = mv. Only the part of its motion across r counts.',
+    condition: 'φ is the angle between r and v', calc: 'L = r × p, whose size is rp sin φ.',
+    solve: {
+      rt: { guard: v => sin(v.phi) === 0 ? err('sin φ is zero: a particle moving straight at the axis has no angular momentum about it, whatever r is.') : null },
+      m: { guard: v => sin(v.phi) === 0 ? err('sin φ is zero: a particle moving straight at the axis has no angular momentum about it.') : null },
+      v: { guard: v => sin(v.phi) === 0 ? err('sin φ is zero: a particle moving straight at the axis has no angular momentum about it.') : null },
+      phi: { guard: v => Math.abs(v.Li / (v.rt * v.m * v.v)) > 1 ? err('L can’t be bigger than rmv: one of them is mistyped.') : null },
+    },
+  },
+  AM4: {
+    label: 'A4', eq: '{Lf} = {Li}', kind: 'law', cue: 'a body changes shape, or things stick, with no twist from outside',
+    meaning: 'With no outside torque about the axis, angular momentum is conserved: pulling mass in lowers I, so ω goes up.',
+    condition: 'no outside torque about the axis (an outside torque changes L: Στ_ext = dL/dt)', applies: c => !!c.noTorque, needs: 'no outside torque about the axis',
+    calc: 'Στ_ext = dL/dt with Στ_ext = 0: L doesn’t change. Inside forces come in third-law pairs whose torques cancel.',
+  },
+  AM5: {
+    label: 'A5', eq: '{tnet} = ({Lf} − {Li}) / {t}', kind: 'law', cue: 'an outside torque acts for a time',
+    meaning: 'Newton’s second law for turning, in terms of L: a steady outside torque changes L by Στ_ext Δt.',
+    condition: 'steady outside torque over the time t', calc: 'Στ_ext = dL/dt, integrated over t with the torque constant.',
+  },
 };
 // rename labels of the kinematics families: K1..K5, R1..R5
 for (const n of [1, 2, 3, 4, 5]){ EQS['X' + n].label = 'K' + n; EQS['E' + n].label = 'R' + n; }
@@ -651,6 +806,41 @@ const CHAPTERS = {
       { key: 'dyn', type: 'choice', label: 'The body', options: [[false, 'In equilibrium (α = 0)'], [true, 'Spinning up (Στ = Iα)']], ask: ['The body is:', [[false, 'in equilibrium (nothing turns or accelerates)'], [true, 'spinning up (Στ = Iα)']]] },
       { key: 'shape', type: 'choice', label: 'Shape (for its moment of inertia)', options: [['rod', 'Thin rod'], ['disc', 'Solid disc or cylinder'], ['ring', 'Thin ring or hoop'], ['sphere', 'Solid sphere'], ['shell', 'Hollow sphere'], ['point', 'Point mass']] },
       { key: 'axis', type: 'choice', label: 'It turns about', options: [['centre', 'Its centre of mass'], ['other', 'Another point (an end, a hinge)']] },
+      { key: 'earth', type: 'hidden', label: 'On Earth (g = 9.81 m/s²)', sets: { g: 9.81 }, default: true },
+    ],
+    defaults: {},
+  },
+  // phase C3: energy with rotation, rolling and angular momentum (docs/core-plan.md section 9). No motion picture yet.
+  rolling: {
+    startCond: { body: 'roll', shape: 'sphere', axis: 'centre', ground: true, smooth: true, earth: true },
+    title: 'Energy, rolling & L', short: 'Rolling', forcesOptional: true,
+    vars: ['M', 'm', 'R', 'D', 'g', 'h', 'inc', 'a', 'alpha', 'v', 'w', 'fs', 'Tn', 'K0', 'K', 'U0', 'U', 'Wnc', 'Wnet', 'Ktr', 'Krot',
+      'I', 'Icm', 'L', 'dpa', 'tnet', 't', 'Li', 'Lf', 'Ii', 'If', 'wi', 'wf', 'rt', 'phi'],
+    names: { M: 'mass of the rolling or spinning body', m: 'hanging mass (or a particle)', R: 'radius (where it rolls, or where the string unwinds)',
+      a: 'acceleration of the centre (or of the hanging mass)', v: 'speed of the centre (or of the hanging mass, or a particle)', w: 'angular velocity at the end',
+      Tn: 'tension in the string', tnet: 'net outside torque about the axis', t: 'time the outside torque acts',
+      rt: 'distance from the axis (to the particle or point mass)', phi: 'angle between r and the particle’s velocity' },
+    dirs: { a: ['down the slope (or down)', 'up the slope (or up)'] },
+    axis: '+ is <b>down the slope</b> (or down) for a, and <b>counterclockwise</b> for L and ω₁, ω₂. Energies carry their own sign: W<sub>nc</sub> is − when friction takes energy out.',
+    stuck: 'Is the body set right in Conditions (rolling, a hanging mass on a disc, or spinning in place)? “Starts from rest” means K₀ = 0. For I, pick the shape and the axis. For L₁ = L₂, is there really no outside torque?',
+    intro: `<p>A body that turns has kinetic energy of turning, <b>½Iω²</b>. A rolling body has both: its centre moves (½Mv²) and it turns about the centre (½I<sub>cm</sub>ω²). Rolling without slipping ties them together: <b>v = Rω</b>, so a body that turns more is slower down a ramp.</p>
+      <p>Energy works when the question gives heights and speeds and no time: K₀ + U₀ + W<sub>nc</sub> = K + U. Static friction on a body rolling without slipping does no work. <b>Angular momentum</b> L = Iω stays the same when <b>no outside torque</b> acts: pull mass in, I drops, ω goes up.</p>`,
+    sections: [
+      { title: 'Energy with rotation', note: 'Conservation of energy, the work–energy theorem, and the two kinds of kinetic energy.', eqs: ['EN1', 'EN2', 'EN3', 'EN4', 'EN5', 'EN6', 'EN7', 'EN8'] },
+      { title: 'Rolling without slipping', note: 'v = Rω and a = Rα, and the kinetic energy of a rolling body or of a disc turned by a hanging mass. The shortcuts put ω = v/R in for you.', eqs: ['RO1', 'RO2', 'RO3', 'RO4', 'RO5', 'RO6'] },
+      { title: 'Forces and torques', note: 'Rolling down a ramp by forces: ΣF along the slope and Στ about the centre. Στ = Iα for any body.', eqs: ['RF1', 'RF2', 'D2'] },
+      { title: 'A disc turned by a hanging mass', note: 'Στ = Iα for the disc, ΣF for the mass, and the two as one system.', eqs: ['D4', 'D5', 'D6'], applies: c => c.body === 'hang', needs: 'a hanging mass turning a disc (the body: turned by a hanging mass)' },
+      { title: 'Moments of inertia', note: 'Standard shapes about their centre, a rod about its end, a point mass, the parallel-axis theorem, and a diameter.', eqs: ['J5', 'J6', 'J3', 'J4', 'J1', 'J2', 'J7', 'J8', 'J9', 'GEO3'] },
+      { title: 'Angular momentum', note: 'L = Iω for a body, L = rmv sin φ for a particle; conserved when no outside torque acts, changed by one that does.', eqs: ['AM1', 'AM2', 'AM3', 'AM4', 'AM5'] },
+    ],
+    conditions: [
+      { key: 'body', type: 'choice', label: 'The body', options: [['roll', 'Rolls without slipping'], ['hang', 'Fixed axis, turned by a hanging mass'], ['spin', 'Fixed axis, spinning on its own']] },
+      { key: 'shape', type: 'choice', label: 'Shape (for its moment of inertia)', options: [['sphere', 'Solid sphere'], ['shell', 'Hollow sphere'], ['disc', 'Solid disc or cylinder'], ['ring', 'Thin ring or hoop'], ['rod', 'Thin rod'], ['point', 'Point mass']] },
+      { key: 'axis', type: 'choice', label: 'It turns about', options: [['centre', 'Its centre of mass'], ['other', 'Another point (an end, a hinge)']] },
+      { key: 'noTorque', type: 'toggle', label: 'No outside torque about the axis (L is conserved)' },
+      { key: 'rest', type: 'hidden', label: 'Starts from rest', sets: { K0: 0 } },
+      { key: 'ground', type: 'hidden', label: 'Heights measured from where it ends', sets: { U: 0 }, default: true },
+      { key: 'smooth', type: 'hidden', label: 'No energy lost: smooth axle, rolls without slipping (untick if a rough axle does work W_nc)', sets: { Wnc: 0 }, default: true },
       { key: 'earth', type: 'hidden', label: 'On Earth (g = 9.81 m/s²)', sets: { g: 9.81 }, default: true },
     ],
     defaults: {},
@@ -821,12 +1011,13 @@ const SAMPLE = {
   theta: 8, w0: 2, w: 6, alpha: 1.5, r: 0.5, s: 4, v: 3, at: 0.75, ac: 18, atot: 18.02,
   dth: 8, dtrav: 8, nrev: 1.27, wavg: 4, aavg: 1.5,
   L: 2, M: 1.5, R: 0.2, Hx: 5, Hy: 5, dP: 0.3, dm: 0.3, dT: 0.4, dF: 0.5, phi: 30, beta: 20, xh: 0.4, hc: 0.12, tau: 5, rt: 0.5, tnet: 5, I: 0.4, Icm: 0.1, dpa: 0.35,
+  K: 20, K0: 5, U: 2, U0: 20, Wnc: 3, Wnet: 15, Ktr: 14, Krot: 6, h: 1, fs: 3, D: 0.4, Li: 2, Lf: 2, Ii: 0.4, If: 0.2, wi: 5, wf: 10,
 };
 for (const [id, x] of Object.entries(SAMPLE)) VARS[id].sample = x;
 // Order symbols are written in a product: coefficient-like first (μk m g), then the rest.
-const PRINT_ORDER = ['mu', 'mus', 'r', 'rt', 'R', 'm', 'M', 'm1', 'm2', 'mA', 'mB', 'g', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'NA', 'NB', 'f', 'fA', 'fB', 'F', 'Fp', 'P', 'Tn', 'inc',
-  'Hx', 'Hy', 'tau', 'tnet', 'I', 'Icm', 'dpa', 'L', 'dP', 'dm', 'dT', 'dF', 'xh', 'hc', 'phi', 'beta',
-  'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'v', 'a', 'alpha', 'at', 'ac', 'atot', 'dth', 'dtrav', 'nrev', 'wavg', 'aavg', 't'];
+const PRINT_ORDER = ['mu', 'mus', 'r', 'rt', 'R', 'm', 'M', 'm1', 'm2', 'mA', 'mB', 'g', 'h', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'NA', 'NB', 'f', 'fA', 'fB', 'F', 'Fp', 'P', 'Tn', 'inc',
+  'Hx', 'Hy', 'fs', 'tau', 'tnet', 'Wnet', 'Wnc', 'K0', 'K', 'Ktr', 'Krot', 'U0', 'U', 'Li', 'Lf', 'I', 'Icm', 'Ii', 'If', 'dpa', 'D', 'L', 'dP', 'dm', 'dT', 'dF', 'xh', 'hc', 'phi', 'beta',
+  'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'wi', 'wf', 'v', 'a', 'alpha', 'at', 'ac', 'atot', 'dth', 'dtrav', 'nrev', 'wavg', 'aavg', 't'];
 
 export default {
   id: 'mech', name: 'Mechanics', bare: true,

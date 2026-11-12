@@ -1689,13 +1689,17 @@ $('clearBtn').onclick = async () => { if (S.busy || !await beforeClearing('Clear
 function zeroForm(e){
   const eq = EQS[e];
   if (eq.Z) return eq.Z;
+  // prefer a form with no sum under a fraction bar: Mg sin θ − f_s − Ma, not M − f_s / (g sin θ − a),
+  // which would put an unknown in a denominator and stop the elimination from isolating it
+  let first = null;
   for (const x of eq.vars){
     const sol = eq.solve[x];
     if (!sol || sol.alt || X.hasPM(sol.tree) || /sin⁻¹|cos⁻¹/.test(sol.sub)) continue;
-    eq.Z = X.zeroOf(X.symbol(x), X.toRat(sol.tree, symEnv(eq.vars), 1));
-    return eq.Z;
+    const Z = X.zeroOf(X.symbol(x), X.toRat(sol.tree, symEnv(eq.vars), 1));
+    if (!Z.d.length) return (eq.Z = Z);
+    first ||= Z;
   }
-  return null;
+  return (eq.Z = first);
 }
 // Systems: equations that must be solved together, found by matching equations to unknowns and taking strongly
 // connected components (js/systems.js). Only blocks that can be solved now and that exact elimination can reduce

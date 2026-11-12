@@ -420,8 +420,8 @@ export function symbolsOf(r, out = new Set()){
 // opts: { sym(id) → string (HTML or plain), order: [ids], spaced(id) → bool, html: bool, fmt(number) → string }
 const SUPS = { 2: '²', 3: '³', 4: '⁴' };
 const atomRank = (key, order) => { const a = ATOMS.get(key); if (a.kind === 'sym'){ const i = order.indexOf(a.id); return i < 0 ? 999 : i; } return a.kind === 'fn' ? 1000 : 2000; };
-function fracOf(x){ // small fractions print as p/q
-  for (let q = 1; q <= 6; q++){ const p = Math.round(x * q); if (Math.abs(p / q - x) < 1e-9 * Math.max(1, Math.abs(x))) return [p, q]; }
+function fracOf(x){ // small fractions print as p/q (q up to 12: 2/7 and 7/10 for rolling, 1/12 for a rod)
+  for (let q = 1; q <= 12; q++){ const p = Math.round(x * q); if (Math.abs(p / q - x) < 1e-9 * Math.max(1, Math.abs(x))) return [p, q]; }
   return null;
 }
 // sin^a · cos^-b of the same angle → tan

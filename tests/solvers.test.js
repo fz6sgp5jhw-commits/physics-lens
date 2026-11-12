@@ -29,6 +29,25 @@ function rotationState({ w0, alpha, t, r }){
   return { ch: 'rotation', cond: { rim: true }, s: { w0, alpha, t, w, theta, r, s: r * theta, v: r * w, at: r * alpha, ac: w * w * r, atot: Math.hypot(r * alpha, w * w * r) } };
 }
 
+// phase C3: a ball rolling down a ramp, a disc turned by a hanging mass, a body spinning on its own (with and without L conserved)
+const I_CM = { sphere: 2 / 5, shell: 2 / 3, disc: 1 / 2, ring: 1 };
+function rollState({ shape, M, R, g = 9.81, inc, h, K0 = 0, Wnc = 0 }){
+  const Icm = I_CM[shape] * M * R * R, k = 1 + Icm / (M * R * R), a = g * Math.sin(rad(inc)) / k, alpha = a / R, U0 = M * g * h, K = K0 + U0 + Wnc;
+  const v = Math.sqrt(2 * K / (M * k)), w = v / R, Krot = 0.5 * Icm * w * w;
+  return { ch: 'rolling', cond: { body: 'roll', shape, axis: 'centre' }, s: { M, R, D: 2 * R, g, inc, h, Icm, I: Icm, a, alpha, fs: Icm * alpha / R, tnet: Icm * alpha,
+    K0, U0, U: 0, Wnc, K, Wnet: K - K0, v, w, Krot, Ktr: K - Krot } };
+}
+function hangState({ m, M, R, g = 9.81, h }){
+  const I = 0.5 * M * R * R, a = m * g / (m + I / (R * R)), Tn = m * (g - a), v = Math.sqrt(2 * a * h), K = m * g * h;
+  return { ch: 'rolling', cond: { body: 'hang', shape: 'disc', axis: 'centre' }, s: { m, M, R, g, h, Icm: I, I, a, alpha: a / R, Tn, tnet: Tn * R,
+    K0: 0, U0: K, U: 0, Wnc: 0, K, Wnet: K, v, w: v / R, Krot: 0.5 * I * (v / R) ** 2 } };
+}
+function spinState({ M, R, w, rt, m, vp, phi, Ii, If, t, noTorque }){
+  const I = 0.5 * M * R * R, Li = rt * m * vp * Math.sin(rad(phi)), wi = Li / Ii, Lf = noTorque ? Li : 1.5 * Li, wf = Lf / If;
+  return { ch: 'rolling', cond: { body: 'spin', shape: 'disc', axis: 'centre', noTorque }, s: { M, R, D: 2 * R, Icm: I, I, w, K: 0.5 * I * w * w, Krot: 0.5 * I * w * w,
+    rt, m, v: vp, phi, Li, Lf, Ii, If, wi, wf, ...(noTorque ? {} : { t, tnet: (Lf - Li) / t }) } };
+}
+
 export const STATES = {
   incline: [
     inclineState({ m: 3, inc: 35, friction: false, up: false, v0: 0, t: 1.5 }),
@@ -51,6 +70,14 @@ export const STATES = {
     rotationState({ w0: -2, alpha: -0.5, t: 3, r: 0.3 }),                                // clockwise, speeding up
     rotationState({ w0: 125.66, alpha: -25.13, t: 2, r: 0.2 }),                          // winding down
     rotationState({ w0: 5, alpha: -2, t: 4, r: 0.4 }),                                   // turns back through the same angle: ambiguous
+  ],
+  rolling: [
+    rollState({ shape: 'sphere', M: 2, R: 0.1, inc: 30, h: 1.5 }),
+    rollState({ shape: 'shell', M: 0.8, R: 0.15, inc: 20, h: 0.9, K0: 1.2, Wnc: -0.3 }),
+    rollState({ shape: 'disc', M: 5, R: 0.3, inc: 12, h: 2.2 }),
+    hangState({ m: 1.2, M: 3, R: 0.2, h: 1.5 }),
+    spinState({ M: 4, R: 0.25, w: 12, rt: 0.4, m: 0.05, vp: 30, phi: 70, Ii: 0.6, If: 0.2, noTorque: true }),
+    spinState({ M: 4, R: 0.25, w: 12, rt: 0.4, m: 0.05, vp: 30, phi: 70, Ii: 0.6, If: 0.2, t: 2.5, noTorque: false }),
   ],
 };
 

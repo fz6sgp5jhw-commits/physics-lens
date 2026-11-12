@@ -8,8 +8,10 @@ import { EQS } from '../js/data.js';
 const snap = JSON.parse(readFileSync(new URL('./fixtures/solvers.json', import.meta.url), 'utf8'));
 
 test('solver snapshot: every solver agrees with the pre-C1 hand solvers', () => {
-  const count = Object.values(EQS).reduce((n, e) => n + Object.keys(e.solve).length, 0);
-  assert.equal(count, snap.solvers, 'solver count changed');
+  // equations added after C1 (phase C3 on) aren't in the snapshot; none of the snapshot's solvers may go missing
+  const old = new Set(snap.cases.map(c => c.eq));
+  const count = [...old].reduce((n, id) => n + Object.keys(EQS[id]?.solve || {}).length, 0);
+  assert.equal(count, snap.solvers, 'solver count of the pre-C1 equations changed');
   const bad = [];
   for (const c of snap.cases){
     const sol = EQS[c.eq] && EQS[c.eq].solve[c.x];
