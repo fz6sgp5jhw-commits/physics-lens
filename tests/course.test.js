@@ -6,7 +6,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { launch, openApp, applyKey, openStage } from './helpers.js';
+import { launch, openApp, applyKey, openStage, checkSetup } from './helpers.js';
 
 let env;
 before(async () => { env = await launch(); });
@@ -19,7 +19,7 @@ async function answerRoute(page){
   await page.click('#lessonBar button:has-text("Route")');
   await page.click('#routeDone');
 }
-const stopOf = (page) => page.evaluate(() => { const s = window.__rl.course.stop; return { key: s.problem.key, answers: s.problem.answers, help: s.help }; });
+const stopOf = (page) => page.evaluate(() => { const c = window.__rl.course, s = c.stop; return { ch: c.lesson.chapter, key: s.problem.key, answers: s.problem.answers, help: s.help }; });
 async function solveAll(page){
   await page.evaluate(() => { window.__rl.help.showMe = true; document.getElementById('showBtn').disabled = false; }); // the loop solves every stop, help or not
   await page.click('#showBtn');
@@ -44,12 +44,14 @@ test('every stop: apply its answer key, solve, and match the stored answers to t
         await page.click('#courseClose');
       }
       const keys = await page.evaluate((own) => window.__rl.course.lessons.flatMap(l => l.stops.filter(s => !own || s.local).map(s => `${l.id}/${s.kind}`)), !!file);
-      assert.ok(keys.length >= (file ? 1 : 6), `stops to run: ${keys}`);
+      assert.ok(keys.length >= (file ? 1 : 12), `stops to run: ${keys}`);
       for (const k of keys){
         assert.equal(await openStop(page, k), true, k);
         const st = await stopOf(page);
         await answerRoute(page);
-        await applyKey(page, { ch: 'rolling', key: st.key });
+        await applyKey(page, { ch: st.ch, key: st.key });
+        const chk = await checkSetup(page);
+        assert.match(chk.title, /perfect/, `${k}: the key passes Check my setup: ${chk.msg}`);
         await solveAll(page);
         const got = await page.evaluate(async (answers) => {
           const { sigMatch } = await import('./js/course.js');
@@ -69,8 +71,8 @@ test('the map, route card, kind tap, help switches, stars and progress', async (
   try {
     // the map is always open: every stop of both lessons can be opened, in any order
     await page.click('#courseBtn');
-    assert.equal(await page.locator('#courseBody .clesson').count(), 2);
-    assert.equal(await page.locator('#courseBody [data-stop]:not([disabled])').count(), 6);
+    assert.equal(await page.locator('#courseBody .clesson').count(), 4);
+    assert.equal(await page.locator('#courseBody [data-stop]:not([disabled])').count(), 12);
     await page.click('[data-stop="roll/transfer"]');
     assert.equal(await page.evaluate(() => window.__rl.mode), 'guided', 'lessons run in guided mode');
     assert.match(await page.inputValue('#problem'), /swing/);

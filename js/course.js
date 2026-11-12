@@ -11,6 +11,8 @@ export const LAWS = {
   forces: 'Newton’s second law: ΣF = ma and Στ = Iα',
   energy: 'Conservation of energy: K₀ + U₀ + W_nc = K + U',
   momentum: 'Conservation of angular momentum: L₁ = L₂',
+  pmomentum: 'Conservation of momentum: m₁v₁ + m₂v₂ before = after',
+  work: 'Work and power: W = F Δx cos φ, P = W / t',
   kinematics: 'Kinematics alone (constant acceleration)',
 };
 export const KIND_NAMES = { law: 'a law', rel: 'a relationship', def: 'a definition' };
@@ -25,7 +27,7 @@ const STARS = 3;
 // sig-fig comparison: the source's answer as written ("0.402") against the app's number
 export function sigMatch(got, written){
   const s = String(written).replace(/^[−-]/, '-'), want = Number(s);
-  const digits = s.replace(/^-?0*\.?0*/, '').replace('.', '').length;
+  const digits = s.split(/e/i)[0].replace(/^-?0*\.?0*/, '').replace('.', '').length; // 1.5e4 has two figures
   const place = 10 ** (Math.floor(Math.log10(Math.abs(want))) - Math.max(1, digits) + 1);
   return Math.abs(got - want) <= 1.01 * place; // one in the last written place: g = 9.8 vs 9.81, rounding along the way
 }
@@ -259,7 +261,7 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
   renderMap();
   return {
     open, leave, event, kindTap, bottomOut, renderMap, renderBar, syncTargets,
-    get active(){ return !!cur; }, get stop(){ return cur && cur.stop; }, get lessons(){ return lessons; }, get progress(){ return progress; },
+    get active(){ return !!cur; }, get stop(){ return cur && cur.stop; }, get lesson(){ return cur && cur.lesson; }, get lessons(){ return lessons; }, get progress(){ return progress; },
     get stars(){ return cur ? cur.stars : null; },
   };
 }

@@ -41,6 +41,8 @@
   }
   *{box-sizing:border-box;border-radius:0}
   html,body{margin:0;min-height:100%;font:14px/1.45 var(--ui);color:var(--text);background:var(--night)}
+  /* no scroll anchoring: when a side panel changes height, the canvas must not jump under the pointer */
+  body{overflow-anchor:none}
   body{background:
       radial-gradient(1100px 700px at 12% -12%, #1f2c86 0%, transparent 62%),
       radial-gradient(900px 700px at 108% 108%, #2b1658 0%, transparent 60%),

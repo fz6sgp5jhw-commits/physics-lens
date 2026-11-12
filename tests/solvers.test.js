@@ -48,6 +48,22 @@ function spinState({ M, R, w, rt, m, vp, phi, Ii, If, t, noTorque }){
     rt, m, v: vp, phi, Li, Lf, Ii, If, wi, wf, ...(noTorque ? {} : { t, tnet: (Lf - Li) / t }) } };
 }
 
+// work, energy and momentum: a block on a rough slope with a spring at the start (climbing) or at the end (sliding down onto it),
+// pulled by a force F at an angle; and two bodies colliding along a line, body 2 then swinging up to h
+function energyState({ m, inc, mu, ks, xs, v0, dx, Fp, phi, t, up, g = 9.81 }){
+  const W = m * g, Wperp = W * Math.cos(rad(inc)), f = mu * Wperp, h = dx * Math.sin(rad(inc)), Usp = 0.5 * ks * xs * xs, K0 = 0.5 * m * v0 * v0, Wnc = -f * dx;
+  const U0 = up ? 0 : m * g * h, U = up ? m * g * h : 0, Us0 = up ? Usp : 0, Us = up ? 0 : Usp, K = K0 + U0 + Us0 + Wnc - U - Us, WF = Fp * dx * Math.cos(rad(phi));
+  return { ch: 'energy', cond: { collide: 'free', rough: true, ground: !up, ground0: up, relax0: !up, relax1: up },
+    s: { m, g, inc, mu, ks, xs, v0, dx, W, Wperp, N: Wperp, f, h, K0, U0, Us0, Wnc, K, U, Us, v: Math.sqrt(2 * K / m), Wnet: K - K0, Fp, phi, t, WF, Pavg: WF / t } };
+}
+function collideState({ m1, m2, v1i, v2i, collide, v1f, g = 9.81 }){
+  const p = m1 * v1i + m2 * v2i;
+  if (collide === 'stick') v1f = p / (m1 + m2);
+  if (collide === 'elastic') v1f = ((m1 - m2) * v1i + 2 * m2 * v2i) / (m1 + m2);
+  const v2f = (p - m1 * v1f) / m2;
+  return { ch: 'energy', cond: { collide }, s: { m1, m2, v1i, v2i, v1f, v2f, g, h: v2f * v2f / (2 * g) } };
+}
+
 export const STATES = {
   incline: [
     inclineState({ m: 3, inc: 35, friction: false, up: false, v0: 0, t: 1.5 }),
@@ -78,6 +94,13 @@ export const STATES = {
     hangState({ m: 1.2, M: 3, R: 0.2, h: 1.5 }),
     spinState({ M: 4, R: 0.25, w: 12, rt: 0.4, m: 0.05, vp: 30, phi: 70, Ii: 0.6, If: 0.2, noTorque: true }),
     spinState({ M: 4, R: 0.25, w: 12, rt: 0.4, m: 0.05, vp: 30, phi: 70, Ii: 0.6, If: 0.2, t: 2.5, noTorque: false }),
+  ],
+  energy: [
+    energyState({ m: 0.4, inc: 25, mu: 0.15, ks: 180, xs: 0.12, v0: 1.5, dx: 0.3, Fp: 12, phi: 35, t: 2.5, up: true }),
+    energyState({ m: 2, inc: 30, mu: 0.2, ks: 400, xs: 0.05, v0: 0.8, dx: 1.5, Fp: 20, phi: 120, t: 4, up: false }),
+    collideState({ m1: 1.5, m2: 6, v1i: 9, v2i: 0, v1f: -5.4, collide: 'free' }),
+    collideState({ m1: 0.5, m2: 2.5, v1i: 6, v2i: 0, collide: 'stick' }),
+    collideState({ m1: 2, m2: 3, v1i: 4, v2i: -1, collide: 'elastic' }),
   ],
 };
 

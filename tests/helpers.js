@@ -107,6 +107,7 @@ export const HIDDEN = {
   pulley: { v0: 'rest', a: 'steady', g: 'earth' },
   rotation: { w0: 'rest', w: 'stop' },
   rolling: { K0: 'rest', U: 'ground', Wnc: 'smooth', g: 'earth' },
+  energy: { phi: 'along', K0: 'rest', K: 'stops', U: 'ground', U0: 'ground0', Us0: 'relax0', Us: 'relax1', Wnc: 'smooth', v2i: 'rest2', g: 'earth' },
 };
 
 // Apply an answer key the way a student would: zero / g givens via their hidden-given condition,

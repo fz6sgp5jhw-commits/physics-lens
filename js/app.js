@@ -110,7 +110,8 @@ const solvable = (e, ks) => { const u = unknownsOf(e, ks); return u.length === 1
 const plain = (id) => VARS[id].plain;
 const nm = (id) => (chapter().names && chapter().names[id]) || VARS[id].name;
 // direction words; on a ramp the student can choose + up the slope, which swaps them
-const dr = (id) => { const d = (chapter().dirs && chapter().dirs[id]) || VARS[id].dir; return d && hook('slopeAxis') && S.cond.upAxis ? [d[1], d[0]] : d; };
+// direction words: the unit's own, else the quantity's; a unit can say false (a size with no direction there)
+const dr = (id) => { const d = (chapter().dirs?.[id] ?? VARS[id].dir) || null; return d && hook('slopeAxis') && S.cond.upAxis ? [d[1], d[0]] : d; };
 const unitOf = (id) => VARS[id].unit;
 const calm = () => document.body.classList.contains('calm');
 const userGivens = () => Object.values(S.givens).filter(g => g.from === 'you').length + Object.values(S.funcs).filter(f => f.from === 'given').length;
@@ -1298,7 +1299,8 @@ $('checkSetup').onclick = () => {
   }
   for (const id of Object.keys(S.givens)) if (!(id in p.key.givens)){ lines.push(`? ${VARS[id].sym} isn’t stated in the problem. If you worked it out, it belongs in the path, not the givens.`); bad++; }
   for (const [k, want] of Object.entries(p.key.cond)){
-    if (!!S.cond[k] !== want){ const c = chapter().conditions.find(x => x.key === k); const w = c.type === 'choice' ? c.options.find(o => o[0] === want)[1] : (want ? 'on' : 'off'); lines.push(`✗ Condition “${c.label}” should be: <b>${w}</b>.`); bad++; }
+    const c = chapter().conditions.find(x => x.key === k); if (!c) continue;
+    if ((c.type === 'choice' ? S.cond[k] : !!S.cond[k]) !== want){ const w = c.type === 'choice' ? c.options.find(o => o[0] === want)[1] : (want ? 'on' : 'off'); lines.push(`✗ Condition “${c.label}” should be: <b>${w}</b>.`); bad++; }
   }
   if (!S.condOk){ lines.push('✗ You haven’t confirmed the conditions yet.'); bad++; }
   for (const t of p.key.targets) if (!S.targets.includes(t)){ lines.push(`✗ The question asks for <b>${symOf(t)}</b> (${nm(t)}): add it as a 🎯 target.`); bad++; }

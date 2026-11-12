@@ -96,6 +96,18 @@ const VARS = {
   If:    { sym: 'I<sub>2</sub>', plain: 'I₂', name: 'moment of inertia after', unit: 'kg·m²', units: { 'kg·m²': 1 } },
   wi:    { sym: 'ω<sub>1</sub>', plain: 'ω₁', name: 'angular velocity before', unit: 'rad/s', units: { 'rad/s': 1, rpm: TAU / 60, 'rev/s': TAU }, dir: ['counterclockwise', 'clockwise'] },
   wf:    { sym: 'ω<sub>2</sub>', plain: 'ω₂', name: 'angular velocity after', unit: 'rad/s', units: { 'rad/s': 1, rpm: TAU / 60, 'rev/s': TAU }, dir: ['counterclockwise', 'clockwise'] },
+  // work, energy and momentum for a body that slides, swings or collides (Exam 3 topics). Collision velocities are signed by
+  // their direction buttons (+ to the right); energies and work carry their own sign.
+  WF:    { sym: 'W<sub>F</sub>', plain: 'W_F', name: 'work done by the force F', unit: 'J', units: { J: 1, kJ: 1000 }, dir: ['adds energy (along the motion)', 'takes energy out (against the motion)'] },
+  Pavg:  { sym: 'P<sub>avg</sub>', plain: 'P_avg', name: 'average power', unit: 'W', units: { W: 1, kW: 1000 } },
+  ks:    { sym: 'k', plain: 'k', name: 'spring constant (force per metre of stretch)', unit: 'N/m', units: { 'N/m': 1, 'N/cm': 100 } },
+  xs:    { sym: 'x<sub>s</sub>', plain: 'x_s', name: 'how far the spring is compressed or stretched', unit: 'm', units: { m: 1, cm: 0.01, mm: 0.001 } },
+  Us0:   { sym: 'U<sub>s0</sub>', plain: 'U_s0', name: 'spring potential energy at the start', unit: 'J', units: { J: 1 } },
+  Us:    { sym: 'U<sub>s</sub>', plain: 'U_s', name: 'spring potential energy at the end', unit: 'J', units: { J: 1 } },
+  v1i:   { sym: 'v<sub>1i</sub>', plain: 'v_1i', name: 'velocity of body 1 before the collision', unit: 'm/s', units: { 'm/s': 1, 'km/h': 1 / 3.6 }, dir: ['to the right', 'to the left'] },
+  v2i:   { sym: 'v<sub>2i</sub>', plain: 'v_2i', name: 'velocity of body 2 before the collision', unit: 'm/s', units: { 'm/s': 1, 'km/h': 1 / 3.6 }, dir: ['to the right', 'to the left'] },
+  v1f:   { sym: 'v<sub>1f</sub>', plain: 'v_1f', name: 'velocity of body 1 after the collision', unit: 'm/s', units: { 'm/s': 1, 'km/h': 1 / 3.6 }, dir: ['to the right', 'to the left'] },
+  v2f:   { sym: 'v<sub>2f</sub>', plain: 'v_2f', name: 'velocity of body 2 after the collision', unit: 'm/s', units: { 'm/s': 1, 'km/h': 1 / 3.6 }, dir: ['to the right', 'to the left'] },
 };
 
 const V = (id) => `<span class="sym" data-v="${id}">${VARS[id].sym}</span>`;
@@ -245,7 +257,7 @@ const EQS = {
   },
   I4: {
     label: 'F5', eq: '{f} = {mu}{N}', kind: 'rel', cue: 'it slides on a rough surface', meaning: 'Sliding friction grows with how hard the surfaces press together.',
-    condition: 'sliding (kinetic friction)', applies: c => !c.still && (c.friction), needs: 'kinetic friction, while it slides',
+    condition: 'sliding (kinetic friction)', applies: c => !c.still && (c.friction || c.rough), needs: 'kinetic friction, while it slides',
     calc: 'An experimental rule (Coulomb’s law of friction), not derived: μk depends on the two surfaces.',
   },
   I5d: {
@@ -686,6 +698,79 @@ const EQS = {
     meaning: 'Newton’s second law for turning, in terms of L: a steady outside torque changes L by Στ_ext Δt.',
     condition: 'steady outside torque over the time t', calc: 'Στ_ext = dL/dt, integrated over t with the torque constant.',
   },
+  // ---- work, energy and momentum for a sliding, swinging or colliding body ----
+  WK1: {
+    label: 'W1', eq: '{WF} = {Fp}{dx} cos {phi}', kind: 'def', cue: 'a steady force acts while the body moves a distance',
+    meaning: 'Work by a constant force: only the part of the force along the motion counts.', condition: 'constant force, straight path; φ is the angle between the force and the motion',
+    calc: 'W = F·d, the dot product: F d cos φ. A force at right angles to the motion (φ = 90°) does no work.',
+    solve: { phi: { guard: v => Math.abs(v.WF) > Math.abs(v.Fp * v.dx) ? err('The work can’t be bigger than F times the distance: one of them is mistyped.') : null } },
+  },
+  WK2: {
+    label: 'W2', eq: '{Pavg} = {WF} / {t}', kind: 'def', cue: 'work done in a stated time',
+    meaning: 'Average power: how fast the force does work.', condition: 'the work W_F done over the time t', calc: 'Power is the rate of doing work; over a whole interval the average is W / t.',
+  },
+  EW1: {
+    label: 'M1', eq: '{K0} + {U0} + {Us0} + {Wnc} = {K} + {U} + {Us}', kind: 'law', cue: 'speeds, heights or a spring at two moments, with no time asked',
+    meaning: 'Energy is conserved: kinetic, gravitational and spring energy at the start, plus the work friction or a push does, is what there is at the end.',
+    condition: 'gravity and the spring are the only other forces that do work', calc: 'The work–energy theorem with gravity’s and the spring’s work written as −ΔU.',
+  },
+  EW2: {
+    label: 'M2', eq: '{K0} = ½{m}{v0}²', kind: 'def', cue: 'it is already moving at the start', meaning: 'Kinetic energy at the start.', condition: 'v₀ is the speed at the start',
+    calc: 'The work needed to bring a mass m from rest to speed v₀.',
+    solve: { v0: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) } },
+  },
+  EW3: {
+    label: 'M3', eq: '{K} = ½{m}{v}²', kind: 'def', cue: 'it is moving at the end', meaning: 'Kinetic energy at the end.', condition: 'v is the speed at the end',
+    calc: 'The work needed to bring a mass m from rest to speed v.',
+    solve: { v: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) } },
+  },
+  EW4: {
+    label: 'M4', eq: '{U0} = {m}{g}{h}', kind: 'def', cue: 'it starts higher than it ends',
+    meaning: 'Gravitational potential energy at the start, with heights measured from where it ends.', condition: 'h measured from where it ends (U = 0 there)',
+    applies: c => !c.ground0, needs: 'heights measured from where it ends (not from where it starts)', calc: 'Gravity’s work on the way down is mgh, stored as U₀.',
+  },
+  EW5: {
+    label: 'M5', eq: '{U} = {m}{g}{h}', kind: 'def', cue: 'it ends higher than it started',
+    meaning: 'Gravitational potential energy at the end, with heights measured from where it starts.', condition: 'h measured from where it starts (U₀ = 0 there)',
+    applies: c => !c.ground, needs: 'heights measured from where it starts (not from where it ends)', calc: 'Gravity’s work on the way up is −mgh, stored as U.',
+  },
+  EW6: {
+    label: 'M6', eq: '{Us0} = ½{ks}{xs}²', kind: 'def', cue: 'a spring is compressed or stretched at the start',
+    meaning: 'Energy stored in a spring squeezed or stretched by x_s from its relaxed length.', condition: 'an ideal spring (Hooke’s law), x_s measured from its relaxed length',
+    applies: c => !c.relax0, needs: 'a spring that stores energy at the start', calc: 'The spring force kx grows with x, so the work to compress it is ∫kx dx = ½kx².',
+    solve: { xs: { pick: () => ({ branch: 1, note: 'The energy is the same compressed or stretched, so the positive root (the size) is kept.' }) } },
+  },
+  EW7: {
+    label: 'M7', eq: '{Us} = ½{ks}{xs}²', kind: 'def', cue: 'a spring is compressed or stretched at the end',
+    meaning: 'Energy stored in a spring squeezed or stretched by x_s from its relaxed length, at the end.', condition: 'an ideal spring (Hooke’s law), x_s measured from its relaxed length',
+    applies: c => !c.relax1, needs: 'a spring that stores energy at the end', calc: 'The spring force kx grows with x, so the work to compress it is ∫kx dx = ½kx².',
+    solve: { xs: { pick: () => ({ branch: 1, note: 'The energy is the same compressed or stretched, so the positive root (the size) is kept.' }) } },
+  },
+  EW8: {
+    label: 'M8', eq: '{Wnc} = −{f}{dx}', kind: 'def', cue: 'it slides a distance on a rough surface',
+    meaning: 'Kinetic friction always points against the motion, so over a distance Δx it takes out f Δx of energy.', condition: 'steady kinetic friction along the whole distance',
+    applies: c => !!c.rough, needs: 'a rough path (kinetic friction)', calc: 'W = F d cos φ with φ = 180°: friction is opposite to the motion, so its work is −f Δx.',
+  },
+  MO1: {
+    label: 'P1', eq: '{m1}{v1i} + {m2}{v2i} = {m1}{v1f} + {m2}{v2f}', kind: 'law', cue: 'two bodies collide or push apart, with no outside push along the line',
+    meaning: 'Momentum is conserved: the total mv just before equals the total just after. Velocities carry their direction as a sign.',
+    condition: 'no net outside force along the line during the collision', calc: 'The bodies push on each other with equal and opposite forces for the same time, so what one gains in mv the other loses.',
+  },
+  MO2: {
+    label: 'P2', eq: '{v1f} = {v2f}', kind: 'rel', cue: 'they stick together', meaning: 'After a perfectly inelastic collision the two bodies move as one.',
+    condition: 'they stick together', applies: c => c.collide === 'stick', needs: 'a collision where they stick together', calc: 'Stuck together, they share one velocity.',
+  },
+  MO3: {
+    label: 'P3', eq: '{v1i} − {v2i} = {v2f} − {v1f}', kind: 'rel', cue: 'an elastic collision: no kinetic energy is lost',
+    meaning: 'In an elastic collision along a line, the bodies separate as fast as they approached.', condition: 'elastic collision along a line',
+    applies: c => c.collide === 'elastic', needs: 'an elastic collision', calc: 'Combine conservation of momentum with conservation of kinetic energy and divide one by the other.',
+  },
+  MO4: {
+    label: 'P4', eq: '½{m2}{v2f}² = {m2}{g}{h}', kind: 'law', cue: 'after the collision, body 2 swings or rises to a height h',
+    meaning: 'Energy is conserved on the swing after the collision: the kinetic energy body 2 leaves with becomes mgh at the top.',
+    condition: 'after the collision only gravity does work on body 2; it stops for a moment at height h', calc: 'K + U just after the collision equals K + U at the top: ½mv² + 0 = 0 + mgh.',
+    solve: { m2: null, v2f: { pick: () => ({ branch: 1, note: 'The height gives the speed, not the direction, so the positive root is kept.' }) } },
+  },
 };
 // rename labels of the kinematics families: K1..K5, R1..R5
 for (const n of [1, 2, 3, 4, 5]){ EQS['X' + n].label = 'K' + n; EQS['E' + n].label = 'R' + n; }
@@ -868,6 +953,44 @@ const CHAPTERS = {
     ],
     defaults: {},
   },
+  // work, energy and momentum for a body that slides, swings or collides. No motion picture yet.
+  energy: {
+    startCond: { collide: 'free' },
+    title: 'Work, energy & p', short: 'Energy', forcesOptional: true,
+    vars: ['m', 'g', 'h', 'inc', 'dx', 't', 'v0', 'v', 'Fp', 'phi', 'WF', 'Pavg', 'Wnet', 'K0', 'K', 'U0', 'U', 'Us0', 'Us', 'Wnc', 'ks', 'xs',
+      'mu', 'W', 'Wperp', 'N', 'f', 'm1', 'm2', 'v1i', 'v2i', 'v1f', 'v2f'],
+    names: { m: 'mass of the body', dx: 'distance it moves along its path', v0: 'speed at the start', v: 'speed at the end', Fp: 'the force F (size)',
+      phi: 'angle between the force and the direction of motion', h: 'height difference between the start and the end (or the height body 2 rises)',
+      U0: 'gravitational potential energy at the start', U: 'gravitational potential energy at the end', Wnc: 'work by friction or another non-conservative force',
+      Wnet: 'net work by all the forces', W: 'weight (mg): a force, not work', Wperp: 'weight component into the surface', N: 'normal force',
+      inc: 'angle of the slope (from horizontal)', m1: 'mass of body 1', m2: 'mass of body 2', t: 'time the work takes' },
+    dirs: { dx: false, v0: false, h: false },
+    axis: 'Collision velocities: + is <b>to the right</b>. Work and energies carry their own sign: W<sub>nc</sub> is − when friction takes energy out. Distances, heights and speeds are sizes.',
+    stuck: 'Every term of the energy law needs a value or an equation: which are zero (from rest, ends at rest, no spring, where heights are measured from)? For a collision, which way is each body moving?',
+    intro: `<p><b>Work</b> is a force acting over a distance: W = F Δx cos φ. Only the part of the force along the motion counts. <b>Power</b> is how fast work is done.</p>
+      <p><b>Energy</b> links two moments with no time: K₀ + U₀ + U<sub>s0</sub> + W<sub>nc</sub> = K + U + U<sub>s</sub>. Decide what each term is at the start and the end; friction’s work is −f Δx. <b>Momentum</b> links just before and just after a collision: m₁v₁ + m₂v₂ stays the same. Many problems need both: momentum for the hit, energy for the motion after it.</p>`,
+    sections: [
+      { title: 'Work and power', note: 'Work by one steady force, the work–energy theorem, and average power.', eqs: ['WK1', 'WK2', 'EN2'] },
+      { title: 'Energy at two moments', note: 'Conservation of energy with gravity and a spring. Each term is a definition; the conditions say which are zero.', eqs: ['EW1', 'EW2', 'EW3', 'EW4', 'EW5', 'EW6', 'EW7'] },
+      { title: 'Friction along the path', note: 'Friction’s work, and the friction force from the normal force on a slope (θ = 0 on level ground).', eqs: ['EW8', 'I4', 'I3', 'I2', 'N2', 'GEO4'] },
+      { title: 'Momentum and collisions', note: 'Momentum is conserved through the collision; energy takes over afterwards.', eqs: ['MO1', 'MO2', 'MO3', 'MO4'] },
+    ],
+    conditions: [
+      { key: 'collide', type: 'choice', label: 'If two bodies collide', options: [['free', 'They bounce apart'], ['stick', 'They stick together'], ['elastic', 'Elastic: no kinetic energy lost']] },
+      { key: 'rough', type: 'toggle', label: 'Kinetic friction acts along the path' },
+      { key: 'along', type: 'hidden', label: 'The force points along the motion (φ = 0)', sets: { phi: 0 } },
+      { key: 'rest', type: 'hidden', label: 'Starts from rest', sets: { K0: 0 } },
+      { key: 'stops', type: 'hidden', label: 'Ends at rest (even for a moment)', sets: { K: 0 } },
+      { key: 'ground', type: 'hidden', label: 'Heights measured from where it ends (U = 0 there)', sets: { U: 0 } },
+      { key: 'ground0', type: 'hidden', label: 'Heights measured from where it starts (U₀ = 0 there)', sets: { U0: 0 } },
+      { key: 'relax0', type: 'hidden', label: 'No spring energy at the start (relaxed, or no spring)', sets: { Us0: 0 } },
+      { key: 'relax1', type: 'hidden', label: 'No spring energy at the end (relaxed, or no spring)', sets: { Us: 0 } },
+      { key: 'smooth', type: 'hidden', label: 'No friction and no outside push does work (W_nc = 0)', sets: { Wnc: 0 } },
+      { key: 'rest2', type: 'hidden', label: 'Body 2 is at rest before the collision', sets: { v2i: 0 } },
+      { key: 'earth', type: 'hidden', label: 'On Earth (g = 9.81 m/s²)', sets: { g: 9.81 } },
+    ],
+    defaults: {},
+  },
 };
 
 // ---------- practice bank: text only for the student; the key is for “Check my setup” ----------
@@ -1034,13 +1157,14 @@ const SAMPLE = {
   theta: 8, w0: 2, w: 6, alpha: 1.5, r: 0.5, s: 4, v: 3, at: 0.75, ac: 18, atot: 18.02,
   dth: 8, dtrav: 8, nrev: 1.27, wavg: 4, aavg: 1.5,
   L: 2, M: 1.5, R: 0.2, Hx: 5, Hy: 5, dP: 0.3, dm: 0.3, dT: 0.4, dF: 0.5, phi: 30, beta: 20, xh: 0.4, hc: 0.12, tau: 5, rt: 0.5, tnet: 5, I: 0.4, Icm: 0.1, dpa: 0.35,
+  WF: 30, Pavg: 15, ks: 200, xs: 0.1, Us0: 1, Us: 1, v1i: 3, v2i: 1, v1f: 1, v2f: 2,
   K: 20, K0: 5, U: 2, U0: 20, Wnc: 3, Wnet: 15, Ktr: 14, Krot: 6, h: 1, fs: 3, D: 0.4, Li: 2, Lf: 2, Ii: 0.4, If: 0.2, wi: 5, wf: 10,
 };
 for (const [id, x] of Object.entries(SAMPLE)) VARS[id].sample = x;
 // Order symbols are written in a product: coefficient-like first (μk m g), then the rest.
 const PRINT_ORDER = ['mu', 'mus', 'r', 'rt', 'R', 'm', 'M', 'm1', 'm2', 'mA', 'mB', 'g', 'h', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'NA', 'NB', 'f', 'fA', 'fB', 'F', 'Fp', 'P', 'Tn', 'inc',
-  'Hx', 'Hy', 'fs', 'tau', 'tnet', 'Wnet', 'Wnc', 'K0', 'K', 'Ktr', 'Krot', 'U0', 'U', 'Li', 'Lf', 'I', 'Icm', 'Ii', 'If', 'dpa', 'D', 'L', 'dP', 'dm', 'dT', 'dF', 'xh', 'hc', 'phi', 'beta',
-  'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'wi', 'wf', 'v', 'a', 'alpha', 'at', 'ac', 'atot', 'dth', 'dtrav', 'nrev', 'wavg', 'aavg', 't'];
+  'Hx', 'Hy', 'fs', 'tau', 'tnet', 'Wnet', 'Wnc', 'WF', 'Pavg', 'ks', 'K0', 'K', 'Ktr', 'Krot', 'U0', 'U', 'Us0', 'Us', 'Li', 'Lf', 'I', 'Icm', 'Ii', 'If', 'dpa', 'D', 'L', 'dP', 'dm', 'dT', 'dF', 'xh', 'hc', 'phi', 'beta',
+  'dx', 'xs', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'wi', 'wf', 'v', 'v1i', 'v2i', 'v1f', 'v2f', 'a', 'alpha', 'at', 'ac', 'atot', 'dth', 'dtrav', 'nrev', 'wavg', 'aavg', 't'];
 
 // ---------- course: lessons as data (phase C5, docs/core-plan.md section 8) ----------
 // Each lesson: long (full help, two routes that agree) → twin (same pathway, new scenario, no Show me or glow) →
@@ -1084,7 +1208,7 @@ const LESSONS = [
           cues: ['The rope doesn’t slip, so a = Rα', 'The cylinder is a uniform solid cylinder: I = ½MR²'],
           decoys: ['Released from rest: K₀ = 0 gives the tension', 'The bucket falls at g'] },
         problem: { original: true, title: 'Tension in the well rope', text: 'A 4.0 kg bucket of water hangs from a rope wound around a 10 kg uniform solid cylinder of radius 0.15 m that turns freely on its axle. The bucket is let go. What is the tension in the rope while the bucket falls?',
-          key: { givens: { M: [10, 'kg'], R: [0.15, 'm'], m: [4, 'kg'], g: [9.81, 'm/s²'] }, cond: { ...HANG, rest: false }, targets: ['Tn'] },
+          key: { givens: { M: [10, 'kg'], R: [0.15, 'm'], m: [4, 'kg'], g: [9.81, 'm/s²'] }, cond: { ...HANG, rest: false, ground: false, smooth: false }, targets: ['Tn'] },
           answers: { Tn: '21.8' } } },
     ],
   },
@@ -1124,6 +1248,82 @@ const LESSONS = [
         problem: { original: true, title: 'Disc swinging on its rim', text: 'A uniform solid disc of radius 0.30 m hangs from a frictionless pivot at a point on its rim, so it can swing in its own plane. It is held with its centre level with the pivot and released from rest. What is its angular speed as its centre passes the lowest point?',
           key: { givens: { M: [null, 'kg'], R: [0.3, 'm'], dpa: [0.3, 'm'], h: [0.3, 'm'], g: [9.81, 'm/s²'], K0: [0, 'J'], U: [0, 'J'], Wnc: [0, 'J'] }, cond: { body: 'spin', shape: 'disc', axis: 'other', rest: true, ground: true, smooth: true, earth: true }, targets: ['w'] },
           answers: { w: '6.60' } } },
+    ],
+  },
+  {
+    id: 'work', chapter: 'energy', title: 'Work and power', objectives: ['W = F Δx cos φ', 'which angle is φ', 'P = W / t'],
+    recap: 'Work is the part of a force along the motion, times the distance: W = F Δx cos φ. The angle is between the force and the direction the body moves, wherever the slope is. Power is how fast the work is done, P = W / t, so a force follows from a power, a time and a distance.',
+    stops: [
+      { kind: 'long', mode: 'guided', help: FULL,
+        prompts: [
+          { when: 'start', text: 'Draw the sled, the rope and the direction it moves. Which angle sits between the rope and the motion?' },
+          { when: 'conditions', text: 'Is the force along the motion, or at an angle to it? Nothing here needs gravity.' },
+          { when: 'solve', text: 'Part (a) is one definition. Part (b) needs the work from (a) and the time.' },
+        ],
+        route: { laws: ['work'], why: 'One steady force, a distance and a time: the definitions of work and power are all it takes. No speeds or heights are asked.',
+          cues: ['The rope is at 25° to the direction the sled moves', 'The force is constant over the whole 8.0 m', 'The work is done in 5.0 s'],
+          decoys: ['The sled starts from rest: K₀ = 0', 'The snow is level, so the rope does no work'] },
+        problem: { original: true, title: 'Sled pulled by a rope', text: 'You pull a sled 8.0 m across level snow with a rope that makes a 25° angle above the horizontal. The tension in the rope is 40 N, and the pull takes 5.0 s. (a) How much work does the rope do on the sled? (b) What is your average power?',
+          key: { givens: { Fp: [40, 'N'], dx: [8, 'm'], phi: [25, '°'], t: [5, 's'] }, cond: { along: false }, targets: ['WF', 'Pavg'] },
+          answers: { WF: '290', Pavg: '58' } } },
+      { kind: 'twin', mode: 'guided', help: TWIN,
+        prompts: [
+          { when: 'start', text: 'Same idea on a ramp. Draw the force and the direction the crate moves: what is the angle between them?' },
+          { when: 'solve', text: 'One force, one distance, one angle.' },
+        ],
+        route: { laws: ['work'], why: 'The work done by one named force: W = F Δx cos φ. The other forces (gravity, friction, the normal force) do their own work, but the question doesn’t ask for it.',
+          cues: ['The force is horizontal and the crate moves along the ramp, so φ is the ramp angle', 'The force is constant over the 4.0 m'],
+          decoys: ['The force is along the motion: φ = 0', 'Friction on the ramp changes the work this force does'] },
+        problem: { original: true, title: 'Crate pushed up a ramp', text: 'A worker pushes a crate up a ramp inclined at 20° with a constant horizontal force of 310 N. How much work does that force do on the crate as it slides 4.0 m up the ramp?',
+          key: { givens: { Fp: [310, 'N'], dx: [4, 'm'], phi: [20, '°'] }, cond: { along: false }, targets: ['WF'] },
+          answers: { WF: '1.2e3' } } },
+      { kind: 'transfer', mode: 'guided', help: NONE,
+        prompts: [{ when: 'start', text: 'A power, a time and a distance. What does the power tell you first?' }],
+        route: { laws: ['work'], why: 'Power times time is the work done; the work is the force times the distance when the force is along the motion.',
+          cues: ['The cable is parallel to the slipway: the force is along the motion', 'The power is an average over the 24 s'],
+          decoys: ['The boat moves at a steady speed, so no work is done', 'The slope’s angle is needed'] },
+        problem: { original: true, title: 'Winch on a slipway', text: 'A winch pulls a boat 15 m up a slipway at a steady speed, with the cable parallel to the slipway. The pull takes 24 s and the winch’s average power output is 450 W. What force does the cable exert on the boat?',
+          key: { givens: { dx: [15, 'm'], t: [24, 's'], Pavg: [450, 'W'], phi: [0, '°'] }, cond: { along: true }, targets: ['Fp'] },
+          answers: { Fp: '720' } } },
+    ],
+  },
+  {
+    id: 'launch', chapter: 'energy', title: 'A spring, a rough ramp and a collision', objectives: ['energy with a spring and friction', 'which terms are zero', 'momentum for the hit, energy after it'],
+    recap: 'Write the energy law term by term and decide each one: K₀ + U₀ + U_s0 + W_nc = K + U + U_s. A spring stores ½kx²; friction takes out f Δx; a climb stores mgh with h = Δx sin θ. A collision is different: energy is lost in the hit, so momentum carries you through it and energy takes over afterwards.',
+    stops: [
+      { kind: 'long', mode: 'guided', help: FULL,
+        prompts: [
+          { when: 'start', text: 'Draw the two moments: spring squeezed and block at rest; block stopped up the ramp. What kinds of energy are there at each?' },
+          { when: 'conditions', text: 'Go through the energy terms one at a time: which are zero at the start, and which at the end? Where will you measure heights from?' },
+          { when: 'solve', text: 'The distance appears twice: in the height gained and in friction’s work. Those equations have to be solved together.' },
+        ],
+        route: { laws: ['energy'], why: 'A start and an end with no time asked: energy. The spring’s energy pays for the climb and for what friction takes out.',
+          cues: ['Released from rest and stops at the top: K₀ = 0 and K = 0', 'The spring is relaxed at the end: U_s = 0', 'Kinetic friction acts over the whole distance', 'The height gained is Δx sin θ'],
+          decoys: ['The ramp is smooth, so W_nc = 0', 'Momentum is conserved along the ramp'] },
+        problem: { original: true, title: 'Spring launcher on a rough ramp', text: 'A spring with force constant 180 N/m sits at the bottom of a ramp inclined at 25°. It is compressed 0.12 m and launches a 0.40 kg block from rest. The coefficient of kinetic friction between the block and the ramp is 0.15. (a) How much energy does the spring store? (b) How far along the ramp does the block travel before it stops?',
+          key: { givens: { ks: [180, 'N/m'], xs: [0.12, 'm'], m: [0.4, 'kg'], inc: [25, '°'], mu: [0.15, 'no unit'], g: [9.81, 'm/s²'], K0: [0, 'J'], K: [0, 'J'], U0: [0, 'J'], Us: [0, 'J'] },
+            cond: { rough: true, rest: true, stops: true, ground: false, ground0: true, relax0: false, relax1: true, smooth: false, earth: true }, targets: ['Us0', 'dx'] },
+          answers: { Us0: '1.3', dx: '0.59' } } },
+      { kind: 'twin', mode: 'guided', help: TWIN,
+        prompts: [
+          { when: 'start', text: 'Same picture, new numbers. Watch the units: centimetres and grams.' },
+          { when: 'solve', text: 'Which terms of the energy law are zero? Which equations share the unknown distance?' },
+        ],
+        route: { laws: ['energy'], why: 'Spring energy at the start becomes height and friction’s loss at the end. No time is asked, so energy does it.',
+          cues: ['Released from rest and stops at the top: K₀ = 0 and K = 0', 'The spring is relaxed at the end: U_s = 0', 'Kinetic friction acts over the whole distance', 'The height gained is Δx sin θ'],
+          decoys: ['The board is nearly level, so gravity can be ignored', 'The puck leaves the spring at a known speed'] },
+        problem: { original: true, title: 'Puck launcher', text: 'A spring of force constant 75 N/m launches a 90 g puck up a board tilted at 10°. The spring is compressed 6.0 cm and released from rest. The coefficient of kinetic friction between the puck and the board is 0.10. How far along the board does the puck travel before it stops?',
+          key: { givens: { ks: [75, 'N/m'], xs: [6, 'cm'], m: [90, 'g'], inc: [10, '°'], mu: [0.1, 'no unit'], g: [9.81, 'm/s²'], K0: [0, 'J'], K: [0, 'J'], U0: [0, 'J'], Us: [0, 'J'] },
+            cond: { rough: true, rest: true, stops: true, ground: false, ground0: true, relax0: false, relax1: true, smooth: false, earth: true }, targets: ['dx'] },
+          answers: { dx: '0.56' } } },
+      { kind: 'transfer', mode: 'guided', help: NONE,
+        prompts: [{ when: 'start', text: 'Two stages: the hit, then the swing. Which law holds through the hit? Which one after it?' }],
+        route: { laws: ['pmomentum', 'energy'], why: 'Kinetic energy is lost when the clay sticks, so only momentum holds through the hit. After it, only gravity does work, so energy gives the height.',
+          cues: ['They stick together: one velocity after the hit', 'The block hangs at rest before the hit', 'After the hit only gravity does work on the swing'],
+          decoys: ['Kinetic energy is conserved through the hit', 'The clay’s ½mv² becomes mgh directly'] },
+        problem: { original: true, title: 'Clay hits a hanging block', text: 'A 0.50 kg ball of clay moving horizontally at 6.0 m/s hits a 2.5 kg block that hangs at rest from a long light cord, and sticks to it. How high above its starting level does the block (with the clay) swing?',
+          key: { givens: { m1: [0.5, 'kg'], v1i: [6, 'm/s', 0], m2: [2.5, 'kg'], v2i: [0, 'm/s', 0], g: [9.81, 'm/s²'] }, cond: { collide: 'stick', rest2: true, earth: true }, targets: ['h'] },
+          answers: { h: '0.051' } } },
     ],
   },
 ];
