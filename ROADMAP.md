@@ -233,6 +233,7 @@ Testing in every C phase: while working, run `npm run test:fast` (Node-only, sec
 
 ## Phase C3: the next section (energy with rotation, rolling, angular momentum)
 **Start with:** done in session 2, after C2. Read plan section 9. The new entries go straight into `js/packs/mech.js`.
+Resume from: box 1 (gate `tests/rolling.test.js`). C1 and C2 are done (2026-11-11); start the session with `Do phase C3 in ROADMAP.md.` Units take their hooks from data (`hook(k)` in app.js, list in docs/architecture.md "Unit hooks"), so the new "Rolling and angular momentum" unit is a `CHAPTERS` entry in `js/packs/mech.js` with `startCond`, `presets` and, if it has a motion picture, `kin` and `diagram`.
 - [ ] Gate first (`tests/rolling.test.js`), classic forms solved with symbols: rolling down a ramp a = (5/7)g sin θ (solid sphere), (3/5)g sin θ (hollow sphere), (2/3)g sin θ (disc); v = √(10gh/7) for a solid sphere from height h; K_rot / K = 2/7 for a solid sphere; disc and hanging mass by energy v = √(2mgh / (m + M/2)), the same as by forces; a turntable of diameter D: M = 16K / (D²ω²); a skater ω₂ = ω₁I₁/I₂ with "no outside torque", and refused (with the reason) when an outside torque is present. Numeric checks against the textbook's answers when the user supplies them.
 - [ ] Library entries (plan section 9) as one-line equations with kinds and cues, in a "Rolling and angular momentum" unit; conditions rolls without slipping, fixed axis, no outside torque, rough axle does work W_f.
 - [ ] All tests pass. Cache bumped. One line here on what changed.
