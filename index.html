@@ -491,6 +491,42 @@
   .bitem{padding:9px 11px;margin-bottom:8px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
   .bitem b{display:block;color:var(--cy);margin-bottom:2px}
   .bitem .btxt{font-size:13px;color:#c3d1e3}
+  /* notebook drawer (js/notebook.js) */
+  .nbform{display:grid;gap:6px;margin-bottom:10px}
+  .nbform label{display:grid;gap:2px;font-size:12px;color:var(--muted)}
+  .nbform input,.nbform textarea,.nbsearch input,.nbsearch select{font:13px var(--ui);color:var(--text);background:var(--inset);border:2px solid var(--line-hi);padding:4px 6px}
+  .nbsearch{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+  .nbsearch input{flex:1;min-width:120px}
+  .nbitem.cur{outline:2px solid var(--amber)}
+  .nbitem .nblaws{font-size:12px;color:var(--found)}
+  .nbitem .nbnotes{color:#c3d1e3;white-space:pre-wrap}
+  .nbbtns{display:flex;flex-direction:column;gap:4px}
+  .nbfoot{margin-top:10px}
+  .warnbtn{color:var(--bad)}
+  /* board (js/board.js): cards coloured by state, arrows behind them */
+  .boardwin{width:min(1180px,96vw);max-height:90vh;display:flex;flex-direction:column;border-image:var(--frame-hero) 6 / 6px stretch}
+  .boardwin .body{display:flex;flex-direction:column;gap:6px;min-height:0}
+  .bdtools{flex-wrap:wrap;gap:6px}
+  .bdtools select{font:13px var(--ui);color:var(--text);background:var(--inset);border:2px solid var(--line-hi);padding:4px}
+  .bdarea{position:relative;overflow:auto;min-height:340px;max-height:66vh;background:var(--dither),var(--inset);border:2px solid var(--line-hi)}
+  .bdlines{position:absolute;left:0;top:0;color:var(--muted);pointer-events:none}
+  .bdlines .bdarrow{fill:none;stroke:currentColor;stroke-width:2}
+  .bdlines .bdalabel{font:12px var(--ui);fill:var(--muted)}
+  .bdcards{position:relative}
+  .bdcard{position:absolute;box-sizing:border-box;padding:5px 8px;background:var(--felt-lo);border:2px solid var(--dim);color:var(--text);cursor:grab;touch-action:none;user-select:none;font-size:14px}
+  .bdcard .bdmain{font-family:var(--mono)}
+  .bdcard.st-given{border-color:var(--given)} .bdcard.st-given .bdmain{color:var(--given)}
+  .bdcard.st-found{border-color:var(--found)} .bdcard.st-found .bdmain{color:var(--found)}
+  .bdcard.st-target{border-color:var(--target);border-style:dashed} .bdcard.st-target .bdmain{color:var(--target)}
+  .bdcard.st-unknown{border-color:var(--dim)} .bdcard.st-unknown .bdmain{color:#b8c0e0}
+  .bdcard .bdval{display:block;font-size:11px;color:var(--muted)}
+  .bdcard.bd-equation{border-color:var(--line-hi);font-size:13px}
+  .bdcard .bdkind{position:absolute;top:-9px;right:6px;font:700 10px var(--ui);letter-spacing:.08em;text-transform:uppercase;background:var(--deep);color:var(--gold-hi);padding:0 4px}
+  .bdcard.bd-note{background:#2a2346;border-color:var(--gold-lo)}
+  .bdcard.bd-state{background:rgba(29,40,120,.35);border:2px dashed var(--muted);cursor:move}
+  .bdcard textarea.bdnote,.bdcard input.bdstate{width:100%;box-sizing:border-box;font:13px var(--ui);color:var(--text);background:transparent;border:0;resize:vertical}
+  .bdcard input.bdstate{font-weight:700;color:var(--gold-hi)}
+  .bdcard.sel{box-shadow:0 0 0 2px var(--amber)} .bdcard.pick{box-shadow:0 0 0 3px var(--good)}
   #dlg .win{width:min(480px,92vw);border-image:var(--frame-bad) 6 / 6px stretch;background:var(--dither),#1a0f2a;background-clip:padding-box}
   #dlg.good .win{border-image:var(--frame-good) 6 / 6px stretch;background:var(--dither),#0c2420;background-clip:padding-box}
   #dlg .titlebar h2{color:var(--bad)} #dlg.good .titlebar h2{color:var(--good)}
@@ -667,6 +703,8 @@
         <span class="small muted guided-only" id="dgNote"></span>
         <button id="diagBtn" aria-expanded="false" title="Open the diagram library: every drawing component and what it means">Diagrams</button>
         <button id="libBtn" class="guided-only" aria-expanded="false" title="Open the equation library">Library</button>
+        <button id="boardBtn" title="Organize the problem on cards: lay out your solved path, add notes">Board</button>
+        <button id="nbBtn" aria-expanded="false" title="Your saved problems: save, search, open, export">Notebook</button>
       </div>
       <div class="ctool draw-only" id="dfTools" role="toolbar" aria-label="Drawing-first tools">
         <button data-dftool="select" aria-pressed="true" title="Move and select parts">Select</button>
@@ -749,6 +787,17 @@
   <div class="dbodyl"><p class="small dintro">Like the line drawings of chemistry, each part of a mechanics drawing is drawn one standard way, so a drawing can be read. Draw a part with its tool, or sketch it with the pen ✎: a line becomes a ramp or surface, a closed loop a ball or wheel, a box a block, an arrow out of a body a vector.</p><div id="diagLib"></div></div>
 </aside>
 <div id="compCard" class="pop compcard" role="tooltip" hidden></div>
+
+<aside id="nbDrawer" class="drawer" aria-label="Notebook">
+  <div class="dhead"><h2>Notebook</h2><span class="small muted">Saved problems, on this device</span><button class="x" id="nbClose" title="Close">×</button></div>
+  <div class="dbodyl" id="nbBody"></div>
+</aside>
+<div id="boardWrap" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="boardT">
+  <div class="win boardwin">
+    <div class="titlebar"><h2 id="boardT">Board</h2><button class="x" id="boardX" title="Close">×</button></div>
+    <div class="body" id="boardHost"></div>
+  </div>
+</div>
 
 <div id="bank" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="bankT">
   <div class="win bankwin">

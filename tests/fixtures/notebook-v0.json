@@ -1,0 +1,13 @@
+[
+  {
+    "id": "old-1",
+    "title": "Spinning up a flywheel (saved before the notebook had versions)",
+    "unit": "rotation",
+    "problem": "A flywheel starts from rest with α = 0.70 rad/s². How fast is it turning after 2.0 s?",
+    "givens": { "alpha": { "from": "you", "mag": 0.7, "unit": "rad/s²", "dir": 0, "val": 0.7 }, "t": { "from": "you", "mag": 2, "unit": "s", "dir": 0, "val": 2 } },
+    "cond": { "rest": true },
+    "targets": ["w"],
+    "notes": "ω₀ = 0 from rest",
+    "saved": "2026-09-01T12:00:00.000Z"
+  }
+]

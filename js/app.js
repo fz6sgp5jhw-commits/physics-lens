@@ -10,6 +10,8 @@ import { createTools } from './tools.js';
 import { createConnect } from './connect.js';
 import { createToolkit } from './toolkit.js';
 import { createWorkspace } from './algebra.js';
+import { createNotebook } from './notebook.js';
+import { fromPath, createBoardView } from './board.js';
 
 const $ = (id) => document.getElementById(id);
 // text the student typed or pasted is escaped before it goes into HTML
@@ -250,7 +252,7 @@ function closeDialog(ok){
 }
 $('dlgOk').onclick = () => closeDialog(true);
 $('dlgCancel').onclick = () => closeDialog(false);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); $('boardWrap').classList.remove('show'); } });
 // changing an input makes every answer found so far wrong: ask before clearing them
 function beforeClearing(what){
   if (!S.path.length) return Promise.resolve(true);
@@ -1682,7 +1684,7 @@ function stepPulse(){ if (calm()) return; const r = $('workWin').getBoundingClie
 // ---------- toggles ----------
 $('calmBtn').onclick = () => { const on = !calm(); document.body.classList.toggle('calm', on); $('calmBtn').setAttribute('aria-pressed', String(on)); field.setCalm(on); try { localStorage.setItem('rl-calm', on ? '1' : '0'); } catch {} draw(); };
 $('soundBtn').onclick = () => { S.sound = !S.sound; $('soundBtn').setAttribute('aria-pressed', String(S.sound)); beep(660, 0.08); };
-$('clearBtn').onclick = async () => { if (S.busy || !await beforeClearing('Clear all')) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); WS.clear(); S.fbd = { body: null, forces: {} }; renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
+$('clearBtn').onclick = async () => { if (S.busy || !await beforeClearing('Clear all')) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); WS.clear(); S.fbd = { body: null, forces: {} }; S.board = null; NB.forget(); renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
 
 // ---------- systems: equations that must be solved together (js/systems.js finds them; combine eliminates) ----------
 // Any equation can be written as Z = 0: generated ones carry Z; for library ones it comes from a solver's template.
@@ -2014,13 +2016,14 @@ function renderForceChips(){
 }
 // ---------- library drawer, add-a-given panel ----------
 // two drawers share the right edge: the equation library and the diagram library; opening one closes the other
-const DRAWERS = { libDrawer: 'libBtn', diagDrawer: 'diagBtn' };
+const DRAWERS = { libDrawer: 'libBtn', diagDrawer: 'diagBtn', nbDrawer: 'nbBtn' };
 function setDrawer(open, id = 'libDrawer'){
   for (const [d, b] of Object.entries(DRAWERS)){ const on = open && d === id; $(d).classList.toggle('open', on); $(b).setAttribute('aria-expanded', String(on)); }
 }
 for (const [d, b] of Object.entries(DRAWERS)) $(b).onclick = () => setDrawer(!$(d).classList.contains('open'), d);
 $('libClose').onclick = () => setDrawer(false);
 $('diagClose').onclick = () => setDrawer(false);
+$('nbClose').onclick = () => setDrawer(false);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setDrawer(false); });
 // a component's card: its standard drawing, what it means, its properties, connections, arrows, equations and what to check
 function compHTML(k, tip = ''){
@@ -2579,6 +2582,81 @@ function renderMatters(){
   box.innerHTML = html;
   paintSyms();
 }
+
+// ---------- notebook and board (js/notebook.js, js/board.js) ----------
+// the current problem as a notebook record (notebook.js validates it); meta: title, objectives, notes from the save form
+const textOf = (html) => { const t = document.createElement('template'); t.innerHTML = html; return t.content.textContent.trim(); };
+const qtyOf = (id) => typeof id === 'string' ? id.replace(/^(fn|rank):/, '') : '';
+function capture(meta){
+  const used = [...S.path.filter(p => p.kind === 'eq').map(p => p.eq), ...S.sheet];
+  return {
+    v: 1, title: meta.title, objectives: meta.objectives || [], notes: meta.notes || '', chapter: S.ch, text: $('problem').value,
+    parts: S.targets.map((t, i) => ({ label: 'abcdefgh'[i], target: t })),
+    givens: Object.fromEntries(Object.entries(S.givens).filter(([, g]) => g.from === 'you' || g.from === 'drawing')),
+    conds: { ...S.cond }, condOk: S.condOk,
+    drawing: S.build.shapes.length ? { ...S.build.save(), setup: DF.save() } : null,
+    board: S.board && S.board.cards.length ? S.board : null,
+    steps: S.path.map(p => ({ title: p.title, eq: p.kind === 'eq' ? p.eq : null, v: p.v })),
+    laws: [...new Set(used)].filter(e => EQS[e] && !EQS[e].generated),
+  };
+}
+// a saved problem back into the workspace: unit, text, drawing, givens, conditions, targets and board (the path is solved again)
+async function openRecord(r){
+  if (S.busy) return false;
+  if (S.path.length && !await ask('Open a saved problem?', `<b>THIS REPLACES YOUR WORKSPACE</b>Your ${S.path.length} solved step${S.path.length > 1 ? 's' : ''} will be cleared. Save the problem first if you want to keep them.`, 'Open it')) return false;
+  r = structuredClone(r); // the workspace changes its drawing and board; the saved record stays as it was
+  switchChapter(r.chapter);
+  S.fbd = { body: null, forces: {} }; WS.clear();
+  if (r.drawing) S.build.load(r.drawing); else if (S.build.shapes.length) S.build.clear();
+  DF.load(r.drawing && r.drawing.setup);
+  $('problem').value = r.text;
+  const defs = defaultsFor(S.ch), keys = new Set([...Object.keys(defs), ...chapter().conditions.map(c => c.key)]);
+  S.cond = { ...defs, ...Object.fromEntries(Object.entries(r.conds).filter(([k]) => keys.has(k))) };
+  const vars = chVars();
+  for (const [id, g] of Object.entries(r.givens)) if (vars.includes(id)) S.givens[id] = { ...g };
+  applyHidden(); S.condOk = r.condOk;
+  S.targets = r.parts.map(p => p.target).filter(t => vars.includes(qtyOf(t)) && !known(t));
+  S.board = r.board; S.lastStep = -1; S.stage = 0;
+  setDrawer(false); renderAll(); BV.render();
+  say(`Opened “${esc(r.title)}”. ${r.steps.length ? 'Its setup is back; solve it again to see the work.' : 'Carry on where you left off.'}`);
+  return true;
+}
+const NB = S.nb = createNotebook({ panel: $('nbBody'), ctx: { chapters: CHAPTERS, vars: VARS, eqs: EQS }, capture, open: openRecord, ask, say, esc,
+  lawLabel: (e) => EQS[e] ? `${EQS[e].label} ${textOf(EQS[e].form)}` : e });
+
+// the board: a solved path laid out given → equation → found → target
+function pathSteps(){
+  return S.path.map(p => {
+    const out = qtyOf(p.v); if (!VARS[out]) return null;
+    if (p.kind === 'eq'){
+      const e = EQS[p.eq]; if (!e) return null;
+      return { ref: p.eq, kind: e.kind || 'law', label: e.label || '', text: textOf(e.form || ''), ins: e.vars.filter(x => x !== out && VARS[x]), out };
+    }
+    return { ref: p.kind, kind: 'calc', label: p.title || p.kind, ins: [p.from].flat().map(qtyOf).filter(x => VARS[x] && x !== out), out };
+  }).filter(Boolean);
+}
+const boardState = (id) => S.targets.includes(id) || S.targets.includes('fn:' + id) ? 'target' : S.givens[id] ? 'given' : S.found[id] ? 'found' : 'unknown';
+function boardValue(id){
+  const g = S.givens[id], f = S.found[id];
+  if (g) return g.kind === 'symbol' ? '' : withUnit(id, g.val);
+  return f && (!f.expr || X.isNumeric(f.expr)) && Number.isFinite(f.val) ? withUnit(id, f.val) : '';
+}
+S.board = null;
+const BV = createBoardView({
+  host: $('boardHost'), get: () => S.board, set: (b) => { S.board = b; },
+  label: (c) => c.type === 'quantity' ? (VARS[c.ref] ? { html: V(c.ref) } : { text: c.ref || '?' })
+    : EQS[c.ref] && !EQS[c.ref].generated ? { html: `<span class="tag">${EQS[c.ref].label}</span> ${EQS[c.ref].form}` } : { text: [c.label, c.text].filter(Boolean).join('  ') },
+  quantities: () => chVars().filter(id => VARS[id]).map(id => [id, `${VARS[id].plain}: ${nm(id)}`]),
+  equations: () => chapter().sections.flatMap(sc => sc.eqs).map(e => [e, `${EQS[e].label}: ${textOf(EQS[e].form)}`, EQS[e].kind || '']),
+  fromPath: () => {
+    if (!S.path.length){ say('Solve at least one step first: the board lays out the path you solved. You can also build one by hand with the card buttons.'); return null; }
+    S.board = fromPath(pathSteps(), { state: boardState, value: boardValue }, S.board); return S.board;
+  },
+  say,
+});
+$('nbBtn').addEventListener('click', () => { if ($('nbDrawer').classList.contains('open')) NB.prefill(); });
+$('boardBtn').onclick = () => { setDrawer(false); BV.render(); $('boardWrap').classList.add('show'); };
+$('boardX').onclick = () => $('boardWrap').classList.remove('show');
 
 // ---------- assemble ----------
 // θ → ω = dθ/dt → α = dω/dt (or x → v → a), with what you know on each rung; ∫dt back up needs a start value

@@ -610,6 +610,13 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     get shapes(){ return st.shapes; },
     get canUndo(){ return hist.length > 0; },
     clear: () => { checkpoint(); st.shapes = []; st.sel = null; render(); onChange(); },
+    // the notebook: the whole drawing as plain data (the same snapshot undo keeps), and back
+    save: () => JSON.parse(snap0()),
+    load: (o) => {
+      checkpoint(); st.shapes = o && Array.isArray(o.shapes) ? o.shapes.filter(x => x && KINDS[x.kind]) : []; st.sel = null;
+      st.theta = o && Number.isFinite(o.theta) ? o.theta : 30; st.seq = o && Number.isFinite(o.seq) ? o.seq : st.shapes.length;
+      restore(o ? o.extra : null); snapAll(); render(); onChange();
+    },
     KINDS,
   };
   render();
