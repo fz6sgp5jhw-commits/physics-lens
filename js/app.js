@@ -1,4 +1,4 @@
-import { VARS, EQS, CHAPTERS, PRACTICE, COMPONENTS, V, fmt, SAMPLE, PRINT_ORDER, DIMS } from './data.js';
+import { VARS, EQS, CHAPTERS, PRACTICE, COMPONENTS, V, fmt, SAMPLE, PRINT_ORDER, DIMS, sizeSI, withUnit } from './data.js';
 import { createBuild, PALETTE } from './build.js';
 import * as X from './expr.js';
 import { createField } from './field.js';
@@ -383,9 +383,10 @@ function renderEditor(){
     if (txt === '' || !isFinite(x)){ dialog('Not a number', `<b>SYNTAX ERROR</b>Type the size as a number, like <b>12</b> or <b>2.5e3</b>. Use the direction buttons for which way it points.`); return; }
     let dirI = S.editing.dir;
     if (x < 0 && dr(id)){ dirI = 1 - dirI; say(`I flipped the direction for you: sizes are always positive, and the direction buttons carry the sign.`); }
-    const u = $('edUnit').value, mag = Math.abs(x);
-    if (!dr(id) && x < 0 && !['inc'].includes(id)){ dialog('Negative size?', `<b>THAT CAN’T BE NEGATIVE</b>${nm(id)} is a size with no direction, so it can’t be negative.`); return; }
-    S.givens[id] = { from: 'you', mag, unit: u, dir: dirI, val: (dirI ? -1 : 1) * mag * d.units[u], moment: S.editing.moment };
+    const u = $('edUnit').value, abs = VARS[id].absolute, mag = abs ? x : Math.abs(x);
+    if (abs && sizeSI(id, x, u) <= 0){ dialog('Below absolute zero', `<b>THAT’S TOO COLD</b>A temperature can’t be at or below absolute zero (0 K = −273.15 °C).`); return; }
+    if (!dr(id) && x < 0 && !['inc'].includes(id) && !abs){ dialog('Negative size?', `<b>THAT CAN’T BE NEGATIVE</b>${nm(id)} is a size with no direction, so it can’t be negative.`); return; }
+    S.givens[id] = { from: 'you', mag, unit: u, dir: dirI, val: (dirI ? -1 : 1) * sizeSI(id, mag, u), moment: S.editing.moment };
     S.targets = S.targets.filter(t => t !== id);
     S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
   };
@@ -912,7 +913,7 @@ async function ladderOp(m){
   if (expr) val = X.evalRat(expr, SAMPLE);
   startWork(`Work · step ${step}: ladder ${MOVE_LABEL[m.kind]} → ${plainOf(m.v)}`, `MOTION LADDER: ${MOVE_LABEL[m.kind].toUpperCase()}`);
   for (const [h, why] of lines) await workLine(h, why);
-  workBlock('result', poly ? `${symOf(m.v)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${X.isNumeric(expr) ? `${fmt(val)} ${unitOf(x)}` : X.toHTML(expr, S.printOpts)}`);
+  workBlock('result', poly ? `${symOf(m.v)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${X.isNumeric(expr) ? withUnit(x, val) : X.toHTML(expr, S.printOpts)}`);
   if (note) workBlock('note', note, true);
   if (poly) S.funcs[x] = { from: 'ladder', poly, step };
   else S.found[x] = { val, expr: X.isNumeric(expr) ? null : expr, step };
@@ -1027,7 +1028,7 @@ async function spanOp(m){
   const expr = r.value, val = X.evalRat(expr, SAMPLE);
   startWork(`Work · step ${step}: between two moments → ${plainOf(x)}`, 'BETWEEN TWO MOMENTS');
   for (const [h, why] of r.lines) await workLine(h, why);
-  workBlock('result', `${VARS[x].sym} = ${X.isNumeric(expr) ? `${fmt(val)} ${unitOf(x)}` : X.toHTML(expr, S.printOpts)}`);
+  workBlock('result', `${VARS[x].sym} = ${X.isNumeric(expr) ? withUnit(x, val) : X.toHTML(expr, S.printOpts)}`);
   if (r.note) workBlock('note', r.note);
   S.found[x] = { val, expr: X.isNumeric(expr) ? null : expr, step };
   workBlock('feedback', x === cur ? targetNote(x) : `Found ${symOf(x)}.`);
@@ -1094,7 +1095,7 @@ async function solveSym(eqId, target){
   else for (const st of eq.solve[x].steps) await workLine(st.eq, st.why);
   workBlock('section', 'PUT IN WHAT YOU KNOW', true);
   for (const w of useFn) await workLine(`${V(w)}(${V('t')}) = ${polyHTML(S.funcs[w].poly)}`, `${plain(w)} is a function of time`);
-  workBlock('result', asFn ? `${symOf('fn:' + x)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${symb ? X.toHTML(R, S.printOpts) : `${fmt(value)} ${unitOf(x)}`}`); paintSyms();
+  workBlock('result', asFn ? `${symOf('fn:' + x)} = ${polyHTML(poly)}` : `${VARS[x].sym} = ${symb ? X.toHTML(R, S.printOpts) : withUnit(x, value)}`); paintSyms();
   workBlock('small units', `Units ✓ every term works out to ${eq.generated ? (eq.unitText || 'the same unit') : eq.solve[x].unitText}.`);
   if (asFn) S.funcs[x] = { from: 'eq', poly, step };
   else S.found[x] = { val: value, expr: symb ? R : null, step, moment: eq.vars.some(w => w !== x && known(w) && isMoment(w)) };
@@ -1140,7 +1141,7 @@ async function solve(eqId, target){
   } else {
     workBlock('section', 'PLUG IN NUMBERS (SI UNITS, SIGNS FROM DIRECTIONS)', true);
     await workLine(`${V(target)} = ${plug(sub, v)}`);
-    workBlock('result', `${symOf(target)} = ${fmt(res.value)} ${unitOf(target)}`);
+    workBlock('result', `${symOf(target)} = ${withUnit(target, res.value)}`);
     const ex = extras(target, res.value); if (ex) workBlock('', ex);
   }
   workBlock('small units', `Units ✓ every term works out to ${sol.unitText}.`);
@@ -1231,7 +1232,7 @@ $('checkSetup').onclick = () => {
   const p = S.bank; if (!p) return;
   const lines = []; let bad = 0;
   for (const [id, [mag, unit, dir]] of Object.entries(p.key.givens)){
-    const want = (dir ? -1 : 1) * mag * VARS[id].units[unit], g = S.givens[id];
+    const want = (dir ? -1 : 1) * sizeSI(id, mag, unit), g = S.givens[id];
     if (!g){ lines.push(`✗ Missing a known: <b>${VARS[id].sym}</b> (${nm(id)}). ${want === 0 ? 'It’s hidden in the wording.' : ''}`); bad++; continue; }
     const close = (a, b) => Math.abs(a - b) <= 0.01 * Math.max(1e-9, Math.abs(b)) || (Math.abs(b) < 1e-9 && Math.abs(a) < 1e-9);
     if (g.kind === 'symbol'){

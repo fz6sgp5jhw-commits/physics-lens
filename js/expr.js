@@ -542,9 +542,11 @@ const UNITS = {
   L: U({ m: 3 }, 1e-3), eV: U(J, 1.602176634e-19), atm: U({ kg: 1, m: -1, s: -2 }, 101325, false),
   rad: U({}, 1, false), '°': U({}, Math.PI / 180, false), rev: U({}, 2 * Math.PI, false),
   min: U({ s: 1 }, 60, false), h: U({ s: 1 }, 3600, false), rpm: U({ s: -1 }, 1 / 60, false),
+  '°C': U({ K: 1 }, 1, false), // a step of 1 °C is 1 K; the 273.15 offset applies only to a temperature (toSI, absolute)
 };
+const C0 = 273.15; // 0 °C in kelvin
 const PREFIX = { n: 1e-9, 'μ': 1e-6, m: 1e-3, c: 1e-2, k: 1e3, M: 1e6 };
-const ALIAS = { '\u00b5': '\u03bc', '\u2126': '\u03a9' }; // micro sign and ohm sign typed from a keyboard
+const ALIAS = { '\u00b5': '\u03bc', '\u2126': '\u03a9', '\u2103': '°C', '\u00baC': '°C' }; // micro sign, ohm sign, ℃ and ºC typed from a keyboard
 const SUPU = { ...SUP, '¹': 1 };
 // one unit token without its power: an exact unit first (min, mol, Pa), then a prefix on a unit that takes one (mm, μF, kPa)
 function unitTok(tok){
@@ -554,24 +556,42 @@ function unitTok(tok){
   return null;
 }
 function readUnit(u){
-  const src = String(u).replace(/[\u00b5\u2126]/g, c => ALIAS[c]);
-  const out = {}; let f = 1;
+  const src = String(u).replace(/[\u00b5\u2126\u2103]|\u00baC/g, c => ALIAS[c]);
+  const out = {}; let f = 1, celsius = 0;
   const [top, ...bots] = src.split('/');
   const addPart = (part, sgn) => {
     for (const tok of part.replace(/[()]/g, ' ').trim().split(/[·*\s]+/).filter(Boolean)){
       const m = /^(.+?)(⁻?)([¹²³⁴⁵]?)$/.exec(tok), base = unitTok(m[1]);
       if (!base || (m[2] && !m[3])) throw new Error(`unknown unit ${m[1]} in ${u}`);
+      if (m[1] === '°C') celsius++;
       const p = (m[3] ? SUPU[m[3]] : 1) * (m[2] ? -1 : 1) * sgn;
       for (const [k, x] of Object.entries(base.dim)) out[k] = (out[k] || 0) + x * p;
       f *= base.f ** p;
     }
   };
   addPart(top === '1' ? '' : top, 1); bots.forEach(b => addPart(b, -1));
-  return { dim: cleanE(out), f };
+  return { dim: cleanE(out), f, celsius: celsius && (src.trim() === '°C' ? 'alone' : 'inside') };
 }
 export const parseUnit = (u) => (u === '' || u === 'no unit') ? {} : readUnit(u).dim;
 // how many SI units one of this unit is: unitFactor('mm') = 0.001, unitFactor('μF') = 1e-6, unitFactor('L') = 0.001 (m³)
 export const unitFactor = (u) => (u === '' || u === 'no unit') ? 1 : readUnit(u).f;
+// A value in unit u → SI. °C is the one offset unit: a temperature (absolute, like T) adds 273.15; a difference (ΔT)
+// and °C inside a compound unit (J/(kg·°C)) convert by 1. A temperature in °C times or over another unit is refused.
+export function toSI(x, u, { absolute = false } = {}){
+  if (u === '' || u === 'no unit') return x;
+  const r = readUnit(u);
+  if (!absolute || !r.celsius) return x * r.f;
+  if (r.celsius === 'inside') throw new MathError(`A temperature in °C can’t be multiplied or divided inside a unit: 0 °C isn’t zero temperature (it’s 273.15 K), so the offset would be scaled too. Give the temperature in K, or in °C on its own.`);
+  return x + C0;
+}
+// SI → unit u (the inverse of toSI): an absolute temperature can be shown back in °C
+export function fromSI(x, u, { absolute = false } = {}){
+  if (u === '' || u === 'no unit') return x;
+  const r = readUnit(u);
+  if (!absolute || !r.celsius) return x / r.f;
+  if (r.celsius === 'inside') throw new MathError(`A temperature can be shown in °C only on its own, not inside a unit.`);
+  return x - C0;
+}
 const dimEq = (a, b) => BASES.every(k => Math.abs((a[k] || 0) - (b[k] || 0)) < 1e-9);
 // names for a dimension when a result is printed (torque's N·m is set by data.js; 1/s stays 1/s, not Hz)
 const NAMED = [[{ kg: 1, m: 1, s: -2 }, 'N'], [{ kg: 1, m: 1, s: -3 }, 'N/s'], [J, 'J'],

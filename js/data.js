@@ -1,7 +1,7 @@
 // Physics Lens — physics data: variables, equations (one line each, rearranged by code), setups.
 // All values are stored in SI units.
 
-import { parse, parseEq, isolate, showTree, hasPM, evalNum, MathError, parseUnit, dimOf, dimEq, dimStr, setSamples } from './expr.js';
+import { parse, parseEq, isolate, showTree, hasPM, evalNum, MathError, parseUnit, dimOf, dimEq, dimStr, setSamples, toSI, fromSI } from './expr.js';
 
 const TAU = 2 * Math.PI;
 
@@ -810,6 +810,10 @@ export function fmt(x){
 // ---------- units, sample values and print order (Phase A: symbolic core) ----------
 // SI dimension of every quantity, from its unit. Angles are dimensionless.
 export const DIMS = Object.fromEntries(Object.entries(VARS).map(([id, d]) => [id, parseUnit(d.unit)]));
+// A given's size in SI from the quantity's own conversion table; an absolute temperature (absolute: true) in °C adds 273.15.
+export const sizeSI = (id, mag, unit) => VARS[id].absolute ? toSI(mag, unit, { absolute: true }) : mag * VARS[id].units[unit];
+// An answer with its unit, and an absolute temperature also in °C: "586.3 K (313.2 °C)".
+export const withUnit = (id, x) => `${fmt(x)} ${VARS[id].unit}${VARS[id].absolute && VARS[id].units['°C'] ? ` (${fmt(fromSI(x, '°C', { absolute: true }))} °C)` : ''}`;
 // A typical size for each quantity. A symbol given without a number uses it to pick roots and signs
 // (and to draw the diagram); the answer itself stays symbolic.
 export const SAMPLE = {

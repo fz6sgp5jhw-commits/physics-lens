@@ -143,3 +143,27 @@ test('powers: simplify and print as atoms', () => {
   assert.equal(s('8^(1/3)'), '2');
   assert.equal(s('{V}^(4/2)'), 'V²');
 });
+
+// ---------------------------------------------------------------- degrees Celsius
+test('°C: a temperature adds 273.15, a difference and a compound unit convert by 1', () => {
+  const abs = { absolute: true };
+  assert.ok(close(X.toSI(20, '°C', abs), 293.15), '20 °C is 293.15 K');
+  assert.ok(close(X.toSI(-40, '℃', abs), 233.15), '℃ typed from a keyboard works too');
+  assert.ok(close(X.fromSI(293.15, '°C', abs), 20), 'and back');
+  assert.equal(X.toSI(80, '°C'), 80, 'a ΔT of 80 °C is 80 K');
+  assert.equal(X.toSI(300, 'K', abs), 300);
+  assert.equal(X.unitFactor('J/(kg·°C)'), X.unitFactor('J/(kg·K)'));
+  assert.ok(X.dimEq(X.parseUnit('J/(kg·°C)'), X.parseUnit('J/(kg·K)')), 'c in J/(kg·°C) is the same quantity as in J/(kg·K)');
+  assert.ok(close(X.toSI(4186, 'J/(kg·°C)'), 4186), 'a specific heat in J/(kg·°C) is not offset');
+  assert.throws(() => X.toSI(20, '°C·s', abs), /can’t be multiplied or divided/);
+  assert.throws(() => X.toSI(20, '°C²', abs), /can’t be multiplied or divided/);
+  assert.throws(() => X.parseUnit('k°C'), /unknown unit/, '°C takes no prefix');
+});
+
+test('°C: Final B Q6, isobaric 600 → 1200 cm³ from 20 °C ends at 313 °C', () => {
+  const abs = { absolute: true }, iso = X.isolate(X.parseEq('{V1}/{T1} = {V2}/{T2}'), 'T2');
+  const v = { V1: X.toSI(600, 'cm³'), V2: X.toSI(1200, 'cm³'), T1: X.toSI(20, '°C', abs) };
+  const T2 = X.fromSI(X.evalNum(iso.tree, v), '°C', abs);
+  assert.ok(Math.abs(T2 - 313) < 0.5, `T₂ = ${T2} °C, the exam's answer is 313 °C`);
+  assert.ok(Math.abs(2 * 20 - T2) > 200, 'doubling 20 °C (the slip the offset prevents) would give 40 °C');
+});
