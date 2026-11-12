@@ -1,7 +1,7 @@
-import { VARS, EQS, CHAPTERS, PRACTICE, COMPONENTS, V, fmt, SAMPLE, PRINT_ORDER, DIMS, sizeSI, withUnit } from './data.js';
+import { VARS, EQS, CHAPTERS, PRACTICE, LESSONS, SLIPS, COMPONENTS, V, fmt, SAMPLE, PRINT_ORDER, DIMS, sizeSI, withUnit } from './data.js';
 import { createBuild, PALETTE } from './build.js';
 import * as X from './expr.js';
-import { readyBlocks, eliminate } from './systems.js';
+import { readyBlocks, eliminate, structure } from './systems.js';
 import { createField } from './field.js';
 import * as TQ from './torque.js';
 import { createSetup } from './setup.js';
@@ -12,6 +12,7 @@ import { createToolkit } from './toolkit.js';
 import { createWorkspace } from './algebra.js';
 import { createNotebook } from './notebook.js';
 import { fromPath, createBoardView } from './board.js';
+import { createCourse, sigMatch } from './course.js';
 
 const $ = (id) => document.getElementById(id);
 // text the student typed or pasted is escaped before it goes into HTML
@@ -252,7 +253,7 @@ function closeDialog(ok){
 }
 $('dlgOk').onclick = () => closeDialog(true);
 $('dlgCancel').onclick = () => closeDialog(false);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); $('boardWrap').classList.remove('show'); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); $('boardWrap').classList.remove('show'); $('routeWrap').classList.remove('show'); } });
 // changing an input makes every answer found so far wrong: ask before clearing them
 function beforeClearing(what){
   if (!S.path.length) return Promise.resolve(true);
@@ -528,7 +529,7 @@ function renderLibrary(){
         else if (!applies(e)){ cls += ' na'; status = `<span class="warn">doesn’t apply here: needs ${naReason(e)}</span>`; }
         else {
           const u = unknownsOf(e, ks), s = solvable(e, ks);
-          if (ready && s){ cls += ' lit'; status = `<span class="hot">★ 1 unknown: ${VARS[s].sym}</span>`; }
+          if (ready && s){ if (S.help.glow){ cls += ' lit'; status = `<span class="hot">★ 1 unknown: ${VARS[s].sym}</span>`; } else status = ''; } // glow off in a lesson's twin
           else if (u.length === 0) status = '<span>all known</span>';
           else if (u.length === 1) status = `<span>1 unknown, but ${VARS[u[0]].sym} can’t be isolated here</span>`;
           else status = `<span>${u.length} unknowns: ${u.map(x => VARS[x].sym).join(', ')}</span>`;
@@ -545,7 +546,11 @@ function renderLibrary(){
     box.insertAdjacentHTML('beforeend', html);
     lib.appendChild(box);
   }
-  lib.querySelectorAll('[data-gather]').forEach(b => b.onclick = () => gather(b.dataset.gather));
+  lib.querySelectorAll('[data-gather]').forEach(b => b.onclick = async () => {
+    const e = b.dataset.gather;
+    if (COURSE.active && !S.sheet.includes(e) && !S.busy && !await COURSE.kindTap(e)) return; // in a lesson: what kind of equation is it?
+    gather(e);
+  });
   const fb = $('focusbar');
   if (S.focus.length){ fb.classList.add('show'); fb.innerHTML = `Equations with ${S.focus.map(V).join(', ')}<button id="unfocus">Show all ×</button>`; $('unfocus').onclick = () => { S.focus = []; renderLibrary(); paintSyms(); }; }
   else fb.classList.remove('show');
@@ -655,7 +660,7 @@ function renderSheet(){
     const eq = EQS[e], ok = applies(e), u = unknownsOf(e, ks), s = solvable(e, ks), fu = fnSolvable(e, ks);
     const card = document.createElement('div');
     const rel = S.focus.length && eq.vars.some(v => S.focus.includes(v));
-    card.className = 'eq ' + (!ok ? 'dim' : (s || fu) ? 'lit' : u.length === 0 ? 'done' : 'dim') + (S.focus.length ? (rel ? ' rel' : ' faded') : '');
+    card.className = 'eq ' + (!ok ? 'dim' : (s || fu) ? (S.help.glow ? 'lit' : 'ready') : u.length === 0 ? 'done' : 'dim') + (S.focus.length ? (rel ? ' rel' : ' faded') : '');
     card.dataset.eq = e;
     let act;
     if (!ok) act = `<span class="small warn">Doesn’t apply now (needs ${naReason(e)})</span>`;
@@ -742,6 +747,8 @@ function openStage(i, quiet = false){
   const c = stageChecks();
   if (i > reach(c) && i !== 3){ if (!quiet) say(`<b>${STAGES[i].name}</b> unlocks when <b>${STAGES[firstOpen(c)].name}</b> passes its check. ${STAGES[firstOpen(c)].tip}`); return false; }
   S.stage = i;
+  if (i > 0) COURSE.event('leftSetup');
+  COURSE.event(['start', 'forces', 'conditions', 'solve'][i]);
   if (i === 0 && S.dtab === 'forces') showTab('build');
   if (i === 1 && S.dtab !== 'forces') showTab('forces');
   renderStage(); return true;
@@ -1186,26 +1193,54 @@ function check(eqId){
   else dialog('Inconsistent data', `<b>THE NUMBERS DISAGREE</b>${eq.label} predicts ${VARS[id].sym} = ${fmt(res.value)} ${unitOf(id)}, but you have ${fmt(actual)} ${unitOf(id)}. Check the directions, units and conditions.`);
 }
 
+// hints come in levels (Andes): pointing → teaching → bottom-out; pressing Hint again on the same step goes one level deeper.
+// Only a bottom-out hint costs a star in a lesson.
+function hintFor(){
+  const cur = curTarget();
+  if (!userGivens()) return 'Start with the givens: add the quantities your problem gives you.';
+  if (!S.condOk) return 'Set the conditions first. They decide which equations even apply.';
+  if (!S.targets.length) return 'Add a 🎯 target on your sheet: what does the question ask for?';
+  if (!cur) return 'All targets found! Press <b>Replay motion</b>.';
+  const ks = knownSet(), lp = shortest(appEqs(), ks, baseOf(cur));
+  if (!lp) return 'No route yet. ' + hook('stuck');
+  const sp = shortest(S.sheet.filter(applies), ks, baseOf(cur));
+  if (sp && sp[0].kind === 'sys') return { key: 'sys' + sysLabel(sp[0]), point: 'Some equations on your sheet share their unknowns: none can be solved alone, but together they can.',
+    teach: 'Equations that share unknowns are a system: as many equations as unknowns, solved together by putting one into the other.',
+    bottom: `<b>${sysLabel(sp[0], '</b> and <b>')}</b> share ${sp[0].eqs.length === 3 ? 'three unknowns, two at a time' : 'the same two unknowns'}: a system. Combine them.` };
+  if (sp && sp[0].kind !== 'eq'){ const n = sp[0]; return { key: 'lad' + n.kind + n.v, point: 'Your motion ladder can take the next step.', teach: 'Going down the ladder is d/dt; going up is ∫dt with a start value.', bottom: `On your <b>motion ladder</b>, you can ${MOVE_TXT[n.kind](n)}. ${n.v === cur ? 'That’s your target!' : 'That gets you closer.'}` }; }
+  if (sp){ const n = sp[0], e = EQS[n.eq]; return { key: 'eq' + n.eq + n.v, point: `Psst… one equation on your sheet has just one unknown.`, teach: `Look for the equation about ${e.cue}: everything in it but one quantity is known.`, bottom: `<b>${e.label}</b> has just one unknown, <b>${symOf(n.v)}</b>. ${n.v === cur ? 'And it’s your target!' : 'Finding it gets you closer.'} Click it to solve.` }; }
+  const miss = lp.find(s => s.kind === 'eq' && !S.sheet.includes(s.eq));
+  if (!miss) return 'Your motion ladder can get there: look at the buttons on its rungs.';
+  const sec = chapter().sections.find(x => x.eqs.includes(miss.eq)), e = EQS[miss.eq];
+  return { key: 'miss' + miss.eq, point: sheetStructure(baseOf(cur)) || 'Your sheet is missing a link.',
+    teach: `Look for an equation that connects <b>${e.vars.map(x => VARS[x].sym).join(', ')}</b>, in the library section “${sec.title}”: it’s for ${e.cue}.`,
+    bottom: `Gather <b>${e.label}</b>: ${e.form}. I’ve put it on your sheet.`, act: () => { if (!S.sheet.includes(miss.eq)){ S.sheet.push(miss.eq); renderAll(false); } } };
+}
+// what the sheet's equations can and can't pin down (C1's matching): an unknown no equation can take, and equations that add nothing
+function sheetStructure(target){
+  const ks = knownSet(), eqs = S.sheet.filter(applies), unk = (e) => unknownsOf(e, ks);
+  if (!eqs.length) return '';
+  const st = structure(eqs, unk), short = st.under.filter(u => u !== target && VARS[u]);
+  const parts = [];
+  if (short.length) parts.push(`You still need an equation with <b>${short.map(u => VARS[u].sym).join('</b> or <b>')}</b>: nothing on your sheet pins ${short.length > 1 ? 'them' : 'it'} down.`);
+  else if (st.missing.includes(target) || !eqs.some(e => EQS[e].vars.includes(target))) parts.push(`Nothing on your sheet holds your target, <b>${VARS[target] ? VARS[target].sym : target}</b>, with only knowns and things you can find.`);
+  if (st.extra.length) parts.push(`${st.extra.map(e => `<b>${EQS[e].label}</b>`).join(', ')} add${st.extra.length > 1 ? '' : 's'} nothing new: ${st.extra.length > 1 ? 'their' : 'its'} unknowns are already pinned down by the others.`);
+  return parts.join(' ');
+}
+let hintAt = { key: null, level: 0 };
 $('hintBtn').onclick = () => {
   if (solveLocked()) return;
-  const cur = curTarget();
-  if (!userGivens()){ say('Start with the givens: add the quantities your problem gives you.'); return; }
-  if (!S.condOk){ say('Set the conditions first. They decide which equations even apply.'); return; }
-  if (!S.targets.length){ say('Add a 🎯 target on your sheet: what does the question ask for?'); return; }
-  if (!cur){ say('All targets found! Press <b>Replay motion</b>.'); return; }
-  const ks = knownSet(), lp = shortest(appEqs(), ks, baseOf(cur));
-  if (!lp){ say('No route yet. ' + hook('stuck')); return; }
-  const sp = shortest(S.sheet.filter(applies), ks, baseOf(cur));
-  if (sp && sp[0].kind === 'sys'){ say(`Psst… <b>${sysLabel(sp[0], '</b> and <b>')}</b> share ${sp[0].eqs.length === 3 ? 'three unknowns, two at a time' : 'the same two unknowns'}: a system. Combine them.`); return; }
-  if (sp && sp[0].kind !== 'eq'){ const n = sp[0]; say(`Psst… on your <b>motion ladder</b>, you can ${MOVE_TXT[n.kind](n)}. ${n.v === cur ? 'That’s your target!' : 'That gets you closer.'}`); return; }
-  if (sp){ const n = sp[0]; say(`Psst… on your sheet, <b>${EQS[n.eq].label}</b> has just one unknown, <b>${symOf(n.v)}</b>. ${n.v === cur ? 'And it’s your target!' : 'Finding it gets you closer.'}`); return; }
-  const miss = lp.find(s => s.kind === 'eq' && !S.sheet.includes(s.eq));
-  if (!miss){ say('Your motion ladder can get there: look at the buttons on its rungs.'); return; }
-  const sec = chapter().sections.find(x => x.eqs.includes(miss.eq));
-  say(`Your sheet is missing a link. Look for an equation that connects <b>${EQS[miss.eq].vars.map(x => VARS[x].sym).join(', ')}</b>, in the library section “${sec.title}”.`);
+  if (!S.help.hints){ say('Hints are off in this stop: it checks what you can do on your own. You can still open the Map and redo the long stop.'); return; }
+  const h = hintFor();
+  if (typeof h === 'string'){ hintAt = { key: null, level: 0 }; say(h); return; }
+  hintAt = { key: h.key, level: hintAt.key === h.key ? Math.min(3, hintAt.level + 1) : 1 };
+  const lv = hintAt.level;
+  if (lv === 3){ h.act?.(); COURSE.bottomOut(); }
+  say(`<span class="hlv">${['', 'Hint', 'Teaching hint', 'Bottom-out hint'][lv]}</span> ${[0, h.point, h.teach, h.bottom][lv]}${lv < 3 ? ` <i>Press Hint again for more${COURSE.active && lv === 2 ? ' (the next one costs a star)' : ''}.</i>` : ''}`);
 };
 $('showBtn').onclick = async () => {
   if (S.busy || solveLocked()) return;
+  if (!S.help.showMe){ say('Show me is off in this stop of the lesson: choose the equations yourself. Hint still points the way.'); return; }
   if (!S.condOk || !S.targets.length){ say('Set the conditions and add a 🎯 target first, then I’ll walk the shortest path.'); return; }
   while (curTarget()){
     const goal = baseOf(curTarget());
@@ -1242,7 +1277,13 @@ $('checkSetup').onclick = () => {
   const p = S.bank; if (!p) return;
   const lines = []; let bad = 0;
   for (const [id, [mag, unit, dir]] of Object.entries(p.key.givens)){
-    const want = (dir ? -1 : 1) * sizeSI(id, mag, unit), g = S.givens[id];
+    const g = S.givens[id];
+    if (mag === null){ // the problem names it but gives no size: it must be a symbol (it cancels)
+      if (g && g.kind === 'symbol') lines.push(`✓ ${VARS[id].sym} as a symbol: the problem gives no value, so it must cancel`);
+      else { lines.push(`✗ ${VARS[id].sym} (${nm(id)}): the problem doesn’t give it. Add it as a <b>symbol</b>; it will cancel.`); bad++; }
+      continue;
+    }
+    const want = (dir ? -1 : 1) * sizeSI(id, mag, unit);
     if (!g){ lines.push(`✗ Missing a known: <b>${VARS[id].sym}</b> (${nm(id)}). ${want === 0 ? 'It’s hidden in the wording.' : ''}`); bad++; continue; }
     const close = (a, b) => Math.abs(a - b) <= 0.01 * Math.max(1e-9, Math.abs(b)) || (Math.abs(b) < 1e-9 && Math.abs(a) < 1e-9);
     if (g.kind === 'symbol'){
@@ -1672,7 +1713,7 @@ $('replayBtn').onclick = () => {
 
 // ---------- celebrate ----------
 function celebrate(){
-  fanfare();
+  fanfare(); setTimeout(() => COURSE.event('solved'), 600);
   say(`<b>Solved.</b> ${S.targets.map((t, i) => `${letter(i)} ${symOf(t)} = ${showVal(t)}`).join(', ')}.${K() ? ' Press <b>Replay motion</b> to watch it.' : ''}${S.bank ? ' Then try another from the practice bank.' : ''}`);
   if (calm()) return;
   const b = $('solved'); b.classList.remove('show'); void b.offsetWidth; b.classList.add('show'); setTimeout(() => b.classList.remove('show'), 1700);
@@ -2016,7 +2057,7 @@ function renderForceChips(){
 }
 // ---------- library drawer, add-a-given panel ----------
 // two drawers share the right edge: the equation library and the diagram library; opening one closes the other
-const DRAWERS = { libDrawer: 'libBtn', diagDrawer: 'diagBtn', nbDrawer: 'nbBtn' };
+const DRAWERS = { libDrawer: 'libBtn', diagDrawer: 'diagBtn', nbDrawer: 'nbBtn', courseDrawer: 'courseBtn' };
 function setDrawer(open, id = 'libDrawer'){
   for (const [d, b] of Object.entries(DRAWERS)){ const on = open && d === id; $(d).classList.toggle('open', on); $(b).setAttribute('aria-expanded', String(on)); }
 }
@@ -2024,6 +2065,7 @@ for (const [d, b] of Object.entries(DRAWERS)) $(b).onclick = () => setDrawer(!$(
 $('libClose').onclick = () => setDrawer(false);
 $('diagClose').onclick = () => setDrawer(false);
 $('nbClose').onclick = () => setDrawer(false);
+$('courseClose').onclick = () => setDrawer(false);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setDrawer(false); });
 // a component's card: its standard drawing, what it means, its properties, connections, arrows, equations and what to check
 function compHTML(k, tip = ''){
@@ -2658,6 +2700,67 @@ $('nbBtn').addEventListener('click', () => { if ($('nbDrawer').classList.contain
 $('boardBtn').onclick = () => { setDrawer(false); BV.render(); $('boardWrap').classList.add('show'); };
 $('boardX').onclick = () => $('boardWrap').classList.remove('show');
 
+// ---------- course (js/course.js): lessons, help switches, "What's wrong?" ----------
+S.help = { glow: true, showMe: true, hints: true };
+function setHelp(h){
+  S.help = { ...h };
+  document.body.classList.toggle('noglow', !h.glow);
+  $('showBtn').disabled = !h.showMe; $('hintBtn').disabled = !h.hints;
+}
+// a lesson stop's problem into the workspace, like a practice problem: text only, the student sets it up
+async function loadLesson(p, ch){
+  if (S.busy) return false;
+  if (S.path.length && curTarget() && !await ask('Start this stop?', `<b>THIS REPLACES UNFINISHED WORK</b>Your ${S.path.length} solved step${S.path.length > 1 ? 's' : ''} will be cleared, and a target is still open.`, 'Start it')) return false;
+  if (S.mode !== 'guided') setMode('guided');
+  switchChapter(ch); S.fbd = { body: null, forces: {} }; if (S.build.shapes.length) S.build.clear(); WS.clear(); S.board = null; NB.forget();
+  S.bank = { ...p, ch }; $('problem').value = p.text; S.lastStep = -1; S.stage = 0;
+  setDrawer(false); renderAll();
+  return true;
+}
+// "What's wrong?": run the solved path again with one small edit at a time (pack error handlers, SLIPS);
+// the first edit that turns the app's answer into yours names your slip
+function replay(edit = {}){
+  const v = {}, fns = {};
+  for (const [id, g] of Object.entries(S.givens)) v[id] = g.val;
+  for (const [id, f] of Object.entries(S.funcs)) if (f.from === 'given') fns[id] = X.ratToPoly(X.polyToRat(f.poly)).map(c => X.numValue(c));
+  if (edit.given) v[edit.given] = -v[edit.given];
+  S.path.forEach((p, i) => routeStep(i === edit.step ? { ...p, tree: edit.tree } : p, v, fns));
+  return v;
+}
+const swapTrig = (n) => !n || typeof n !== 'object' ? n : Array.isArray(n) ? n.map(swapTrig)
+  : Object.fromEntries(Object.entries(n).map(([k, x]) => [k, k === 'f' && (x === 'sin' || x === 'cos') ? (x === 'sin' ? 'cos' : 'sin') : swapTrig(x)]));
+const hasTrig = (n) => !!n && typeof n === 'object' && (n.f === 'sin' || n.f === 'cos' || Object.values(n).some(hasTrig));
+const SLIP_EDITS = {
+  // sin and cos swapped in one step
+  swapTrig: () => S.path.map((p, i) => p.kind === 'eq' && !p.gen && !p.fn && hasTrig(p.tree) ? { edit: { step: i, tree: swapTrig(p.tree) }, eq: EQS[p.eq].label } : null).filter(Boolean),
+  // one given, or the answer itself, the other way round
+  flipSign: (t) => [...Object.entries(S.givens).filter(([, g]) => g.val).map(([id]) => ({ edit: { given: id }, q: VARS[id].sym })), { edit: {}, flipAnswer: true, q: VARS[t].sym }],
+};
+function whatsWrong(t, typed){
+  if (!S.path.length || !known(t)) return null;
+  for (const slip of SLIPS) for (const c of SLIP_EDITS[slip.edit](t)){
+    let x; try { x = replay(c.edit)[t]; } catch { continue; }
+    if (c.flipAnswer) x = -x;
+    if (Number.isFinite(x) && sigMatch(x, typed)) return slip.says.replace('{eq}', c.eq || '').replace('{q}', c.q || '');
+  }
+  return null;
+}
+function checkAnswer(t, typed){
+  const n = Number(String(typed).replace('−', '-'));
+  if (!typed || !Number.isFinite(n)) return 'Type the number you got (in the unit shown).';
+  if (!known(t)) return `Solve for ${symOf(t)} here first; then I can compare it with yours.`;
+  const v = S.found[t] ? S.found[t].val : val(t);
+  if (sigMatch(v, typed)) return `✓ ${symOf(t)} = ${fmt(v)} ${unitOf(t)}: yours matches to the figures you wrote.`;
+  return `✗ The app gets ${symOf(t)} = ${fmt(v)} ${unitOf(t)}. Press <b>What’s wrong?</b> to test the usual slips.`;
+}
+const COURSE = S.course = createCourse({
+  lessons: LESSONS, vars: VARS, drawer: $('courseBody'), bar: $('lessonBar'), routeWrap: $('routeWrap'), kindWrap: $('kindWrap'),
+  app: { load: loadLesson, setHelp, say, ask, dialog, esc, openMap: () => setDrawer(true, 'courseDrawer'),
+    eqLabel: (e) => `${EQS[e].label} (${textOf(EQS[e].form)})`, eqKind: (e) => EQS[e].kind || 'law',
+    targets: () => S.targets.filter(t => VARS[t]).map(t => [t, `${letter(S.targets.indexOf(t))} ${VARS[t].plain}`, unitOf(t)]),
+    check: checkAnswer, wrong: (t, typed) => whatsWrong(t, typed) || 'None of the usual slips (sin and cos swapped, a sign flipped) gives your number. Compare your steps with the app’s, one line at a time.' },
+});
+
 // ---------- assemble ----------
 // θ → ω = dθ/dt → α = dω/dt (or x → v → a), with what you know on each rung; ∫dt back up needs a start value
 function calcHTML(){
@@ -2683,6 +2786,7 @@ function renderAll(full = true){
   if (S.givens.inc && S.givens.inc.kind !== 'symbol' && S.givens.inc.val >= 5 && S.givens.inc.val <= 75 && Math.abs(S.build.theta - S.givens.inc.val) > 1e-9) S.build.theta = S.givens.inc.val;
   renderKind(); renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSpan(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
   $('calcCond').innerHTML = $('calcSolve').innerHTML = calcHTML();
+  S.course?.syncTargets();
   $('axisNote').innerHTML = hook('slopeAxis') && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice). Pick the direction for each vector; the app sets the sign.' : chapter().axis;
   if (S.dtab !== 'motion') S.build.render(); // labels show given values; a wheel shows its button once ω or α is known
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();

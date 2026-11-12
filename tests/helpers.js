@@ -106,6 +106,7 @@ export const HIDDEN = {
   incline: { v0: 'rest', vf: 'stop', g: 'earth' },
   pulley: { v0: 'rest', a: 'steady', g: 'earth' },
   rotation: { w0: 'rest', w: 'stop' },
+  rolling: { K0: 'rest', U: 'ground', Wnc: 'smooth', g: 'earth' },
 };
 
 // Apply an answer key the way a student would: zero / g givens via their hidden-given condition,
@@ -122,7 +123,7 @@ export async function applyKey(page, p, { skip = [], flip = [], condOverride = {
     const c = hidden[id];
     const isHidden = c && (id === 'g' ? mag === 9.81 && !symbols : mag === 0);
     if (isHidden){ viaCond.add(c); continue; }
-    await addGiven(page, id, mag, unit, flip.includes(id) ? 1 - (dir || 0) : (dir || 0), { symbol: symbols });
+    await addGiven(page, id, mag, unit, flip.includes(id) ? 1 - (dir || 0) : (dir || 0), { symbol: symbols || mag === null }); // null: the problem gives no size
   }
   // hidden givens that the key doesn't use must be off (earth defaults on in incline/pulley)
   for (const c of new Set(Object.values(hidden))) await setCondition(page, c, viaCond.has(c));

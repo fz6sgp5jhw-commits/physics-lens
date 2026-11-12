@@ -10,9 +10,14 @@ export const PACKS = [mech];
 
 const PARTS = { quantities: 'quantity', equations: 'equation', chapters: 'unit', components: 'component' };
 
+// every problem a student sees names where it comes from, or says it is the app's own
+export function checkSource(p, x){
+  if (!x.original && !(x.source && x.source.work && x.source.license)) throw new Error(`Pack ${p.id}: problem “${x.title}” needs a source (work, edition, license, url, problem) or original: true.`);
+}
+
 // Merge packs into one set of tables. Throws, naming both packs, on a collision or a missing prefix.
 export function mergePacks(packs){
-  const out = { packs: {}, quantities: {}, equations: {}, chapters: {}, components: {}, practice: [], samples: {}, printOrder: [] };
+  const out = { packs: {}, quantities: {}, equations: {}, chapters: {}, components: {}, practice: [], lessons: [], slips: [], samples: {}, printOrder: [] };
   for (const p of packs){
     if (out.packs[p.id]) throw new Error(`Pack ${p.id} is loaded twice.`);
     out.packs[p.id] = p;
@@ -26,9 +31,15 @@ export function mergePacks(packs){
       if (q.sample !== undefined) out.samples[id] = q.sample;
     }
     for (const x of p.practice || []){
-      if (!x.original && !(x.source && x.source.work && x.source.license)) throw new Error(`Pack ${p.id}: practice problem “${x.title}” needs a source (work, edition, license, url, problem) or original: true.`);
+      checkSource(p, x);
       x.pack = p.id; out.practice.push(x);
     }
+    for (const l of p.lessons || []){
+      if (!p.bare && !l.id.startsWith(p.id + '_')) throw new Error(`Pack ${p.id}: the lesson id ${l.id} needs the prefix ${p.id}_.`);
+      for (const st of l.stops) checkSource(p, st.problem);
+      l.pack = p.id; out.lessons.push(l);
+    }
+    out.slips.push(...(p.slips || []));
     out.printOrder.push(...(p.printOrder || []));
   }
   return out;

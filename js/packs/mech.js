@@ -541,9 +541,9 @@ const EQS = {
     condition: 'K includes ½Iω²', calc: 'Add ∫F·dx for the centre and ∫τ dθ for the turning: each equals the change in its own kinetic energy.',
   },
   EN3: {
-    label: 'E3', eq: '{U0} = {M}{g}{h}', kind: 'def', cue: 'the rolling body starts higher up',
-    meaning: 'Gravitational potential energy of the rolling body, measured from where it ends.', condition: 'h measured from where it ends (U = 0 there)',
-    applies: c => c.body === 'roll', needs: 'a rolling body (the body: rolls without slipping)', calc: 'Gravity’s work on the way down is Mgh, stored as U₀.',
+    label: 'E3', eq: '{U0} = {M}{g}{h}', kind: 'def', cue: 'the body (its centre) starts higher up',
+    meaning: 'Gravitational potential energy of the body, from the height of its centre above where it ends.', condition: 'h measured from where it ends (U = 0 there)',
+    applies: c => c.body !== 'hang' && c.ground !== false, needs: 'the body itself moving up or down (not a hanging mass), with heights measured from where it ends', calc: 'Gravity’s work on the way down is Mgh, stored as U₀.',
   },
   EN4: {
     label: 'E4', eq: '{U0} = {m}{g}{h}', kind: 'def', cue: 'the hanging mass starts higher up',
@@ -617,6 +617,28 @@ const EQS = {
     solve: { v: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) }, R: null },
   },
   // ---- rolling down a ramp by forces (+ is down the slope) ----
+  EN9: {
+    label: 'E9', eq: '{U} = {M}{g}{h}', kind: 'def', cue: 'the body ends higher up than it started',
+    meaning: 'Gravitational potential energy at the end, with heights measured from the start (U₀ = 0 there): rolling up a ramp.', condition: 'h measured from where it starts (U₀ = 0 there)',
+    applies: c => c.body === 'roll' && c.ground === false, needs: 'a rolling body, with heights measured from the start (untick “Heights measured from where it ends”)', calc: 'Gravity’s work on the way up is −Mgh, stored as U.',
+  },
+  RO7: {
+    label: 'V7', eq: '{K0} = ½({M} + {Icm} / {R}²){v0}²', kind: 'rel', cue: 'a rolling body’s energy at the start, from its starting speed',
+    meaning: 'The shortcut V4 at the start: a body rolling at v₀ has ½Mv₀² + ½I_cm(v₀/R)².',
+    condition: 'rolls without slipping', applies: c => c.body === 'roll', needs: 'a rolling body',
+    calc: '½I_cm(v₀/R)² = ½(I_cm/R²)v₀², added to ½Mv₀².',
+    solve: { v0: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) }, R: null },
+  },
+  RO8: {
+    label: 'V8', eq: '{v0} = {R}{w0}', kind: 'rel', cue: 'rolls without slipping, and the start is given as a spin rate',
+    meaning: 'Rolling without slipping at the start: the centre’s speed is the radius times the angular speed.', condition: 'rolls without slipping',
+    applies: c => c.body === 'roll', needs: 'a rolling body', calc: 'The contact point is at rest, so the centre moves at Rω₀.',
+  },
+  GEO4: {
+    label: 'G4', eq: '{h} = {dx} sin {inc}', kind: 'rel', cue: 'a height and a distance along a ramp', meaning: 'The height gained or lost over a distance Δx along a ramp at angle θ.',
+    condition: 'a straight ramp', calc: 'Δx is the hypotenuse of a right triangle; h is the side opposite θ.',
+    solve: { inc: null },
+  },
   RF1: {
     label: 'D7', eq: '{M}{g} sin {inc} − {fs} = {M}{a}', kind: 'law', cue: 'a body rolling down a ramp: forces along the slope',
     meaning: 'Along the slope: the weight’s part down the slope minus static friction up the slope accelerates the centre.',
@@ -815,19 +837,20 @@ const CHAPTERS = {
     startCond: { body: 'roll', shape: 'sphere', axis: 'centre', ground: true, smooth: true, earth: true },
     title: 'Energy, rolling & L', short: 'Rolling', forcesOptional: true,
     vars: ['M', 'm', 'R', 'D', 'g', 'h', 'inc', 'a', 'alpha', 'v', 'w', 'fs', 'Tn', 'K0', 'K', 'U0', 'U', 'Wnc', 'Wnet', 'Ktr', 'Krot',
-      'I', 'Icm', 'L', 'dpa', 'tnet', 't', 'Li', 'Lf', 'Ii', 'If', 'wi', 'wf', 'rt', 'phi'],
+      'I', 'Icm', 'L', 'dpa', 'tnet', 't', 'Li', 'Lf', 'Ii', 'If', 'wi', 'wf', 'rt', 'phi', 'v0', 'w0', 'dx'],
     names: { M: 'mass of the rolling or spinning body', m: 'hanging mass (or a particle)', R: 'radius (where it rolls, or where the string unwinds)',
       a: 'acceleration of the centre (or of the hanging mass)', v: 'speed of the centre (or of the hanging mass, or a particle)', w: 'angular velocity at the end',
       Tn: 'tension in the string', tnet: 'net outside torque about the axis', t: 'time the outside torque acts',
-      rt: 'distance from the axis (to the particle or point mass)', phi: 'angle between r and the particle’s velocity' },
+      rt: 'distance from the axis (to the particle or point mass)', phi: 'angle between r and the particle’s velocity',
+      v0: 'speed of the centre at the start', w0: 'angular speed at the start', dx: 'distance along the ramp', h: 'height the centre drops (or climbs)' },
     dirs: { a: ['down the slope (or down)', 'up the slope (or up)'] },
     axis: '+ is <b>down the slope</b> (or down) for a, and <b>counterclockwise</b> for L and ω₁, ω₂. Energies carry their own sign: W<sub>nc</sub> is − when friction takes energy out.',
     stuck: 'Is the body set right in Conditions (rolling, a hanging mass on a disc, or spinning in place)? “Starts from rest” means K₀ = 0. For I, pick the shape and the axis. For L₁ = L₂, is there really no outside torque?',
     intro: `<p>A body that turns has kinetic energy of turning, <b>½Iω²</b>. A rolling body has both: its centre moves (½Mv²) and it turns about the centre (½I<sub>cm</sub>ω²). Rolling without slipping ties them together: <b>v = Rω</b>, so a body that turns more is slower down a ramp.</p>
       <p>Energy works when the question gives heights and speeds and no time: K₀ + U₀ + W<sub>nc</sub> = K + U. Static friction on a body rolling without slipping does no work. <b>Angular momentum</b> L = Iω stays the same when <b>no outside torque</b> acts: pull mass in, I drops, ω goes up.</p>`,
     sections: [
-      { title: 'Energy with rotation', note: 'Conservation of energy, the work–energy theorem, and the two kinds of kinetic energy.', eqs: ['EN1', 'EN2', 'EN3', 'EN4', 'EN5', 'EN6', 'EN7', 'EN8'] },
-      { title: 'Rolling without slipping', note: 'v = Rω and a = Rα, and the kinetic energy of a rolling body or of a disc turned by a hanging mass. The shortcuts put ω = v/R in for you.', eqs: ['RO1', 'RO2', 'RO3', 'RO4', 'RO5', 'RO6'] },
+      { title: 'Energy with rotation', note: 'Conservation of energy, the work–energy theorem, and the two kinds of kinetic energy.', eqs: ['EN1', 'EN2', 'EN3', 'EN4', 'EN9', 'EN5', 'EN6', 'EN7', 'EN8'] },
+      { title: 'Rolling without slipping', note: 'v = Rω and a = Rα, and the kinetic energy of a rolling body or of a disc turned by a hanging mass. The shortcuts put ω = v/R in for you.', eqs: ['RO1', 'RO2', 'RO3', 'RO4', 'RO5', 'RO6', 'RO7', 'RO8', 'GEO4'] },
       { title: 'Forces and torques', note: 'Rolling down a ramp by forces: ΣF along the slope and Στ about the centre. Στ = Iα for any body.', eqs: ['RF1', 'RF2', 'D2'] },
       { title: 'A disc turned by a hanging mass', note: 'Στ = Iα for the disc, ΣF for the mass, and the two as one system.', eqs: ['D4', 'D5', 'D6'], applies: c => c.body === 'hang', needs: 'a hanging mass turning a disc (the body: turned by a hanging mass)' },
       { title: 'Moments of inertia', note: 'Standard shapes about their centre, a rod about its end, a point mass, the parallel-axis theorem, and a diameter.', eqs: ['J5', 'J6', 'J3', 'J4', 'J1', 'J2', 'J7', 'J8', 'J9', 'GEO3'] },
@@ -1019,9 +1042,102 @@ const PRINT_ORDER = ['mu', 'mus', 'r', 'rt', 'R', 'm', 'M', 'm1', 'm2', 'mA', 'm
   'Hx', 'Hy', 'fs', 'tau', 'tnet', 'Wnet', 'Wnc', 'K0', 'K', 'Ktr', 'Krot', 'U0', 'U', 'Li', 'Lf', 'I', 'Icm', 'Ii', 'If', 'dpa', 'D', 'L', 'dP', 'dm', 'dT', 'dF', 'xh', 'hc', 'phi', 'beta',
   'dx', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'wi', 'wf', 'v', 'a', 'alpha', 'at', 'ac', 'atot', 'dth', 'dtrav', 'nrev', 'wavg', 'aavg', 't'];
 
+// ---------- course: lessons as data (phase C5, docs/core-plan.md section 8) ----------
+// Each lesson: long (full help, two routes that agree) → twin (same pathway, new scenario, no Show me or glow) →
+// transfer (looks different, same principle, no help). A stop's problem has the practice format plus `answers`
+// (the source's answers as written, compared within their significant figures). Prompts name the decision, never the answer.
+// js/packs/local.js (not in the repository: it stays on the student's device) can replace any stop's problem.
+const HANG = { body: 'hang', shape: 'disc', axis: 'centre', rest: true, ground: true, smooth: true, earth: true };
+const ROLL = { body: 'roll', shape: 'sphere', axis: 'centre', rest: true, ground: true, smooth: true, earth: true };
+const FULL = { glow: true, showMe: true, hints: true }, TWIN = { glow: false, showMe: false, hints: true }, NONE = { glow: false, showMe: false, hints: false };
+const LESSONS = [
+  {
+    id: 'disc', chapter: 'rolling', title: 'A disc turned by a hanging mass', objectives: ['Στ = Iα with a = Rα', 'energy with rotation', 'two routes agree'],
+    recap: 'The disc and the mass are tied by the string: a = Rα and v = Rω. By forces you need three equations (ΣF on the mass, Στ on the disc, a = Rα) solved together; by energy, one: the mass’s drop pays for ½mv² and ½Iω². Both routes give the same motion (check: v² = 2ah).',
+    stops: [
+      { kind: 'long', mode: 'guided', help: FULL,
+        prompts: [
+          { when: 'start', text: 'Draw it first: a disc on an axle, a string off its rim, a block hanging. Then add each given. Which body is it in Conditions?' },
+          { when: 'conditions', text: 'The disc turns on a fixed axle and the block hangs from it: that decides which equations apply. Does anything take energy out?' },
+          { when: 'solve', text: 'Part (a) asks for an acceleration and no height: forces and torques. Part (b) gives a height and asks a speed: energy.' },
+        ],
+        route: { laws: ['forces', 'energy'], why: 'The acceleration comes from forces and torques (ΣF on the block, Στ = Iα on the disc); the speed after a drop comes from energy, with no time needed.',
+          cues: ['The string doesn’t slip, so a = Rα and v = Rω', 'The disc is a uniform solid disc: I = ½MR²', 'Released from rest: K₀ = 0'],
+          decoys: ['The disc rolls along the floor', 'There is no outside torque, so L is conserved'] },
+        problem: { original: true, title: 'Block on a disc pulley', text: 'A 3.0 kg uniform solid disc of radius 0.40 m turns on a frictionless axle. A light string wound around its rim holds a 1.2 kg block, which is released from rest. (a) What is the block’s acceleration? (b) How fast is the block moving after it has fallen 1.5 m?',
+          key: { givens: { M: [3, 'kg'], R: [0.4, 'm'], m: [1.2, 'kg'], h: [1.5, 'm'], g: [9.81, 'm/s²'], K0: [0, 'J'], U: [0, 'J'], Wnc: [0, 'J'] }, cond: HANG, targets: ['a', 'v'] },
+          answers: { a: '4.36', v: '3.62' } } },
+      { kind: 'twin', mode: 'guided', help: TWIN,
+        prompts: [
+          { when: 'start', text: 'Same picture, new numbers and a new question. Show me is off: you choose each equation.' },
+          { when: 'solve', text: 'A height and a speed, no time: which law?' },
+        ],
+        route: { laws: ['energy'], why: 'A drop and a speed with no time asked: energy does it in one law. Forces work too, but need three equations and then kinematics.',
+          cues: ['The string doesn’t slip, so v = Rω', 'The disc is a uniform solid disc: I = ½MR²', 'Released from rest: K₀ = 0'],
+          decoys: ['The bucket and the cylinder stick together', 'The cylinder rolls without slipping on the ground'] },
+        problem: { original: true, title: 'Bucket on a windlass', text: 'A 2.0 kg bucket hangs from a rope wound around a 5.0 kg uniform solid cylinder of radius 0.25 m that turns freely on its axle. The bucket is released from rest. How fast is it moving after it has fallen 0.80 m?',
+          key: { givens: { M: [5, 'kg'], R: [0.25, 'm'], m: [2, 'kg'], h: [0.8, 'm'], g: [9.81, 'm/s²'], K0: [0, 'J'], U: [0, 'J'], Wnc: [0, 'J'] }, cond: HANG, targets: ['v'] },
+          answers: { v: '2.64' } } },
+      { kind: 'transfer', mode: 'guided', help: NONE,
+        prompts: [{ when: 'start', text: 'No help this time. A tension is a force: which equations hold a force?' }],
+        route: { laws: ['forces'], why: 'A tension is a force, so energy alone can’t give it: ΣF on the bucket and Στ = Iα on the cylinder, tied by a = Rα.',
+          cues: ['The rope doesn’t slip, so a = Rα', 'The cylinder is a uniform solid cylinder: I = ½MR²'],
+          decoys: ['Released from rest: K₀ = 0 gives the tension', 'The bucket falls at g'] },
+        problem: { original: true, title: 'Tension in the well rope', text: 'A 4.0 kg bucket of water hangs from a rope wound around a 10 kg uniform solid cylinder of radius 0.15 m that turns freely on its axle. The bucket is let go. What is the tension in the rope while the bucket falls?',
+          key: { givens: { M: [10, 'kg'], R: [0.15, 'm'], m: [4, 'kg'], g: [9.81, 'm/s²'] }, cond: { ...HANG, rest: false }, targets: ['Tn'] },
+          answers: { Tn: '21.8' } } },
+    ],
+  },
+  {
+    id: 'roll', chapter: 'rolling', title: 'Rolling down (and up) a ramp', objectives: ['rolling without slipping', 'K = ½Mv² + ½I_cmω²', 'solid vs hollow'],
+    recap: 'A rolling body shares its energy between moving and turning, so it is slower than a sliding one: v = √(2gh / (1 + I_cm/MR²)). Mass and radius cancel; only the shape (I_cm/MR²) matters, so a solid sphere beats a disc, which beats a hollow sphere or a ring.',
+    stops: [
+      { kind: 'long', mode: 'guided', help: FULL,
+        prompts: [
+          { when: 'start', text: 'Draw the ramp and the ball, then add the givens. In Conditions: what is the body doing, and what shape is it?' },
+          { when: 'conditions', text: 'Rolling without slipping: static friction acts but does no work. Which shape gives I_cm?' },
+          { when: 'solve', text: '(a) asks an acceleration: forces and torques about the centre. (b) gives a height: energy. When you’re done, switch the shape to a hollow sphere and solve again: which is faster?' },
+        ],
+        route: { laws: ['forces', 'energy'], why: 'The acceleration down the slope needs ΣF along the slope and Στ about the centre (friction makes it turn). The speed at the bottom comes from energy: the drop pays for moving and turning.',
+          cues: ['Rolls without slipping: a = Rα and v = Rω', 'A uniform solid sphere: I_cm = ⅖MR²', 'Released from rest: K₀ = 0'],
+          decoys: ['Friction takes energy out as it rolls', 'The axle is fixed, so all of K is turning'] },
+        problem: { original: true, title: 'Ball down a ramp', text: 'A 2.0 kg uniform solid sphere of radius 0.10 m is released from rest on a ramp inclined at 25° and rolls without slipping. (a) What is its acceleration down the ramp? (b) How fast is it moving after its centre has dropped 1.2 m?',
+          key: { givens: { M: [2, 'kg'], R: [0.1, 'm'], inc: [25, '°'], h: [1.2, 'm'], g: [9.81, 'm/s²'], K0: [0, 'J'], U: [0, 'J'], Wnc: [0, 'J'] }, cond: ROLL, targets: ['a', 'v'] },
+          answers: { a: '2.96', v: '4.10' } } },
+      { kind: 'twin', mode: 'guided', help: TWIN,
+        prompts: [
+          { when: 'start', text: 'Now it rolls up. Where do you measure heights from, and where is K zero?' },
+          { when: 'conditions', text: 'It starts at the bottom and ends higher up: untick “Heights measured from where it ends” and give U₀ = 0 at the start.' },
+          { when: 'solve', text: 'The start is a spin rate, the answer a distance along the ramp: which relationships turn one into the other?' },
+        ],
+        route: { laws: ['energy'], why: 'A starting speed and a stopping point, no time: energy. Its kinetic energy at the bottom (moving and turning) becomes height.',
+          cues: ['Rolls without slipping: v₀ = Rω₀', 'A uniform solid sphere: I_cm = ⅖MR²', 'A diameter is given: R = D/2', 'It stops at the top: K = 0', 'h = Δx sin θ along the ramp'],
+          decoys: ['Static friction takes energy out', 'No outside torque, so L is conserved'] },
+        problem: { original: true, title: 'Ball rolling up a ramp', text: 'A 0.50 kg uniform solid sphere of diameter 8.0 cm rolls without slipping up a ramp inclined at 20°, starting with an angular speed of 40 rad/s. How far along the ramp does it roll before it stops?',
+          key: { givens: { M: [0.5, 'kg'], D: [8, 'cm'], w0: [40, 'rad/s'], inc: [20, '°'], g: [9.81, 'm/s²'], U0: [0, 'J'], K: [0, 'J'], Wnc: [0, 'J'] }, cond: { ...ROLL, rest: false, ground: false }, targets: ['dx'] },
+          answers: { dx: '0.534' } } },
+      { kind: 'transfer', mode: 'guided', help: NONE,
+        prompts: [{ when: 'start', text: 'No help. It doesn’t roll: it swings about a pivot on its rim. Which I, and how far does the centre drop?' }],
+        route: { laws: ['energy'], why: 'A drop and a spin rate, no time: energy. All the kinetic energy is turning about the pivot, with I from the parallel-axis theorem.',
+          cues: ['It turns about a fixed pivot: K = ½Iω²', 'The pivot is on the rim: I = I_cm + MR²', 'The centre drops one radius'],
+          decoys: ['It rolls without slipping: v = Rω', 'No outside torque, so L is conserved'] },
+        problem: { original: true, title: 'Disc swinging on its rim', text: 'A uniform solid disc of radius 0.30 m hangs from a frictionless pivot at a point on its rim, so it can swing in its own plane. It is held with its centre level with the pivot and released from rest. What is its angular speed as its centre passes the lowest point?',
+          key: { givens: { M: [null, 'kg'], R: [0.3, 'm'], dpa: [0.3, 'm'], h: [0.3, 'm'], g: [9.81, 'm/s²'], K0: [0, 'J'], U: [0, 'J'], Wnc: [0, 'J'] }, cond: { body: 'spin', shape: 'disc', axis: 'other', rest: true, ground: true, smooth: true, earth: true }, targets: ['w'] },
+          answers: { w: '6.60' } } },
+    ],
+  },
+];
+
+// "What's wrong?" error handlers (plan section 8, after Andes): each names an edit app.js knows how to try on the solved path,
+// and what to say when that edit turns the app's answer into the student's. The most specific comes first.
+const SLIPS = [
+  { id: 'trig', edit: 'swapTrig', says: 'Your number is what you get with <b>sin and cos swapped</b> in {eq}. Check which side of the triangle is opposite the angle: the component along the angle’s side uses cos, the one across from it sin.' },
+  { id: 'sign', edit: 'flipSign', says: 'Your number is what you get with <b>{q} the other way round</b>: a sign slip. Check which way you took as + and the direction of {q}.' },
+];
+
 export default {
   id: 'mech', name: 'Mechanics', bare: true,
   // licences are open question 4 in docs/core-plan.md (CC BY-SA 4.0 is the recommendation for content)
   license: { code: 'not chosen yet', content: 'not chosen yet' },
-  quantities: VARS, equations: EQS, chapters: CHAPTERS, components: COMPONENTS, practice: PRACTICE, printOrder: PRINT_ORDER,
+  quantities: VARS, equations: EQS, chapters: CHAPTERS, components: COMPONENTS, practice: PRACTICE, lessons: LESSONS, slips: SLIPS, printOrder: PRINT_ORDER,
 };

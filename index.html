@@ -503,6 +503,24 @@
   .nbbtns{display:flex;flex-direction:column;gap:4px}
   .nbfoot{margin-top:10px}
   .warnbtn{color:var(--bad)}
+  /* course (js/course.js): the map, the lesson bar, the route card and the kind tap */
+  .clesson{margin:0 0 12px}
+  .clesson > b{color:var(--cy)}
+  .cstops{display:grid;gap:4px;margin-top:6px}
+  .cstop{display:grid;grid-template-columns:90px 1fr auto;gap:8px;text-align:left;align-items:center}
+  .cstop .ckind{font:700 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--gold-hi)}
+  .cstop.cur{outline:2px solid var(--amber)} .cstop.done .ckind::after{content:' ✓';color:var(--good)}
+  .cstars{color:var(--amber);letter-spacing:1px}
+  .lessonbar{display:grid;gap:4px;margin:0 0 6px;padding:6px 8px;border:2px solid var(--gold-lo);background:rgba(232,182,76,.08)}
+  .lessonbar[hidden]{display:none}
+  .lessonbar .lrow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .lessonbar .ltitle{font-weight:700;color:var(--gold-hi)}
+  .lessonbar input,.lessonbar select,.kbody select{font:13px var(--ui);color:var(--text);background:var(--inset);border:2px solid var(--line-hi);padding:3px 5px}
+  .rbody .rhead{margin:8px 0 2px;font:700 11px var(--ui);letter-spacing:.1em;text-transform:uppercase;color:var(--gold-hi)}
+  .rchoice{display:block;padding:3px 0;font-size:14px}
+  .rout p{margin:6px 0;font-size:14px}
+  .hlv{font:700 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--gold-hi);margin-right:4px}
+  #showBtn:disabled,#hintBtn:disabled{opacity:.45;cursor:not-allowed}
   /* board (js/board.js): cards coloured by state, arrows behind them */
   .boardwin{width:min(1180px,96vw);max-height:90vh;display:flex;flex-direction:column;border-image:var(--frame-hero) 6 / 6px stretch}
   .boardwin .body{display:flex;flex-direction:column;gap:6px;min-height:0}
@@ -659,7 +677,8 @@
     </div>
     <div class="tools" style="grid-column:3;grid-row:1">
       <div id="modeBtn" class="seg" role="group" aria-label="Mode" title="Remembered on this device; choosing Drawing first again forgets it"><button data-mode="draw" aria-pressed="true" title="Draw the problem, then set each part">Drawing first</button><button data-mode="guided" aria-pressed="false" title="Step by step: stages, sheet, Hint and Show me">Guided</button></div>
-      <button id="bankBtn" class="go guided-only" title="Practice problems: text only, you set them up">Practice bank</button>
+      <button id="bankBtn" class="go guided-only" title="Practice bank: problems as text only, you set them up">Practice</button>
+      <button id="courseBtn" aria-expanded="false" title="Lessons: long → twin → transfer, any stop in any order">Course</button>
       <button id="calmBtn" aria-pressed="false" title="Freeze the background field and turn off animations">Calm mode</button>
       <button id="soundBtn" aria-pressed="false" title="Soft blips (off by default)">Sound</button>
     </div>
@@ -675,6 +694,7 @@
         <div class="topics" id="chPick"></div>
         <div class="row" id="checkRow" style="display:none"><button class="go" id="checkSetup">✔ Check my setup</button><span class="small muted" id="bankTitle"></span></div>
       </div>
+      <div id="lessonBar" class="lessonbar" hidden aria-live="polite"></div>
       <textarea id="problem" rows="2" placeholder="Type or paste your problem here, or open the Practice bank."></textarea>
     </section>
 
@@ -799,6 +819,16 @@
   </div>
 </div>
 
+<aside id="courseDrawer" class="drawer" aria-label="Course map">
+  <div class="dhead"><h2>Course</h2><span class="small muted">Lessons and their stops</span><button class="x" id="courseClose" title="Close">×</button></div>
+  <div class="dbodyl" id="courseBody"></div>
+</aside>
+<div id="routeWrap" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="routeT">
+  <div class="win bankwin"><div class="titlebar"><h2 id="routeT">What’s the route?</h2></div><div class="body rbody"></div></div>
+</div>
+<div id="kindWrap" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="kindT">
+  <div class="win bankwin"><div class="titlebar"><h2 id="kindT">What kind of equation?</h2><button class="x kx" title="Cancel">×</button></div><div class="body kbody"></div></div>
+</div>
 <div id="bank" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="bankT">
   <div class="win bankwin">
     <div class="titlebar"><h2 id="bankT">Practice bank</h2><button class="x" id="bankX" title="Close">×</button></div>

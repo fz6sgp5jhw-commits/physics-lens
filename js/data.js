@@ -6,7 +6,7 @@ import { parse, parseEq, isolate, showTree, hasPM, evalNum, MathError, parseUnit
 import { PACKS, mergePacks } from './packs/index.js';
 
 const ALL = mergePacks(PACKS);
-export const { quantities: VARS, equations: EQS, chapters: CHAPTERS, components: COMPONENTS, practice: PRACTICE, printOrder: PRINT_ORDER } = ALL;
+export const { quantities: VARS, equations: EQS, chapters: CHAPTERS, components: COMPONENTS, practice: PRACTICE, lessons: LESSONS, slips: SLIPS, printOrder: PRINT_ORDER } = ALL;
 export { fmt };
 export const V = (id) => `<span class="sym" data-v="${id}">${VARS[id].sym}</span>`;
 
