@@ -31,7 +31,8 @@ export async function launch(){
 
 // Open the app at 1440×900 and collect console errors / page errors.
 // Guided mode (today's stages and sheet) unless { mode: 'draw' }: drawing-first, the app's default.
-export async function openApp(browser, url, { calm = true, mode = 'guided' } = {}){
+// { before(page) } runs before the first load (a test can route a file there).
+export async function openApp(browser, url, { calm = true, mode = 'guided', before } = {}){
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
@@ -39,6 +40,7 @@ export async function openApp(browser, url, { calm = true, mode = 'guided' } = {
   if (calm) await page.addInitScript(() => { try { localStorage.setItem('rl-calm', '1'); } catch {} });
   // only on the first load: a test that switches mode and reloads keeps what it chose
   await page.addInitScript((m) => { try { if (!sessionStorage.getItem('pl-test')){ sessionStorage.setItem('pl-test', '1'); if (m === 'draw') localStorage.removeItem('pl-mode'); else localStorage.setItem('pl-mode', m); } } catch {} }, mode);
+  if (before) await before(page);
   await page.goto(url);
   await page.waitForFunction(() => window.__rl && document.getElementById('steps').children.length > 0);
   return { page, errors };

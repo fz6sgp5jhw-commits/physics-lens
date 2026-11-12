@@ -527,6 +527,15 @@ function printRat(r, o){
 export const toText = (r, o) => printRat(r, { ...o, html: false, sym: o.plain || ((id) => id) });
 export const toHTML = (r, o) => printRat(r, { ...o, html: true, sym: o.html || ((id) => id) });
 
+// a number for the screen: 4 significant figures, powers of ten outside 0.001 … 100 000
+export function fmt(x){
+  if (!isFinite(x)) return String(x);
+  if (Math.abs(x) < 1e-10) return '0';
+  const a = Math.abs(x);
+  if (a >= 1e5 || a < 1e-3) return x.toExponential(3).replace(/\.?0+e/, 'e').replace('e+', '×10^').replace('e-', '×10^-');
+  return String(+x.toPrecision(4));
+}
+
 // ---------------------------------------------------------------- units
 // A unit string like "m/s²", "J/(mol·K)" or "μF" → dimension vector over the SI bases m, kg, s, A, K, mol.
 // Angles (°, rad, rev) are dimensionless. Every unit also has its size in SI units (unitFactor), written from the

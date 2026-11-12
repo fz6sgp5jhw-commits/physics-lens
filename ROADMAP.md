@@ -218,12 +218,18 @@ Testing in every C phase: while working, run `npm run test:fast` (Node-only, sec
 
 ## Phase C2: subject packs and one rule for diagrams
 **Start with:** `Do phases C2 and C3 in ROADMAP.md.` (session 2) Read plan sections 4 and 5; ask `code-scout` for every `S.ch ===` / `ch ===` branch in `app.js` before reading it.
-- [ ] Gate first (`tests/core-packs.test.js`): a test pack (`tests/fixtures/demo-pack.js`, P = P₀ + ρgh) loads, shows in the library and solves with Show me, with no `app.js` change; an id collision between packs is refused at load; no unit name (`'incline'`, `'pulley'`, `'rotation'`, `'torque'`, `'blocks'`) appears in `app.js`.
-- [ ] Pack registry (`js/packs/index.js`); mechanics moves to `js/packs/mech.js` (quantities with `py` and `sample`, equations, chapters, components, diagrams, practice). Mechanics ids stay bare; new packs prefix theirs.
-- [ ] The unit branches in `app.js` listed, grouped by what they decide, and each group made one hook with a default.
-- [ ] The free-body builder and `torque.js` wrapped as diagrams `{ kind, pack, equations(state), check(state) }`; behaviour unchanged.
-- [ ] Packs carry `license` (code, content) and every practice or lesson problem a `source` (work, edition, licence, url, problem) or `original: true`; an attribution list is built from them (plan section 4). Existing practice problems get their sources.
-- [ ] A short function index for `app.js` in `docs/architecture.md`. All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/core-packs.test.js`): a test pack (`tests/fixtures/demo-pack.js`, P = P₀ + ρgh) loads, shows in the library and solves with Show me, with no `app.js` change; an id collision between packs is refused at load; no unit name (`'incline'`, `'pulley'`, `'rotation'`, `'torque'`, `'blocks'`) appears in `app.js`.
+  Done: the test serves `js/packs/index.js` with the demo pack added (Playwright route; `openApp` takes `before`), switches to its unit, finds H1 in the library and solves P with Show me; collisions, missing prefixes and a pack loaded twice throw; a regex over app.js finds no quoted unit name. Pack ids use `<pack>_` (`demo_P`), not `<pack>.`: the app's `{(\w+)}` templates and CSS selectors can't take a dot.
+- [x] Pack registry (`js/packs/index.js`); mechanics moves to `js/packs/mech.js` (quantities with `py` and `sample`, equations, chapters, components, diagrams, practice). Mechanics ids stay bare; new packs prefix theirs.
+  Done: `js/packs/mech.js` holds all mechanics data (no imports but `fmt`, which moved to expr.js); `data.js` merges packs, keeps its exports and derives solvers. `py` defaults to the id; `sample` is on each quantity; `printOrder` per pack.
+- [x] The unit branches in `app.js` listed, grouped by what they decide, and each group made one hook with a default.
+  Done: 25 branches in 10 groups → `hook(k)` with defaults in `HOOKS` (startCond, slopeAxis, extended, points, angular, posLabel, flatPlus, presets, sim, stuck) plus `drawFirst` and the unit's `diagram` for the motion picture; a unit with no `kin` skips the picture and replay.
+- [x] The free-body builder and `torque.js` wrapped as diagrams `{ kind, pack, equations(state), check(state) }`; behaviour unchanged.
+  Done: `DIAGRAMS` in app.js (`extended` for beams and discs → torque.js, `fbd` otherwise), `diagramOf(b)`, `problems(b)`; both panels' Check and Write go through them. Checks return `{ ok, text }`; equations stay generated equations (Z forms).
+- [x] Packs carry `license` (code, content) and every practice or lesson problem a `source` (work, edition, licence, url, problem) or `original: true`; an attribution list is built from them (plan section 4). Existing practice problems get their sources.
+  Done: mechanics `license: { code: 'not chosen yet', content: 'not chosen yet' }` (open question 4); all 13 practice problems are `original: true`; `mergePacks` refuses a problem with neither; `attribution(packs)` lists licences, outside works with their problems, and the count of original ones.
+- [x] A short function index for `app.js` in `docs/architecture.md`. All tests pass. Cache bumped. One line here on what changed.
+  Done: index in `docs/architecture.md` ("app.js function index"); cache v21. **What changed in C2:** mechanics is a pack, a new subject is one pack file, app.js names no unit, and diagrams share one shape. Nothing changed for students.
 
 ## Phase C3: the next section (energy with rotation, rolling, angular momentum)
 **Start with:** done in session 2, after C2. Read plan section 9. The new entries go straight into `js/packs/mech.js`.
