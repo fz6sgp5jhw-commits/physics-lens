@@ -1,6 +1,7 @@
 import { VARS, EQS, CHAPTERS, PRACTICE, COMPONENTS, V, fmt, SAMPLE, PRINT_ORDER, DIMS, sizeSI, withUnit } from './data.js';
 import { createBuild, PALETTE } from './build.js';
 import * as X from './expr.js';
+import { readyBlocks, eliminate } from './systems.js';
 import { createField } from './field.js';
 import * as TQ from './torque.js';
 import { createSetup } from './setup.js';
@@ -162,16 +163,7 @@ function moves(eqList, ks){
     const u = solvable(e, ks); if (u) out.push({ kind: 'eq', eq: e, v: u, moment: EQS[e].vars.some(x => ks.has('m:' + x)) });
     const fu = fnSolvable(e, ks); if (fu) out.push({ kind: 'eq', eq: e, v: 'fn:' + fu, fn: true });
   }
-  for (let i = 0; i < eqList.length; i++){
-    const ua = unknownsOf(eqList[i], ks); if (ua.length !== 2) continue;
-    for (let j = i + 1; j < eqList.length; j++){
-      const ub = unknownsOf(eqList[j], ks);
-      if (ub.length !== 2 || !ua.every(x => ub.includes(x)) || !EQS[eqList[i]].vars.concat(EQS[eqList[j]].vars).every(x => ks.has(x) || ua.includes(x))) continue;
-      if (!zeroForm(eqList[i]) || !zeroForm(eqList[j])) continue;
-      for (const x of ua) out.push({ kind: 'sys', a: eqList[i], b: eqList[j], eqs: [eqList[i], eqList[j]], pair: ua, v: x });
-    }
-  }
-  for (const t of triples(eqList, ks)) for (const x of t.keeps) out.push({ kind: 'sys', ...t, v: x });
+  for (const b of systems(eqList, ks)) for (const x of b.keeps) out.push({ kind: 'sys', ...b, v: x });
   const L = ladder(); if (!L) return out;
   const f = (x) => ks.has('fn:' + x), R = L.rungs;
   for (let i = 0; i < R.length - 1; i++) if (f(R[i]) && !f(R[i + 1])) out.push({ kind: 'deriv', from: R[i], v: 'fn:' + R[i + 1] });
@@ -686,8 +678,9 @@ function renderSheet(){
     const sys = findSystem(ks);
     if (sys){
       const U = sys.pair.map(x => VARS[x].sym), la = EQS[sys.a].label, lb = EQS[sys.b].label;
-      const txt = sys.eqs.length === 3
-        ? `${sysLabel(sys, ', ')} hold three unknowns, ${U[0]}, ${U[1]} and ${U[2]}, two at a time: that’s a <b>system of three equations</b>. Solve one for an unknown and put it into another that holds it, then do it again: one equation with one unknown is left.`
+      const k = sys.eqs.length, words = ['', '', 'two', 'three', 'four', 'five', 'six'][k] || k;
+      const txt = k > 2
+        ? `${sysLabel(sys, ', ')} hold ${words} unknowns, ${U.slice(0, -1).join(', ')} and ${U[k - 1]}, and none of them can be found alone: that’s a <b>system of ${words} equations</b>. Solve one for an unknown and put it into another that holds it, then do it again: one equation with one unknown is left.`
         : `${la} and ${lb} share the same two unknowns, ${U[0]} and ${U[1]}: that’s a <b>system of two equations</b>. Solve ${la} for one of them and substitute it into ${lb}: it drops out, leaving one equation with one unknown.`;
       st.innerHTML += `<div class="sysnote">🧩 ${txt} <button class="go" id="sysBtn" style="margin-left:4px">Combine them ▶</button></div>`;
       $('sysBtn').onclick = () => combine(sys);
@@ -1688,67 +1681,31 @@ function zeroForm(e){
   }
   return null;
 }
-// three equations whose unknowns are three quantities, two in each (a disc, its string and the hanging mass: T and α,
-// T and a, a and α): a system of three. Pairs with the same two unknowns are left to the two-equation move.
-function triples(eqList, ks){
-  // only linear equations: then substituting one into another always works
-  const linear = (e, u) => { const Z = zeroForm(e); if (!Z) return false; return u.every(v => { const p = X.ratToPolyIn(Z, v); return p && p.length === 2; }); };
-  const two = eqList.map(e => ({ e, u: unknownsOf(e, ks) })).filter(x => x.u.length === 2 && linear(x.e, x.u));
-  const out = [], same = (p, q) => p.u.every(v => q.u.includes(v));
-  for (let i = 0; i < two.length; i++) for (let j = i + 1; j < two.length; j++) for (let k = j + 1; k < two.length; k++){
-    const [A, B, C] = [two[i], two[j], two[k]], us = [...new Set([...A.u, ...B.u, ...C.u])];
-    if (us.length !== 3 || same(A, B) || same(A, C) || same(B, C)) continue;
-    if (![A, B, C].every(x => EQS[x.e].vars.every(v => ks.has(v) || us.includes(v)))) continue;
-    // dependent equations (one follows from the other two) eliminate down to 0 = 0: offer only unknowns that survive
-    const keeps = us.filter(x => solvesFor([A.e, B.e, C.e], us, x));
-    if (keeps.length) out.push({ eqs: [A.e, B.e, C.e], a: A.e, b: B.e, pair: us, keeps });
-  }
-  return out;
+// Systems: equations that must be solved together, found by matching equations to unknowns and taking strongly
+// connected components (js/systems.js). Only blocks that can be solved now and that exact elimination can reduce
+// are offered, each with the unknowns it can be solved for (keeps).
+function systems(eqList, ks){
+  const unk = (e) => unknownsOf(e, ks);
+  const eqs = eqList.filter(e => unk(e).length && zeroForm(e));
+  return readyBlocks(eqs, unk).filter(b => b.eqs.length > 1)
+    .map(b => ({ eqs: b.eqs, a: b.eqs[0], b: b.eqs[1], pair: b.unknowns, keeps: b.unknowns.filter(x => solvesFor(b.eqs, b.unknowns, x)) }))
+    .filter(b => b.keeps.length);
 }
 const SYS_OK = new Map();
 function solvesFor(eqs, us, x){
   const key = `${eqs.join('+')}|${[...us].sort().join(',')}|${x}`;
   if (!SYS_OK.has(key)){
     let ok = false;
-    try { ok = !!eliminate(eqs.map(e => ({ Z: zeroForm(e), label: EQS[e].label })), us, x); } catch (e){ if (!(e instanceof X.MathError)) throw e; }
+    try { ok = !!eliminate(eqs.map(e => ({ Z: zeroForm(e), label: EQS[e].label })), us, x, plain); } catch (e){ if (!(e instanceof X.MathError)) throw e; }
     SYS_OK.set(key, ok);
   }
   return SYS_OK.get(key);
 }
 const sysLabel = (sys, sep = '+') => (sys.eqs || [sys.a, sys.b]).map(e => EQS[e].label).join(sep);
+// the first system on the sheet that hasn't been combined yet
 function findSystem(ks){
-  const eqs = S.sheet.filter(e => applies(e)), done = (list) => Object.values(S.gen).some(g => g.key === list.join('+'));
-  for (let i = 0; i < eqs.length; i++) for (let j = i + 1; j < eqs.length; j++){
-    const [a, b] = [eqs[i], eqs[j]], ua = unknownsOf(a, ks), ub = unknownsOf(b, ks);
-    if (ua.length !== 2 || ub.length !== 2 || !ua.every(x => ub.includes(x))) continue;
-    if (done([a, b])) continue;
-    if (!zeroForm(a) || !zeroForm(b)) continue;
-    return { a, b, eqs: [a, b], pair: ua };
-  }
-  return triples(eqs, ks).find(t => !done(t.eqs)) || null;
-}
-// Combine a system: solve one equation for an unknown and put it into the others that hold it, again and again,
-// until one equation with one unknown (keep, if given) is left. Every step is exact algebra on the Z = 0 forms.
-function eliminate(list, unknowns, keep){
-  let work = list.map(q => ({ ...q })), steps = [];
-  while (work.length > 1){
-    const has = (q, x) => X.symbolsOf(q.Z).has(x);
-    let moved = false;
-    for (const x of unknowns.filter(u => u !== keep)){
-      const holders = work.filter(q => has(q, x));
-      if (holders.length < 2) continue;
-      for (const src of holders){
-        let iso; try { iso = X.solveLinear(src.Z, x, plain(x)); } catch (e){ if (e instanceof X.MathError) continue; throw e; }
-        steps.push({ from: src.label, x, iso });
-        work = work.filter(q => q !== src).map(q => has(q, x) ? { Z: X.substRat(q.Z, { [x]: iso }), label: `${src.label}→${q.label}` } : q);
-        moved = true; break;
-      }
-      if (moved) break;
-    }
-    if (!moved) return null;
-  }
-  const left = unknowns.filter(u => X.symbolsOf(work[0].Z).has(u));
-  return left.length === 1 && (!keep || left[0] === keep) ? { Z: work[0].Z, x: left[0], steps } : null;
+  const done = (list) => Object.values(S.gen).some(g => g.key === list.join('+'));
+  return systems(S.sheet.filter(e => applies(e)), ks).find(b => !done(b.eqs)) || null;
 }
 function combine(sys, keep = null){
   if (solveLocked()) return null;
@@ -1758,7 +1715,7 @@ function combine(sys, keep = null){
   const list = eqs.map(e => ({ Z: zeroForm(e), label: EQS[e].label }));
   for (const k of keep ? [keep] : [...sys.pair].reverse()){
     let res;
-    try { res = eliminate(list, sys.pair, k); } catch (e){ if (!(e instanceof X.MathError)) throw e; res = null; }
+    try { res = eliminate(list, sys.pair, k, plain); } catch (e){ if (!(e instanceof X.MathError)) throw e; res = null; }
     if (!res) continue;
     const vars = [...new Set(eqs.flatMap(e => EQS[e].vars))].filter(v => X.symbolsOf(res.Z).has(v));
     const label = sysLabel(sys);

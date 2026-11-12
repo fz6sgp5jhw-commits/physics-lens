@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as X from '../js/expr.js';
 import { between, seedNote } from './rand.js';
+import { structure, readyBlocks, eliminate } from '../js/systems.js';
 
 const close = (a, b, tol = 1e-9) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(b));
 const dims = (o) => Object.fromEntries(Object.entries(o).map(([id, u]) => [id, X.parseUnit(u)]));
@@ -166,4 +167,57 @@ test('°C: Final B Q6, isobaric 600 → 1200 cm³ from 20 °C ends at 313 °C', 
   const T2 = X.fromSI(X.evalNum(iso.tree, v), '°C', abs);
   assert.ok(Math.abs(T2 - 313) < 0.5, `T₂ = ${T2} °C, the exam's answer is 313 °C`);
   assert.ok(Math.abs(2 * 20 - T2) > 200, 'doubling 20 °C (the slip the offset prevents) would give 40 °C');
+});
+
+// ---------------------------------------------------------------- systems: matching + strongly connected components
+// Test fixture: four blocks in a line on a smooth table, joined by strings, the last one hanging over a pulley.
+// Four equations hold a, T₁, T₂, T₃, and none can be found alone. F = m₁a afterwards is a block of its own.
+const CHAIN = {
+  N1: '{m1}{a} = {T1}', N2: '{m2}{a} = {T2} − {T1}', N3: '{m3}{a} = {T3} − {T2}', N4: '{m4}{a} = {m4}{g} − {T3}', F: '{F} = {m1}{a}',
+};
+const zOf = (src) => { const { lhs, rhs } = X.parseEq(src), ids = [...src.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
+  const env = Object.fromEntries(ids.map(id => [id, X.symbol(id)])); return { Z: X.zeroOf(X.toRat(lhs, env), X.toRat(rhs, env)), ids }; };
+const CH = Object.fromEntries(Object.entries(CHAIN).map(([id, src]) => [id, { ...zOf(src), label: id }]));
+const UNKNOWN = ['a', 'T1', 'T2', 'T3', 'F'];
+X.addSamples({ m1: 1, m2: 1, m3: 1, m4: 1, T1: 1, T2: 1, T3: 1, F: 1 });
+const unk = (e) => CH[e].ids.filter(x => UNKNOWN.includes(x));
+
+test('systems: four equations that must be solved together are one block, solved before F = m₁a', () => {
+  const st = structure(Object.keys(CH), unk);
+  assert.deepEqual(st.blocks.map(b => [...b.unknowns].sort()), [['T1', 'T2', 'T3', 'a'], ['F']], 'the block of four first, then F');
+  assert.deepEqual([...st.blocks[0].eqs].sort(), ['N1', 'N2', 'N3', 'N4']);
+  assert.deepEqual(st.missing, []); assert.deepEqual(st.extra, []);
+  assert.deepEqual(readyBlocks(Object.keys(CH), unk).map(b => b.eqs.length), [4], 'only the block of four can be solved now');
+});
+
+test('systems: exact elimination of the block of four gives a = m₄g / (m₁ + m₂ + m₃ + m₄), and every unknown checks', () => {
+  const list = ['N1', 'N2', 'N3', 'N4'].map(e => CH[e]), us = ['a', 'T1', 'T2', 'T3'];
+  for (let k = 0; k < 5; k++){
+    const v = { m1: between(0.5, 5), m2: between(0.5, 5), m3: between(0.5, 5), m4: between(0.5, 5), g: 9.8 };
+    const aWant = v.m4 * v.g / (v.m1 + v.m2 + v.m3 + v.m4);
+    const want = { a: aWant, T1: v.m1 * aWant, T2: (v.m1 + v.m2) * aWant, T3: (v.m1 + v.m2 + v.m3) * aWant };
+    for (const x of us){
+      const res = eliminate(list, us, x);
+      assert.ok(res && res.x === x, `the block can be reduced to one equation in ${x}`);
+      assert.equal(res.steps.length, 3, 'three unknowns eliminated, one step each');
+      const got = X.evalRat(X.solveLinear(res.Z, x), v);
+      assert.ok(close(got, want[x]), `${x} = ${got}, want ${want[x]} ${seedNote}`);
+    }
+  }
+});
+
+test('systems: an unknown no equation can take is missing; a second equation for the same thing is extra', () => {
+  // without N4 nothing ties the chain to the hanging block: four unknowns, three equations
+  const short = structure(['N1', 'N2', 'N3'], unk);
+  assert.equal(short.missing.length, 1, 'one unknown is short of an equation');
+  assert.deepEqual([...short.under].sort(), ['T1', 'T2', 'T3', 'a'], 'and it leaves the whole chain undetermined');
+  assert.deepEqual(readyBlocks(['N1', 'N2', 'N3'], unk), []);
+  // N1 written twice adds nothing new
+  CH.N1b = { ...CH.N1, label: 'N1b' };
+  try {
+    const twice = structure(['N1', 'N1b', 'N2', 'N3', 'N4'], unk);
+    assert.equal(twice.extra.length, 1, 'one equation is extra');
+    assert.deepEqual([...twice.blocks[0].unknowns].sort(), ['T1', 'a'], 'the two N1s now pin a and T₁ alone, the smaller block');
+    assert.deepEqual(twice.blocks.slice(1).map(b => b.unknowns.join()).sort(), ['T2', 'T3'], 'then T₂ and T₃ one at a time');
+  } finally { delete CH.N1b; }
 });
