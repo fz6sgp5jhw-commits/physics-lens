@@ -14,6 +14,7 @@ import { createNotebook } from './notebook.js';
 import { fromPath, createBoardView } from './board.js';
 import { createMC } from './mc.js';
 import { createCourse, sigMatch } from './course.js';
+import { createGuide } from './guide.js';
 import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms } from './pick.js';
 
 const $ = (id) => document.getElementById(id);
@@ -718,10 +719,10 @@ function renderSheet(){
       if (S.busy) return;
       if (ev.target.closest('[data-solve], [data-check]') && solveLocked()) return;
       if (ev.target.closest('[data-rm]')){ S.sheet = S.sheet.filter(x => x !== e); renderAll(false); return; }
-      const sb = ev.target.closest('[data-solve]'); if (sb){ solve(e, sb.dataset.solve); return; }
+      const sb = ev.target.closest('[data-solve]'); if (sb){ const n = S.path.length; solve(e, sb.dataset.solve).then(() => { if (S.path.length > n) S.guide?.correct(); }); return; }
       if (ev.target.closest('[data-check]')){ check(e); return; }
       if (ev.target.closest('.sym')) return;
-      if (ok && u.length > 1) dialog('Illegal operation', `<b>TOO MANY UNKNOWNS</b>${eq.label} still has <b>${u.length}</b> unknowns: ${u.map(x => VARS[x].sym).join(' and ')}. One equation can only pin down one unknown. Find one of them first and this one will light up.`);
+      if (ok && u.length > 1){ S.guide?.wrong(); dialog('Illegal operation', `<b>TOO MANY UNKNOWNS</b>${eq.label} still has <b>${u.length}</b> unknowns: ${u.map(x => VARS[x].sym).join(' and ')}. One equation can only pin down one unknown. Find one of them first and this one will light up.`); }
     });
     box.appendChild(card);
   }
@@ -1284,6 +1285,7 @@ $('showBtn').onclick = async () => {
   if (S.busy || solveLocked()) return;
   if (!S.help.showMe){ say('Show me is off in this stop of the lesson: choose the equations yourself. Hint still points the way.'); return; }
   if (!S.condOk || !S.targets.length){ say('Set the conditions and add a 🎯 target first, then I’ll walk the shortest path.'); return; }
+  COURSE.bottomOut();   // Show me is always there in a lesson that allows it, and it costs a star
   while (curTarget()){
     const goal = baseOf(curTarget());
     if (known(goal)){ say(isRank(curTarget()) ? 'To rank the cases, add at least two complete rows to the scenario table.' : ''); return; }
@@ -2830,8 +2832,76 @@ const COURSE = S.course = createCourse({
   app: { load: loadLesson, setHelp, say, ask, dialog, esc, openMap: () => setDrawer(true, 'courseDrawer'),
     eqLabel: (e) => `${EQS[e].label} (${textOf(EQS[e].form)})`, eqKind: (e) => EQS[e].kind || 'law',
     targets: () => S.targets.filter(t => VARS[t]).map(t => [t, `${letter(S.targets.indexOf(t))} ${VARS[t].plain}`, unitOf(t)]),
-    check: checkAnswer, wrong: (t, typed) => whatsWrong(t, typed) || 'None of the usual slips (a unit mix-up, sin and cos swapped, a sign flipped, a term left out) gives your number. Compare your steps with the app’s, one line at a time.' },
+    step: (ok) => S.guide?.[ok ? 'correct' : 'wrong'](),
+    check: (t, typed) => { const r = checkAnswer(t, typed); if (/^[✓✗]/.test(r)) S.guide?.[r[0] === '✓' ? 'correct' : 'wrong'](); return r; }, wrong: (t, typed) => whatsWrong(t, typed) || 'None of the usual slips (a unit mix-up, sin and cos swapped, a sign flipped, a term left out) gives your number. Compare your steps with the app’s, one line at a time.' },
 });
+
+// ---------- the fading guide (phase G2) ----------
+const DEMO_P = PRACTICE.find(p => p.title === 'Crate with friction');
+let demoFrom = null;
+function highlight(sel){
+  document.querySelectorAll('.guide-pulse').forEach(x => x.classList.remove('guide-pulse'));
+  const t = sel && document.querySelector(sel); if (t){ t.classList.add('guide-pulse'); t.scrollIntoView({ block: 'nearest' }); }
+}
+const showStage = (n) => { S.stage = n; renderStage(); };
+// each demo step does what it says with the app's own functions, then the caption names the control and why
+const DEMO_RUN = {
+  async load(){ await loadLesson(DEMO_P, DEMO_P.ch); showStage(0); },
+  async givens(){
+    for (const [id, [mag, unit, dir]] of Object.entries(DEMO_P.key.givens)) if (id !== 'g') S.givens[id] = { from: 'you', mag, unit, dir: dir || 0, val: (dir ? -1 : 1) * sizeSI(id, mag, unit) };
+    renderAll(false); showStage(0);
+  },
+  async conds(){ showStage(2); Object.assign(S.cond, DEMO_P.key.cond); S.condOk = true; applyHidden(); clearDerived(); renderAll(false); showStage(2); },
+  async target(s){
+    showStage(3); addTarget(DEMO_P.key.targets[0]);
+    const lp = shortest(appEqs(), knownSet(), curTarget()) || [], pl = curPlan();
+    const more = lp.map((m, i) => ({ target: '#sheet', stage: 3, run: 'step', move: m, text: '' }));
+    return { text: `Target: <b>${symOf(curTarget())}</b>, what the question asks for. Naming it first tells you what to look for. ${pl.lines.slice(0, 2).join(' ')} Next, the <b>Equation library</b> (Gather) and the <b>sheet</b> (Solve ▶), once per equation.`,
+      more: [...more, { target: '#hintBtn', stage: 3, text: 'Stuck? <b>Hint</b> nudges without solving, and <b>What am I looking for?</b> names the principle. <b>Show me the path</b> does it for you, and costs a star in a lesson.' }] };
+  },
+  async step(s){
+    const m = s.move; showStage(3);
+    if (m.kind === 'eq'){ if (!S.sheet.includes(m.eq)) gather(m.eq); await solve(m.eq, m.v); }
+    else if (m.kind === 'sys') await sysOp(m); else await ladderOp(m);
+    const e = m.kind === 'eq' ? EQS[m.eq] : null;
+    return { text: e ? `Library → <b>+ Gather ${e.label}</b>: ${e.form} (${e.principle || e.cue}). Then <b>Solve for ${symOf(m.v)} ▶</b> on its card: the algebra appears in the Work panel, symbols first. Now ${symOf(m.v)} = ${showVal(m.v)}.` : `That step uses a system or the motion ladder: ${symOf(m.v)} = ${showVal(m.v)}.` };
+  },
+};
+const GUIDE = S.guide = createGuide({
+  card: $('guideCard'),
+  app: {
+    say, highlight,
+    snapshot: () => ({
+      shapes: S.build.shapes.map(x => ({ id: x.id, kind: x.kind })),
+      strings: S.build.shapes.filter(x => x.kind === 'string').map(x => (x.ends || []).map(id => S.build.shapes.find(y => y.id === id)?.kind)),
+      forces: Object.fromEntries(Object.entries(S.fbd.forces).map(([id, fs]) => [id, fs.map(f => f.kind)])),
+    }),
+    stopGuide: () => (COURSE.active && COURSE.stop.guide) || null,
+    stopKey: () => COURSE.active ? `${COURSE.lesson.id}/${COURSE.stop.kind}` : 'open',
+    demo: {
+      async begin(){
+        if (S.busy) return null;
+        if ((S.path.length || userGivens()) && !await ask('Run the demo?', '<b>THIS REPLACES YOUR WORK</b>The demo solves its own example, so your givens, sheet and answers are cleared. You can start your problem again afterwards.', 'Run it')) return null;
+        demoFrom = COURSE.active ? [COURSE.lesson.id, COURSE.stop.kind] : null;
+        if (COURSE.active) COURSE.leave();
+        resetAll(false);
+        return [
+          { target: '#problem', stage: 0, run: 'load', text: `<b>The problem.</b> Read it for two things: what is given, and what is asked. “${esc(DEMO_P.text)}”` },
+          { target: '.strip', stage: 0, run: 'givens', text: '<b>Givens.</b> Each number in the text goes in with its unit (the palette under “+ Add a given”), so you always see what is known. g comes from the condition “Earth”.' },
+          { target: '#condCard', stage: 2, run: 'conds', text: '<b>Conditions.</b> What the picture can’t show, like friction or which way it moves. They decide which equations apply.' },
+          { target: '#targets', stage: 3, run: 'target', text: '' },
+        ];
+      },
+      async run(step){ const r = await DEMO_RUN[step.run](step); if (r && r.text) step.text = r.text; return r; },
+      async end(){
+        if (demoFrom){ const [l, k] = demoFrom; demoFrom = null; await COURSE.open(l, k); }
+        else { resetAll(false); $('problem').value = ''; S.stage = 0; renderAll(); say('Now your turn: type or paste your problem, or open a practice problem, and make the same moves.'); }
+        highlight(null);
+      },
+    },
+  },
+});
+GUIDE.render();
 
 // ---------- assemble ----------
 // θ → ω = dθ/dt → α = dω/dt (or x → v → a), with what you know on each rung; ∫dt back up needs a start value

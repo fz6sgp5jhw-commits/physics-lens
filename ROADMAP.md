@@ -30,11 +30,13 @@ G3 needs the checks from session 1 and the levels from session 3, so it cannot m
 
 ## Phase G2: fading guide levels and a demo first
 **Start with:** `Do phase G2 in ROADMAP.md.` Read `js/course.js` (help switches, stars); new code in `js/guide.js`.
-- [ ] Gate first (`tests/guide.test.js`): three levels (Walk me through, Prompt me, On my own); a correct step drops the level one notch; wrong steps raise it; Show me always available and costs a star; the level is stored in `pl-guide`, validated, with a visible way to clear it.
-- [ ] Demo first: the first time (and on request) the app solves a short example while naming each control it uses and why; the student then repeats the same moves on their own problem. This is the top level.
-- [ ] Walk me through: the app asks about the diagram and the forces first (draw the disc, the string, the block; tension on both; weight on the block), checks the drawing and explains why each force is there.
-- [ ] Prompt me: questions before equations ("what is the block's net force? what turns the disc?"); the answer chosen is used in the explanation.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/guide.test.js`): three levels (Walk me through, Prompt me, On my own); a correct step drops the level one notch; wrong steps raise it; Show me always available and costs a star; the level is stored in `pl-guide`, validated, with a visible way to clear it.
+- [x] Demo first: the first time (and on request) the app solves a short example while naming each control it uses and why; the student then repeats the same moves on their own problem. This is the top level.
+- [x] Walk me through: the app asks about the diagram and the forces first (draw the disc, the string, the block; tension on both; weight on the block), checks the drawing and explains why each force is there.
+- [x] Prompt me: questions before equations ("what is the block's net force? what turns the disc?"); the answer chosen is used in the explanation.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+- What changed (G2): new `js/guide.js`: levels `demo` > `walk` > `prompt` > `own` kept in `pl-guide` (`{v, level, demo}`, validated; `#guideClear` "Forget my level" clears it); a correct step (a solve, a right kind tap, route, answer or guide question) drops one notch, a wrong one raises it (never back to the demo). Card `#guideCard` in the right column. Walk me through reads the drawing (`snapshot`: shapes, strings, forces) against the stop's `guide.walk` (data in `mech.js`, disc lesson's long stop) and says why each is there; Prompt me asks `guide.ask` one question at a time and the explanation quotes the answer chosen. Demo (`#guideDemo`, steps `#demoNext`/`#demoDone`): the app loads the "Crate with friction" practice problem and really enters its givens, conditions and target, then gathers and solves each equation of the shortest route, one Next at a time, naming the control and why; at the end it reopens the student's stop (or an empty workspace). Show me now costs a star (course test updated on purpose: the disc/long stop ends with 1 star). Gate: `tests/guide.test.js` (8). Walk and Prompt data exist only for the disc lesson's long stop so far.
+
 
 ## Phase G3: the student does the algebra in guided mode
 **Start with:** `Do phase G3 in ROADMAP.md.` Needs session 1 (checks) and G2 (levels). Reuse `js/algebra.js`; do not rebuild it.

@@ -141,7 +141,7 @@ test('the map, route card, kind tap, help switches, stars and progress', async (
 
     // progress: the long stop is done, with its stars, in pl-course
     const prog = await page.evaluate(() => JSON.parse(localStorage.getItem('pl-course')));
-    assert.deepEqual(prog.stops['disc/long'], { done: true, stars: 2 });
+    assert.deepEqual(prog.stops['disc/long'], { done: true, stars: 1 });
 
     // the twin: Show me and glow are off
     await openStop(page, 'disc/twin');

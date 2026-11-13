@@ -199,7 +199,7 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
     const out = el('div', { className: 'rout', ariaLive: 'polite' });
     const check = el('button', { className: 'go', id: 'routeCheck', textContent: 'Check my route' });
     const done = el('button', { id: 'routeDone', textContent: 'Carry on' });
-    check.onclick = () => out.replaceChildren(...grade([...box.querySelectorAll('[name=law]:checked')].map(x => x.value), [...box.querySelectorAll('[name=cue]:checked')].map(x => x.value)).map(t => el('p', { textContent: t })));
+    check.onclick = () => { const g = grade([...box.querySelectorAll('[name=law]:checked')].map(x => x.value), [...box.querySelectorAll('[name=cue]:checked')].map(x => x.value)); app.step?.(g[0].startsWith('✓')); out.replaceChildren(...g.map(t => el('p', { textContent: t }))); };
     done.onclick = () => { cur.routeDone = true; routeWrap.classList.remove('show'); };
     box.replaceChildren(el('p', { className: 'small', textContent: 'Before you solve: which law(s) will you use, and what in the picture brings in the relationships you need?' }),
       el('div', { className: 'rhead', textContent: 'Law(s)' }), ...lawBoxes, el('div', { className: 'rhead', textContent: 'Cues in the picture' }), ...cueBoxes,
@@ -236,6 +236,7 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
       go.onclick = () => {
         if (!kind){ out.replaceChildren(el('p', { textContent: 'Pick law, relationship or definition first.' })); return; }
         const ok = kind === want, reasonOk = why.value === want;
+        app.step?.(ok);
         out.replaceChildren(el('p', { textContent: ok ? `✓ Yes: it’s ${KIND_NAMES[want]}.` : `✗ It’s ${KIND_NAMES[want]}, not ${KIND_NAMES[kind]}. ${REASONS.find(x => x[0] === want)[1]}.` }),
           ...(why.value && !reasonOk ? [el('p', { textContent: `✗ That reason fits ${KIND_NAMES[why.value]}.` })] : []));
         put.hidden = false; put.focus();

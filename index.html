@@ -250,6 +250,11 @@
   .eq.dim{opacity:.6}
   .eq.faded{opacity:.35}
   /* equation cards glow when they can be solved */
+  .guidecard{padding:6px 10px}
+  .guidecard .guidebar{flex-wrap:wrap;gap:4px 6px;align-items:center}
+  .guidewalk{list-style:none;margin:6px 0 0;padding:0;font-size:13px} .guidewalk li.next{color:var(--gold-hi)} .guidewalk li.done{color:#6ee7a0}
+  .guideok{color:#6ee7a0} .guidebad{color:var(--gold-hi)}
+  .guide-pulse{outline:3px solid #4fd1ff;outline-offset:3px}
   .eq.suggest,.lib-eq.suggest{outline:2px dashed #4fd1ff;outline-offset:2px}
   .lookhere{color:#4fd1ff;font-weight:700}
   #lookPop{left:50%;top:120px;transform:translateX(-50%);width:min(520px,92vw);max-height:70vh;overflow:auto}
@@ -804,6 +809,7 @@
     <section class="card draw-only" id="dfCard" aria-live="polite"></section>
     <section class="card draw-only" id="dfKnowns"></section>
     <section class="card draw-only" id="dfWork"></section>
+    <section class="card guidecard" id="guideCard" data-stage="0 1 2 3" hidden aria-live="polite"></section>
     <section class="card" id="condCard" data-stage="2">
       <div class="titlebar"><h2>Conditions</h2><button id="condOk">✓ These conditions are right</button></div>
       <div class="body"><div class="calc" id="calcCond"></div><div id="conds"></div></div>

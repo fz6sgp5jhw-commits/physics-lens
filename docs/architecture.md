@@ -124,3 +124,5 @@ Run everything with `node --test tests/*.test.js` (Node's test runner; `playwrig
 - Condensing and drag (phases 8b, 9) live in `algebra.js`: `pieces`, `setAt`, `replacePiece`, `moveAcross`, `moveFactor`; lines carry `op` and `one` (what made them) so a check can say why a line fails; `fixed` lines (numbers last) have no term buttons.
 - Tests: `tests/drawfirst-knowns.test.js`, `tests/drawfirst-toolkit.test.js`, `tests/drawfirst-algebra.test.js`, `tests/drawfirst-checks.test.js`, `tests/drawfirst-drag.test.js`.
 
+
+- `js/guide.js` (phase G2): the fading guide. `createGuide({ card, app })`; `readGuide` validates `pl-guide`; `drawn`/`walkStatus` check a stop's `guide.walk` items against `app.snapshot()`; `askJudge` judges a `guide.ask` option. The demo runs `DEMO_RUN` in `app.js` (real givens, conditions, target, gather, solve) and `enter()` splices the route steps in after the target step. `S.guide.state()` for tests.

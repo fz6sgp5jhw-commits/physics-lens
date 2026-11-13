@@ -1252,6 +1252,25 @@ const LESSONS = [
         route: { laws: ['forces', 'energy'], why: 'The acceleration comes from forces and torques (ΣF on the block, Στ = Iα on the disc); the speed after a drop comes from energy, with no time needed.',
           cues: ['The string doesn’t slip, so a = Rα and v = Rω', 'The disc is a uniform solid disc: I = ½MR²', 'Released from rest: K₀ = 0'],
           decoys: ['The disc rolls along the floor', 'There is no outside torque, so L is conserved'] },
+        // the guide (js/guide.js): what to draw and why, and the questions to answer before any equation
+        guide: {
+          walk: [
+            { say: 'Draw the disc on its axle.', needs: { shape: 'wheel' }, why: 'The disc is the body that turns, so Στ = Iα is written for it.' },
+            { say: 'Draw the block hanging below it.', needs: { shape: 'block' }, why: 'The block is the body that falls, so ΣF = ma is written for it.' },
+            { say: 'Join them with a string from the rim to the block.', needs: { string: ['wheel', 'block'] }, why: 'The string carries the pull between them, and it is why a = Rα.' },
+            { say: 'Draw the tension on the disc, at its rim.', needs: { force: { on: 'wheel', kind: 'tension' } }, why: 'It acts at the rim, a distance R from the axle, so it is the one force that turns the disc.' },
+            { say: 'Draw the tension on the block, pulling up.', needs: { force: { on: 'block', kind: 'tension' } }, why: 'The string pulls the block up, against its weight.' },
+            { say: 'Draw the block’s weight, pulling down.', needs: { force: { on: 'block', kind: 'gravity' } }, why: 'Gravity pulls down; the weight minus the tension is the net force that accelerates it.' },
+          ],
+          ask: [
+            { q: 'What is the block’s net force?', why: 'That is ΣF = ma for the block: weight down minus tension up, so it falls slower than free fall.',
+              options: [{ t: 'its weight minus the string’s pull', right: true }, { t: 'its weight alone', why: 'With only its weight it would fall freely at g; the string holds it back.' }, { t: 'the string’s pull alone', why: 'The string pulls up, but gravity pulls down too.' }] },
+            { q: 'What turns the disc?', why: 'Only the tension acts at the rim, with lever arm R, so Στ = TR = Iα.',
+              options: [{ t: 'the string’s tension at the rim', right: true }, { t: 'the disc’s weight', why: 'Its weight acts at the centre, on the axle: no lever arm, so no torque.' }, { t: 'the axle’s force', why: 'It also acts at the centre, so it has no lever arm either.' }] },
+            { q: 'What ties the block’s acceleration to the disc’s?', why: 'The string does not slip on the rim, so the block moves as the rim does: a = Rα.',
+              options: [{ t: 'the string doesn’t slip: a = Rα', right: true }, { t: 'they have the same mass', why: 'Mass does not link motions; the string’s length does.' }, { t: 'they both feel gravity', why: 'Gravity acts on both, but it does not say how fast the disc turns.' }] },
+          ],
+        },
         problem: { original: true, title: 'Block on a disc pulley', text: 'A 3.0 kg uniform solid disc of radius 0.40 m turns on a frictionless axle. A light string wound around its rim holds a 1.2 kg block, which is released from rest. (a) What is the block’s acceleration? (b) How fast is the block moving after it has fallen 1.5 m?',
           key: { givens: { M: [3, 'kg'], R: [0.4, 'm'], m: [1.2, 'kg'], h: [1.5, 'm'], g: [9.81, 'm/s²'], K0: [0, 'J'], U: [0, 'J'], Wnc: [0, 'J'] }, cond: HANG, targets: ['a', 'v'] },
           answers: { a: '4.36', v: '3.62' } } },
