@@ -482,6 +482,20 @@
   #matters .rank{font:14px var(--mono);color:var(--found)}
   #matters .statics p.ok b{color:var(--good)} #matters .statics p.bad b{color:var(--bad)}
 
+  /* multiple-choice aid (js/mc.js) */
+  .mcwin{width:min(820px,96vw);max-height:90vh;display:flex;flex-direction:column;border-image:var(--frame-hero) 6 / 6px stretch}
+  .mcwin .body{overflow-y:auto;min-height:0}
+  .mctabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+  .mcpanel{display:grid;gap:8px} .mcpanel[hidden]{display:none}
+  .mcrow{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+  .mcf{display:grid;gap:2px;font-size:12px;color:var(--muted)}
+  .mcf input,.mcf select,.mcf textarea{font:13px var(--mono);min-width:0}
+  .mcpanel textarea{width:100%;box-sizing:border-box;font:13px var(--mono)}
+  .mcmsg{margin:2px 0;padding:6px 9px;border-left:4px solid var(--line-hi);font-size:13px;line-height:1.45}
+  .mcmsg.good{border-color:var(--good)} .mcmsg.bad{border-color:var(--bad)}
+  .mcsteps div{margin:3px 0;font-size:13px} .mcsteps code{font:13px var(--mono);color:var(--found)} .mcsteps small{color:var(--muted)}
+  .mcfacts code{font:13px var(--mono);color:var(--found)}
+
   /* practice bank and dialogs */
   .modalwrap,#dlg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(3,4,16,.66)}
   .modalwrap{z-index:18}
@@ -725,6 +739,7 @@
         <span class="small muted guided-only" id="dgNote"></span>
         <button id="diagBtn" aria-expanded="false" title="Open the diagram library: every drawing component and what it means">Diagrams</button>
         <button id="libBtn" class="guided-only" aria-expanded="false" title="Open the equation library">Library</button>
+        <button id="mcBtn" title="Multiple-choice aid: pick the principle, scale and rank, signs, vectors, check the options">Multiple choice</button>
         <button id="boardBtn" title="Organize the problem on cards: lay out your solved path, add notes">Board</button>
         <button id="nbBtn" aria-expanded="false" title="Your saved problems: save, search, open, export">Notebook</button>
       </div>
@@ -825,6 +840,12 @@
   <div class="dhead"><h2>Course</h2><span class="small muted">Lessons and their stops</span><button class="x" id="courseClose" title="Close">×</button></div>
   <div class="dbodyl" id="courseBody"></div>
 </aside>
+<div id="mcWrap" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="mcT">
+  <div class="win mcwin">
+    <div class="titlebar"><h2 id="mcT">Multiple-choice aid</h2><button class="x" id="mcX" title="Close">×</button></div>
+    <div class="body" id="mcHost"></div>
+  </div>
+</div>
 <div id="routeWrap" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="routeT">
   <div class="win bankwin"><div class="titlebar"><h2 id="routeT">What’s the route?</h2></div><div class="body rbody"></div></div>
 </div>

@@ -322,7 +322,11 @@ Done 2026-11-12: engines only, no screen yet (same as Q1). `js/vectors.js` (dot,
 - [x] Reasoning box: the sentence(s) for the exam's "Reasoning:" line are assembled from the student's steps and are editable; never filled in before the student acts.
 - [x] All tests pass. Cache bumped. One line here on what changed.
 
-Done 2026-11-12: engines only, no screen yet (as Q1, Q2). `js/options.js`: `parseOption` (numbers, ratios, statements), `checkOptions` (nothing marked before a prediction; match by SI value; each wrong option explained by a data-table slip: root, square, inverse, sign, half, double, prefix), `factsCard` (from each equation's meaning/condition: same ω, α everywhere; v, a_t, a_c depend on r) and `reasoning` (empty until the student acts, editable). Gate in `tests/choice-check.test.js` (in `test:fast`). The existing app SLIPS (trig, sign) are a separate numeric 'What's wrong?' feature and are untouched. Still to build for Q1–Q3: one multiple-choice screen wiring the pickers, option checker, facts card and reasoning box into the UI.
+Done 2026-11-12: engines only, no screen yet (as Q1, Q2). `js/options.js`: `parseOption` (numbers, ratios, statements), `checkOptions` (nothing marked before a prediction; match by SI value; each wrong option explained by a data-table slip: root, square, inverse, sign, half, double, prefix), `factsCard` (from each equation's meaning/condition: same ω, α everywhere; v, a_t, a_c depend on r) and `reasoning` (empty until the student acts, editable). Gate in `tests/choice-check.test.js` (in `test:fast`). The existing app SLIPS (trig, sign) are a separate numeric 'What's wrong?' feature and are untouched. Screen: built in Q4 (below).
+
+## Phase Q4: the multiple-choice screen
+- [x] `js/mc.js` + `#mcWrap` dialog (button "Multiple choice"): five tabs (principle, scaling and ranking, sign and direction, vectors, options with facts card and reasoning box) over the Q1–Q3 engines; typed text shown by `textContent` only; errors become sentences. Gate in `tests/mc.test.js` (browser). New ids: `mcBtn`, `mcWrap`, `mcX`, `mcHost`, `mc-<tab>`. Cache v31.
+- Not done: the sign tool takes typed components, not a drawing on the canvas; the facts card uses R7–R9 only.
 
 ---
 

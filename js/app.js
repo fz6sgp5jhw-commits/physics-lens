@@ -12,6 +12,7 @@ import { createToolkit } from './toolkit.js';
 import { createWorkspace } from './algebra.js';
 import { createNotebook } from './notebook.js';
 import { fromPath, createBoardView } from './board.js';
+import { createMC } from './mc.js';
 import { createCourse, sigMatch } from './course.js';
 
 const $ = (id) => document.getElementById(id);
@@ -255,7 +256,7 @@ function closeDialog(ok){
 }
 $('dlgOk').onclick = () => closeDialog(true);
 $('dlgCancel').onclick = () => closeDialog(false);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); $('boardWrap').classList.remove('show'); $('routeWrap').classList.remove('show'); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); $('boardWrap').classList.remove('show'); $('mcWrap').classList.remove('show'); $('routeWrap').classList.remove('show'); } });
 // changing an input makes every answer found so far wrong: ask before clearing them
 function beforeClearing(what){
   if (!S.path.length) return Promise.resolve(true);
@@ -2712,6 +2713,9 @@ const BV = createBoardView({
 $('nbBtn').addEventListener('click', () => { if ($('nbDrawer').classList.contains('open')) NB.prefill(); });
 $('boardBtn').onclick = () => { setDrawer(false); BV.render(); $('boardWrap').classList.add('show'); };
 $('boardX').onclick = () => $('boardWrap').classList.remove('show');
+const MC = createMC({ host: $('mcHost'), eqs: EQS });
+$('mcBtn').onclick = () => { setDrawer(false); $('mcWrap').classList.add('show'); };
+$('mcX').onclick = () => $('mcWrap').classList.remove('show');
 
 // ---------- course (js/course.js): lessons, help switches, "What's wrong?" ----------
 S.help = { glow: true, showMe: true, hints: true };
