@@ -16,6 +16,7 @@ import { fromPath, createBoardView } from './board.js';
 import { createMC } from './mc.js';
 import { createCourse, sigMatch } from './course.js';
 import { createGuide } from './guide.js';
+import { createThumbBar } from './thumbbar.js';
 import { stepCardHTML } from './concepts.js';
 import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms } from './pick.js';
 
@@ -796,6 +797,9 @@ function openStage(i, quiet = false){
   if (i === 1 && S.dtab !== 'forces') showTab('forces');
   renderStage(); return true;
 }
+// on a phone the open stage's tools sit in the thumb bar (js/thumbbar.js); body[data-stage] lets the CSS show one stage's cards
+const TB = createThumbBar({ bar: $('thumbBar'), note: $('thumbNote'), bubble: $('bubble'), go: (i) => openStage(i),
+  state: () => { const c = stageChecks(); return { mode: S.mode, stage: S.stage, passed: c[S.stage] !== false, solved: !!c[3], names: STAGES.map(st => st.name) }; } });
 function renderStage(){
   const i = S.stage, locked = i === 3 && !solveOpen();
   document.querySelectorAll('.ws-right [data-stage]').forEach(el => el.classList.toggle('off', !(el.id === 'dfWork' && S.mode === 'draw') && !el.dataset.stage.split(' ').includes(String(i))));
@@ -813,6 +817,7 @@ function steps(){
     + `<button id="sheetTab" class="${S.stage === 3 ? 'now' : ''}" title="Your sheet, from any stage">Sheet · ${S.sheet.length}</button>`;
   $('steps').querySelectorAll('[data-stage]').forEach(b => b.onclick = () => openStage(+b.dataset.stage));
   $('sheetTab').onclick = () => openStage(3);
+  document.body.dataset.stage = S.stage; TB.render();
   if (f !== S.lastStep){
     if (f < STAGES.length && S.lastStep !== -1 && f > S.lastStep) say(`${c[S.lastStep] ? `⭐ ${STAGES[S.lastStep].name} passed. ` : ''}Next: <b>${STAGES[f].name}</b>. ${STAGES[f].tip}`);
     S.lastStep = f;
@@ -1986,7 +1991,7 @@ function setMode(m, remember = true){
   // drawing-first covers the torque unit for now (a rod and point masses)
   if (m === 'draw'){ if (S.ch !== DRAW_UNIT){ switchChapter(DRAW_UNIT); renderAll(); } showTab('build'); }
   if (m !== 'draw') TOOLS.use('select');
-  DF.render(); KN.render(); S.build.render(); WS.render();
+  DF.render(); KN.render(); S.build.render(); WS.render(); TB.render();
 }
 $('modeBtn').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
   if (b.dataset.mode === S.mode) return;
