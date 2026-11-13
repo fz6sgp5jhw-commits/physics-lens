@@ -9,7 +9,8 @@ import { createKnowns } from './knowns.js';
 import { createTools } from './tools.js';
 import { createConnect } from './connect.js';
 import { createToolkit } from './toolkit.js';
-import { createWorkspace } from './algebra.js';
+import { createWorkspace, toId, InputError } from './algebra.js';
+import { solveSystem } from './refsolve.js';
 import { createNotebook } from './notebook.js';
 import { fromPath, createBoardView } from './board.js';
 import { createMC } from './mc.js';
@@ -796,7 +797,7 @@ function openStage(i, quiet = false){
 }
 function renderStage(){
   const i = S.stage, locked = i === 3 && !solveOpen();
-  document.querySelectorAll('.ws-right [data-stage]').forEach(el => el.classList.toggle('off', !el.dataset.stage.split(' ').includes(String(i))));
+  document.querySelectorAll('.ws-right [data-stage]').forEach(el => el.classList.toggle('off', !(el.id === 'dfWork' && S.mode === 'draw') && !el.dataset.stage.split(' ').includes(String(i))));
   $('paneForces').hidden = i !== 1; $('paneSide').hidden = i === 1;
   $('sheetWin').classList.toggle('locked', locked);
   $('sheetLock').hidden = !locked; if (locked) $('sheetLock').innerHTML = `🔒 You can read your sheet. ${lockText()}`;
@@ -1936,7 +1937,41 @@ TOOLS = S.tools = createTools({ svg: $('bd'), wrap: $('bd').parentElement, bar: 
 CN = createConnect({ build: S.build, tools: TOOLS, say });
 TK = S.tk = createToolkit({ build: S.build, tools: TOOLS, hit: CN.hit, say, setup: () => DF, bar: $('dfTools') });
 KN.addSource(TK.knowns);
-const WS = S.ws = createWorkspace({ panel: $('dfWork'), knowns: () => KN, masses: () => S.build.shapes.filter(s => s.kind === 'block' || s.kind === 'particle').length, say, tk: () => S.tk.state() });
+// guided mode (phase G3): the algebra workspace reads the problem's givens and targets instead of the drawing's knowns.
+// Every given is a symbol (its name) with its number kept for "numbers last"; the checks hold the student's lines against the
+// code's own values for the route's unknowns (refsolve.js), at random points and at the actual values.
+const algId = (q) => toId(VARS[q].plain);
+const GK = {
+  get targets(){ return S.targets.filter(t => VARS[t] && !isFn(t) && !isRank(t)).map(t => VARS[t].plain); },
+  symbols: () => chVars().filter(q => VARS[q]).map(algId).filter(Boolean),
+  entries(){
+    return Object.entries(S.givens).filter(([q]) => VARS[q]).map(([q, g]) => {
+      const name = VARS[q].plain, u = VARS[q].unit;
+      if (g.val === 0) return { name, value: '0', source: g.from === 'condition' ? 'condition' : 'given' };
+      return { name, value: name, free: true, actual: g.val, number: g.kind === 'symbol' ? undefined : `${g.dir ? '−' : ''}${g.mag} ${g.unit === 'no unit' ? '' : g.unit}`.trim(), dim: DIMS[q], source: g.from === 'condition' ? 'condition' : 'given' };
+    });
+  },
+  // the route's unknowns solved with the givens' values at this point: { algebraId: value }
+  refAll(env){
+    const targets = S.targets.filter(t => VARS[t] && !isFn(t) && !isRank(t)); if (!targets.length) return {};
+    const pl = pickPlan({ targets, known: new Set(Object.keys(S.givens)), eqs: appEqs(), EQS, VARS });
+    if (pl.none) return {};
+    const known = {}; for (const q of Object.keys(S.givens)){ const v = env[algId(q)]; if (typeof v === 'number') known[q] = v; }
+    const sol = solveSystem({ eqs: pl.eqs.map(e => EQS[e].eq), known, unknowns: pl.unknowns });
+    return sol ? Object.fromEntries(Object.entries(sol).map(([q, v]) => [algId(q), v])) : {};
+  },
+};
+// the first line of the worked example: the first law on the route, in the workspace's names
+function workedLine(cheap){
+  if (S.mode === 'draw' || !S.targets.length || !S.condOk || !['demo', 'walk'].includes(S.guide?.level)) return null;
+  if (cheap) return true;   // drawing the button must not search for a route on every redraw
+  const targets = S.targets.filter(t => VARS[t] && !isFn(t) && !isRank(t)), pl = pickPlan({ targets, known: new Set(Object.keys(S.givens)), eqs: appEqs(), EQS, VARS });
+  const st = pl.steps && pl.steps[0]; if (!st) return null;
+  const text = EQS[st.eq].eq.replace(/\{(\w+)\}/g, (_, q) => VARS[q] ? `{${algId(q)}}` : q);
+  return { text, how: `${EQS[st.eq].label}, ${st.principle}`, why: `This is the ${EQS[st.eq].kind === 'law' ? 'law' : 'relationship'} for ${EQS[st.eq].cue}. ${EQS[st.eq].meaning}` };
+}
+const WS = S.ws = createWorkspace({ panel: $('dfWork'), knowns: () => S.mode === 'draw' ? KN : GK, masses: () => S.build.shapes.filter(s => s.kind === 'block' || s.kind === 'particle').length, say,
+  tk: () => S.mode === 'draw' ? S.tk.state() : null, example: workedLine, onCheck: (ok) => S.guide?.[ok ? 'correct' : 'wrong']() });
 WS.render();
 
 // ---------- modes: drawing-first (the default) or guided (today's stages, sheet, Hint and Show me) ----------
@@ -1950,7 +1985,7 @@ function setMode(m, remember = true){
   // drawing-first covers the torque unit for now (a rod and point masses)
   if (m === 'draw'){ if (S.ch !== DRAW_UNIT){ switchChapter(DRAW_UNIT); renderAll(); } showTab('build'); }
   if (m !== 'draw') TOOLS.use('select');
-  DF.render(); KN.render(); S.build.render();
+  DF.render(); KN.render(); S.build.render(); WS.render();
 }
 $('modeBtn').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
   if (b.dataset.mode === S.mode) return;
@@ -2933,6 +2968,7 @@ function renderAll(full = true){
   $('axisNote').innerHTML = hook('slopeAxis') && S.cond.upAxis ? '+ is <b>up the slope</b> (your choice). Pick the direction for each vector; the app sets the sign.' : chapter().axis;
   if (S.dtab !== 'motion') S.build.render(); // labels show given values; a wheel shows its button once ω or α is known
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();
+  if (S.mode !== 'draw') WS.render();
   draw();
 }
 async function boot(){

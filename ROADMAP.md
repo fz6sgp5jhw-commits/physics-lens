@@ -40,10 +40,11 @@ G3 needs the checks from session 1 and the levels from session 3, so it cannot m
 
 ## Phase G3: the student does the algebra in guided mode
 **Start with:** `Do phase G3 in ROADMAP.md.` Needs session 1 (checks) and G2 (levels). Reuse `js/algebra.js`; do not rebuild it.
-- [ ] Gate first (`tests/guide-algebra.test.js`): the disc-and-block problem solved by typed and tapped algebra at "On my own" (a = m₂g / (m₂ + ½m₁) = 4.36 m/s², v = 3.62 m/s from the lesson); a planted slip is found with its line named; at "Walk me through" the app does one line as a worked example and hands the next to the student.
-- [ ] Guided mode uses the algebra workspace for the algebra; Show me stays as a last resort (costs a star) rather than the main button.
-- [ ] Each rearrangement says why it is allowed; a wrong move is explained, not blocked.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/guide-algebra.test.js`): the disc-and-block problem solved by typed and tapped algebra at "On my own" (a = m₂g / (m₂ + ½m₁) = 4.36 m/s², v = 3.62 m/s from the lesson); a planted slip is found with its line named; at "Walk me through" the app does one line as a worked example and hands the next to the student.
+- [x] Guided mode uses the algebra workspace for the algebra; Show me stays as a last resort (costs a star) rather than the main button.
+- [x] Each rearrangement says why it is allowed; a wrong move is explained, not blocked.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+- What changed (G3): the algebra workspace (`#dfWork`) now shows in guided mode at the Solve stage, reading the problem's givens through a `GK` adapter in `app.js` (every given is a symbol with its number kept for numbers last; every quantity of the unit may be named). New `js/refsolve.js`: the route's equations (pick.js) are solved by Newton's method with the equations' own templates, giving the code's values for every unknown at a point; `checks.js` holds each line against them at two random points and the actual values (lines with data in them, like `0.40 m`, only at the actual values), so intermediate symbols (T, α, I) are judged too. The final check accepts the last line when it isolates any target. Each move writes why it is allowed under the line (a one-sided move says the sides now differ, never blocked). At Walk me through / Demo the empty workspace offers "Show me the first line" (`#algExample`): the app writes the first law on the route as a worked example, then it is the student's turn. A check result feeds the guide level. Show me is relabelled "last resort". Gate: `tests/guide-algebra.test.js` (4): a = mg/(m + ½M) = 4.36 m/s², v = 3.617 m/s ≈ 3.62; a planted slip named at line 2. Changed on purpose: the 8a test no longer expects the workspace hidden in guided mode. Not done: solving a problem also marks the lesson stop done (still via the sheet's solves); only the first target is shown in the final-check star count.
 
 ---
 

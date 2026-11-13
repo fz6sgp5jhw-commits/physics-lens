@@ -47,7 +47,9 @@ export function readKnowns(ctx){
     } else {
       try { tree = parse(k.value); } catch { continue; }
     }
-    out.push({ id: key, name: k.name, tree, num, unit, text: String(k.value), dim: k.qty ? QDIM[k.qty] : unit ? parseUnit(unit) : null });
+    // guided mode: a given is a symbol (tree) that also has a number with a unit for "numbers last" (k.number) and an actual value
+    if (k.number){ const q = NUMERIC.exec(String(k.number).trim()); if (q){ try { num = (q[1] ? -1 : 1) * toSI(Number(q[2]), q[3] || 'no unit'); unit = q[3] || ''; } catch {} } }
+    out.push({ id: key, name: k.name, tree, num, unit, free: !!k.free, actual: k.actual !== undefined ? k.actual : num, text: String(k.value), dim: k.dim || (k.qty ? QDIM[k.qty] : unit ? parseUnit(unit) : null) });
   }
   return out;
 }
@@ -57,7 +59,9 @@ const blockNo = (name) => { const m = /^x\((?:Block|Particle) (\d+)\)$/.exec(nam
 export function buildEnv(ctx, k, { numeric = false } = {}){
   const kn = readKnowns(ctx), env = {}, ids = new Set(kn.map(x => x.id));
   if (!numeric){
-    for (const x of kn) if (x.tree) for (const id of symsOf(x.tree)) if (!ids.has(id) && !(id in env)) env[id] = pointValue(id, k);
+    // a free given is a symbol: its actual value at the "actual" point, a random one of the same sign at the others
+    for (const x of kn) if (x.free) env[x.id] = k === 'actual' || x.actual === 0 ? x.actual : Math.sign(x.actual || 1) * pointValue(x.id, k);
+    for (const x of kn) if (x.tree && !x.free) for (const id of symsOf(x.tree)) if (!ids.has(id) && !(id in env)) env[id] = pointValue(id, k);
   }
   for (let pass = 0; pass < 8; pass++){
     for (const x of kn){
@@ -111,17 +115,21 @@ export function reference(ctx, target){
 }
 const envAt = (ctx, k, tgt) => {
   const env = buildEnv(ctx, k);
+  // the code's own values for everything the setup leaves unknown (every quantity the route needs), at this point
+  if (ctx.refAll){ try { Object.assign(env, ctx.refAll(env)); } catch { /* no solution here: lines using them are unjudged */ } return env; }
   if (tgt && tgt.ref.tree){ try { env[tgt.id] = evalTree(tgt.ref.tree, env); } catch (e) { if (!(e instanceof Unjudged)) throw e; } }
   return env;
 };
 function theTarget(ctx){
   const id = targetIds(ctx)[0]; if (!id) return null;
-  return { id, ref: reference(ctx, id) };
+  return { id, ref: ctx.refAll ? { fn: true } : reference(ctx, id) };
 }
 
 // ---------------------------------------------------------------- does a line hold; why not
 const close = (a, b) => Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
 const NICE = [[2, 'twice'], [0.5, 'half'], [4, 'four times'], [0.25, 'a quarter of'], [3, 'three times'], [1 / 3, 'a third of']];
+// a line with data in it (a number with a unit, a decimal) is true only at the setup's actual values
+const hasData = (n) => !!n && typeof n === 'object' && (n.t === 'q' || (n.t === 'num' && /\./.test(n.s || '') && n.s !== '½') || Object.values(n).some(v => typeof v === 'object' && hasData(v)));
 function holds(L, envs){
   const diffs = envs.map(env => [evalTree(L.l, env), evalTree(L.r, env)]);
   return { ok: diffs.every(([a, b]) => close(a, b)), diffs };
@@ -191,7 +199,7 @@ export function checkLabels(tk){
 // lines: the active lines [{ l, r, how, op }]. Returns { status: 'pass'|'look', issues: [{ line (1-based) | null, kind, why }], notes, look: [target ids] }
 export function runCheck(lines, ctx, { final = false, tk = null } = {}){
   const issues = [], notes = [], tgt = theTarget(ctx);
-  const envs = [0, 1].map(k => envAt(ctx, k, tgt));
+  const all = [0, 1, 'actual'].map(k => envAt(ctx, k, tgt)), envsFor = (L) => hasData(L.l) || hasData(L.r) ? [all[2], all[2]] : ctx.refAll ? all : [all[0], all[1]];
   if (!lines.length){
     const labels = checkLabels(tk).map(l => ({ line: null, ...l }));
     return { status: 'look', issues: labels.length ? labels : [{ line: null, kind: 'empty', why: 'There are no lines yet. Pick a relationship from the formula sheet or type one.' }], notes, look: [] };
@@ -199,11 +207,11 @@ export function runCheck(lines, ctx, { final = false, tk = null } = {}){
   let unjudged = null;
   for (let i = 0; i < lines.length; i++){
     try {
-      const h = holds(lines[i], envs);
-      if (!h.ok){ issues.push({ line: i + 1, kind: 'line', why: whyNot(lines[i], lines[i - 1], envs, h.diffs) }); break; }
+      const h = holds(lines[i], envsFor(lines[i]));
+      if (!h.ok){ issues.push({ line: i + 1, kind: 'line', why: whyNot(lines[i], lines[i - 1], envsFor(lines[i]), h.diffs) }); break; }
     } catch (e) {
       if (!(e instanceof Unjudged)) throw e;
-      if (tgt && e.id === tgt.id && !tgt.ref.tree){ unjudged = unjudged || { line: i + 1, why: tgt.ref.why }; continue; }
+      if (tgt && e.id === tgt.id && !tgt.ref.tree && !tgt.ref.fn){ unjudged = unjudged || { line: i + 1, why: tgt.ref.why }; continue; }
       unjudged = unjudged || { line: i + 1, why: `${display(e.id).text} has no value in your setup, so I can’t judge this line. Put it in the knowns list (a card name or a coordinate), or leave it out.` };
     }
   }
@@ -211,6 +219,8 @@ export function runCheck(lines, ctx, { final = false, tk = null } = {}){
   for (const l of checkLabels(tk)) issues.push({ line: null, ...l });
   if (final && !issues.length){
     const last = lines[lines.length - 1];
+    const ids = targetIds(ctx), hit = ids.find(id => (last.l.t === 'sym' && last.l.id === id) || (last.r.t === 'sym' && last.r.id === id));
+    if (hit && tgt) tgt.id = hit;
     const side = tgt && last.l.t === 'sym' && last.l.id === tgt.id ? 'r' : tgt && last.r.t === 'sym' && last.r.id === tgt.id ? 'l' : null;
     if (!tgt) issues.push({ line: null, kind: 'final', why: 'Pick a target in the knowns list first, so I know what the answer is.' });
     else if (!side) issues.push({ line: lines.length, kind: 'final', why: `The last line doesn’t have ${display(tgt.id).text} alone on one side yet.` });
@@ -219,7 +229,7 @@ export function runCheck(lines, ctx, { final = false, tk = null } = {}){
       const base = new Set(readKnowns(ctx).flatMap(x => x.tree ? symsOf(x.tree) : [])), known = new Set(readKnowns(ctx).map(x => x.id));
       const left = symsOf(rhs).filter(id => known.has(id) && !base.has(id) || id === tgt.id);
       if (left.length) issues.push({ line: lines.length, kind: 'final', why: `The answer still has ${left.map(id => display(id).text).join(', ')} in it. Put in what each one equals until only the problem’s own symbols are left.` });
-      else if (!tgt.ref.tree) issues.push({ line: null, kind: 'final', why: tgt.ref.why });
+      else if (!tgt.ref.tree && !tgt.ref.fn) issues.push({ line: null, kind: 'final', why: tgt.ref.why });
     }
   }
   const look = issues.some(i => i.kind === 'line' || i.kind === 'final' || i.kind === 'unjudged') && tgt ? [tgt.id] : [];

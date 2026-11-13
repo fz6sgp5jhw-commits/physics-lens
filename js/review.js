@@ -45,6 +45,7 @@ export function createReview(api){
     if (!lines.length){ st.last = r; st.corr = false; return; }
     if (!final) st.used++;
     r.final = final; st.last = r; st.corr = false;
+    api.onCheck?.(r.status === 'pass');
     if (r.status === 'pass'){ if (final){ st.final = true; st.solved = true; } else st.stars++; api.look([]); }
     else api.look(r.look);
   }

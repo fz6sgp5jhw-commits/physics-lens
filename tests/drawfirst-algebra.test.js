@@ -104,9 +104,9 @@ test('keyboard only: / opens the sheet, typed substitutions with autocomplete, s
     await page.keyboard.type('/ 2'); await page.keyboard.press('Enter');
     s = await lines(page);
     assert.equal(s.lines.at(-1), 'I/2 = mL²/2'); assert.equal(s.how.at(-1), '÷ 2, this term only');
-    // guided mode hides the workspace
+    // guided mode keeps the workspace (phase G3 changed this on purpose: the student does the algebra there too)
     await page.click('#modeBtn [data-mode="guided"]');
-    assert.equal(await page.isVisible('#dfWork'), false);
+    assert.equal(await page.isVisible('#dfWork'), true);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

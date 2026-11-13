@@ -126,3 +126,4 @@ Run everything with `node --test tests/*.test.js` (Node's test runner; `playwrig
 
 
 - `js/guide.js` (phase G2): the fading guide. `createGuide({ card, app })`; `readGuide` validates `pl-guide`; `drawn`/`walkStatus` check a stop's `guide.walk` items against `app.snapshot()`; `askJudge` judges a `guide.ask` option. The demo runs `DEMO_RUN` in `app.js` (real givens, conditions, target, gather, solve) and `enter()` splices the route steps in after the target step. `S.guide.state()` for tests.
+- Guided algebra (phase G3): `js/refsolve.js` `solveSystem` (Newton over `parseEq`/`evalNum`); `GK` in `app.js` is the knowns adapter (`entries`, `targets`, `symbols`, `refAll`); `checks.js` `ctx.refAll(env)` gives every route unknown's value at a point, `hasData` picks the points a line is judged at. `S.ws` is shared by both modes; `knowns:` and `tk:` switch on `S.mode`.

@@ -289,6 +289,14 @@ export function moveFactor(eq, side, i, f){
 }
 
 // what a line says it did
+// why a move is allowed (or what it did to the equation), shown under the line
+export function whyOp(op, at){
+  if (op.k === 'subst') return `${display(op.sym).text} and ${print(op.x)} are equal in your setup, so putting one for the other keeps the equation true.`;
+  if (op.k === 'simp') return 'Same value, written shorter: collecting and cancelling never changes what an expression equals.';
+  if (!at) return { div: 'Dividing both sides by the same (non-zero) thing keeps an equation true.', mul: 'Multiplying both sides by the same thing keeps an equation true.', add: 'Adding the same to both sides keeps an equation true.',
+    sub: 'Subtracting the same from both sides keeps an equation true.', sq: 'Squaring both sides keeps it true (it can add a root that isn’t physical: check the sign at the end).', sqrt: 'Taking the square root of both sides keeps it true for positive sizes; choose the sign deliberately.' }[op.k];
+  return 'This changed one term only, so the two sides now differ: the equation is no longer true as written. Do the same to the other side too (Shift), or a check will point here.';
+}
 export function describe(op, at){
   const x = op.x ? print(op.x) : '';
   const what = { div: `÷ ${x}`, mul: `× ${x}`, add: `+ ${x}`, sub: `− ${x}`, sq: 'squared', sqrt: 'square-rooted', simp: 'simplified', subst: `${op.sym ? display(op.sym).text : ''} → ${x}` }[op.k];
@@ -340,15 +348,15 @@ export function sheet(query = '', nMasses = 1){
 }
 
 // ---------------------------------------------------------------- the workspace (UI)
-export function createWorkspace({ panel, knowns, masses, say, tk = () => null }){
+export function createWorkspace({ panel, knowns, masses, say, tk = () => null, example = () => null, onCheck = () => {} }){
   const st = { lines: [], cur: -1, sel: null, n: null, msg: '', ac: [], names: {}, look: [], drag: null };
   const $ = (id) => document.getElementById(id);
   const pop = (id) => { let p = $(id); if (!p){ p = document.createElement('div'); p.id = id; p.className = 'pop algpop'; p.hidden = true; document.body.appendChild(p); } return p; };
   const menu = pop('algMenu'), sh = pop('algSheet');
   const active = () => st.lines.slice(0, st.cur + 1);
   // what the checks need: the knowns list, the targets and the pieces the student named
-  const ctx = () => ({ knowns: knowns().entries(), targets: knowns().targets, names: st.names });
-  const review = createReview({ lines: active, ctx, tk, add: (eq, how, extra) => add(eq, how, extra), redraw: () => render(), look: (ids) => { st.look = ids; }, });
+  const ctx = () => ({ knowns: knowns().entries(), targets: knowns().targets, names: st.names, refAll: knowns().refAll });
+  const review = createReview({ lines: active, ctx, tk, onCheck, add: (eq, how, extra) => add(eq, how, extra), redraw: () => render(), look: (ids) => { st.look = ids; }, });
 
   // ---- symbols: the knowns list (names and values), targets, and every symbol on an active line
   function known(){
@@ -364,6 +372,7 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null })
     for (const k of known()){ if (k.id) s.add(k.id); if (k.value) symsOf(k.value).forEach(x => s.add(x)); }
     for (const t of knowns().targets){ const id = toId(t); if (id) s.add(id); }
     for (const id of Object.keys(st.names)) s.add(id);
+    for (const id of knowns().symbols?.() || []) s.add(id);   // guided mode: every quantity of the unit may be named
     for (const L of active()){ symsOf(L.l).forEach(x => s.add(x)); symsOf(L.r).forEach(x => s.add(x)); }
     return s;
   }
@@ -389,7 +398,7 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null })
     closeMenu(); render();
   }
   function run(op, at, lineIx){
-    try { add(applyOp(st.lines[lineIx], op, at), describe(op, at), { op, one: !!at }); return true; }
+    try { add(applyOp(st.lines[lineIx], op, at), describe(op, at), { op, one: !!at, why: whyOp(op, at) }); return true; }
     catch (err){ if (!(err instanceof MathError || err instanceof InputError)) throw err; st.msg = err.message; render(); return false; }
   }
   const sideHTML = (side, i, live) => termsOf(st.lines[i][side]).map((t, j) => {
@@ -402,10 +411,10 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null })
     const rows = st.lines.map((L, i) => {
       const live = i <= st.cur && !L.fixed;
       return `<li class="algline${i <= st.cur ? '' : ' grey'}${i === st.cur ? ' cur' : ''}" data-line="${i}"><span class="algeq"><span class="algside" data-side="l">${sideHTML('l', i, live)}</span> <span class="algsign" data-drop="${i}" title="Drop a term here to move it across">=</span> <span class="algside" data-side="r">${sideHTML('r', i, live)}</span></span>
-        <span class="small muted alghow">${esc(L.how)}</span>${i !== st.cur ? `<button class="dfmini" data-back="${i}" title="${i <= st.cur ? 'Continue from this line; the lines after it are greyed until you do' : 'Bring the lines back up to here'}">Back to here</button>` : ''}</li>`;
+        <span class="small muted alghow">${esc(L.how)}</span>${L.why ? `<span class="small alghow alhwhy${L.one ? ' warn' : ' muted'}">${esc(L.why)}</span>` : ''}${i !== st.cur ? `<button class="dfmini" data-back="${i}" title="${i <= st.cur ? 'Continue from this line; the lines after it are greyed until you do' : 'Bring the lines back up to here'}">Back to here</button>` : ''}</li>`;
     }).join('');
     panel.innerHTML = `<div class="titlebar"><h2>Algebra</h2><button id="algSheetBtn" title="Every relationship in the library, by idea (or press / in the line box)">Formula sheet</button><button id="algUndo" title="Step back one line; later lines stay greyed until you continue">Undo</button></div>
-      <div class="body"><ol class="alglines" id="algLines">${rows || '<li class="small muted">Pick a relationship from the <b>Formula sheet</b>, or type a line below.</li>'}</ol>
+      <div class="body"><ol class="alglines" id="algLines">${rows || `<li class="small muted">Pick a relationship from the <b>Formula sheet</b>, or type a line below.${example(true) ? ' <button class="dfmini" id="algExample" title="The app writes the first line as a worked example, then it is your turn">Show me the first line</button>' : ''}</li>`}</ol>
       <div class="row algrow"><input id="algIn" type="text" autocomplete="off" spellcheck="false" placeholder="Type a line (I = m_1*r_1**2) · / for the sheet" aria-label="Type a line or an operation"><button id="algGo">Add</button></div>
       <div class="algac" id="algAc"></div>
       <p class="small" id="algMsg" aria-live="polite">${esc(st.msg)}</p>
@@ -599,6 +608,7 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null })
   panel.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (review.click(b)) return;
+    if (b.id === 'algExample'){ const ex = example(); if (ex){ try { const eq = parseEq(ex.text); add(eq, `worked example: ${ex.how}`, { why: ex.why, ex: true }); say('That line was a worked example. Now it is your turn: the next relationship, or an operation on this one.'); } catch (e) { if (!(e instanceof InputError)) throw e; } } return; }
     if (b.id === 'algSheetBtn') return openSheet();
     if (b.id === 'algUndo'){ if (st.cur >= 0){ st.cur--; st.sel = null; closeMenu(); render(); } return; }
     if (b.id === 'algGo'){ if (enter($('algIn').value, e.shiftKey)) $('algIn').focus(); return; }

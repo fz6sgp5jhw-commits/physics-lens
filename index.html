@@ -606,7 +606,7 @@
 
   /* calm mode and reduced motion: the field stands still and nothing bobs, blinks or glides */
   /* modes: drawing-first hides the guided flow; guided hides the drawing-first setup */
-  body.mode-draw .guided-only,body.mode-draw .ws-right > [data-stage]{display:none !important}
+  body.mode-draw .guided-only,body.mode-draw .ws-right > [data-stage]:not(#dfWork){display:none !important}
   body:not(.mode-draw) .draw-only{display:none !important}
   body.mode-draw .canvascard .bsvg{height:64vh;max-height:64vh}
   .seg{display:flex}
@@ -808,8 +808,6 @@
   <aside class="ws-right">
     <section class="card draw-only" id="dfCard" aria-live="polite"></section>
     <section class="card draw-only" id="dfKnowns"></section>
-    <section class="card draw-only" id="dfWork"></section>
-    <section class="card guidecard" id="guideCard" data-stage="0 1 2 3" hidden aria-live="polite"></section>
     <section class="card" id="condCard" data-stage="2">
       <div class="titlebar"><h2>Conditions</h2><button id="condOk">✓ These conditions are right</button></div>
       <div class="body"><div class="calc" id="calcCond"></div><div id="conds"></div></div>
@@ -833,7 +831,7 @@
       <div class="locknote" id="sheetLock" hidden></div>
       <div class="sheethead">
         <div class="targets" id="targets"></div>
-        <div class="modes"><button id="lookBtn" title="Say what you are looking for, and how to gather the formulas">What am I looking for?</button><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="Gather what’s needed and walk the shortest path">Show me the path</button></div>
+        <div class="modes"><button id="lookBtn" title="Say what you are looking for, and how to gather the formulas">What am I looking for?</button><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="A last resort: the app gathers and solves it for you (costs a star in a lesson). Do the algebra yourself in the Algebra card.">Show me (last resort)</button></div>
       </div>
       <div class="eq spancard" id="spanCard" hidden></div>
       <div class="sheet-status" id="sheetStatus"></div>
@@ -852,6 +850,8 @@
       <div class="titlebar"><h2>Path so far</h2></div>
       <div class="body"><div id="pathList"></div></div>
     </section>
+    <section class="card guidecard" id="guideCard" data-stage="0 1 2 3" hidden aria-live="polite"></section>
+    <section class="card" id="dfWork" data-stage="3"></section>
   </aside>
 </main>
 
