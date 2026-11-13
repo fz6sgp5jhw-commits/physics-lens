@@ -5,6 +5,46 @@ Order: function first, style last. Phases 1–3 are in priority order; 4 builds 
 
 ---
 
+## Next sessions (rearranged 2026-11-12, from the user's feedback on solving the disc-and-block problem)
+Feedback: the guided flow gives generic hints, the student watches the computer solve and does no algebra, and nothing explains what is going on. The fix is a guide that does a first example, helps pick equations, and then fades while the student does the algebra. Run in this order; each session follows the usage stop rule.
+
+| Session | Phases | Start with | Model | Effort |
+|---|---|---|---|---|
+| 1 | 8b and 9 (checks that name the faulty line; both on `algebra.js`) | `Do phases 8b and 9 in ROADMAP.md.` | Opus | High |
+| 2 | G1 (equation-picking helper, glowing hints, next-step hint; includes C6) | `Do phase G1 in ROADMAP.md.` | Opus | Medium |
+| 3 | G2 (fading guide levels, and the demo-first tour as the top level) | `Do phase G2 in ROADMAP.md.` | Opus | High |
+| 4 | G3 (the student does the algebra in guided mode) | `Do phase G3 in ROADMAP.md.` | Opus | High |
+| 5 | 11 and the Q leftovers (concept cards, facts card, sign tool on the canvas) | `Do phase 11 in ROADMAP.md.` | Sonnet | Medium |
+| 6 | 10, the new look | `Do phase 10 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.` | Sonnet | Medium |
+
+G3 needs the checks from session 1 and the levels from session 3, so it cannot move earlier. Phase 11 needs the user's answers first: where a card appears (sheet after a step, side drawer, or both), whether it must be read before the next step, and whether definitions get a short self-check. Phase C6 below is merged into G1.
+
+## Phase G1: help picking equations (replaces C6)
+**Start with:** `Do phase G1 in ROADMAP.md.` Read `hintFor` in `js/app.js` and the hint code in `js/course.js`; new code in `js/pick.js`.
+- [ ] Gate first (`tests/pick.test.js`): for the disc-and-block problem the helper names the sought quantity, the principle (Στ = Iα for the disc, ΣF = ma for the block, a = Rα linking them) and the equations to gather, from the structure of the problem, never a number.
+- [ ] "What am I looking for?" sheet: the target, what is known, what is missing, and strategies for gathering symbolic formulas (one law per body, then the link between bodies, then count unknowns against equations).
+- [ ] The suggested formulas glow in the library and on the sheet as part of the hints; the glow never reveals an answer, only which equation to look at, and only after the student has named what they are looking for.
+- [ ] "Next step" hint: what is sought, then which principle, then the route with the most steps already done. More "What's wrong?" handlers (dropped term, wrong component, unit slip), each with its test.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+## Phase G2: fading guide levels and a demo first
+**Start with:** `Do phase G2 in ROADMAP.md.` Read `js/course.js` (help switches, stars); new code in `js/guide.js`.
+- [ ] Gate first (`tests/guide.test.js`): three levels (Walk me through, Prompt me, On my own); a correct step drops the level one notch; wrong steps raise it; Show me always available and costs a star; the level is stored in `pl-guide`, validated, with a visible way to clear it.
+- [ ] Demo first: the first time (and on request) the app solves a short example while naming each control it uses and why; the student then repeats the same moves on their own problem. This is the top level.
+- [ ] Walk me through: the app asks about the diagram and the forces first (draw the disc, the string, the block; tension on both; weight on the block), checks the drawing and explains why each force is there.
+- [ ] Prompt me: questions before equations ("what is the block's net force? what turns the disc?"); the answer chosen is used in the explanation.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+## Phase G3: the student does the algebra in guided mode
+**Start with:** `Do phase G3 in ROADMAP.md.` Needs session 1 (checks) and G2 (levels). Reuse `js/algebra.js`; do not rebuild it.
+- [ ] Gate first (`tests/guide-algebra.test.js`): the disc-and-block problem solved by typed and tapped algebra at "On my own" (a = m₂g / (m₂ + ½m₁) = 4.36 m/s², v = 3.62 m/s from the lesson); a planted slip is found with its line named; at "Walk me through" the app does one line as a worked example and hands the next to the student.
+- [ ] Guided mode uses the algebra workspace for the algebra; Show me stays as a last resort (costs a star) rather than the main button.
+- [ ] Each rearrangement says why it is allowed; a wrong move is explained, not blocked.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+---
+
+
 ## Phase 1: clean up, fix, secure
 **Start with:** `Do phase 1 in ROADMAP.md.`
 
@@ -276,7 +316,7 @@ Asked for by the user after the pilot, to study from PHYS 2210 Sample Exam 3A.
 - [x] Exam 3A #7 (2026-11-12): a sixth lesson, “A force that changes with time” (`ftime`; originals: a puck pushed harder and harder v = 11 m/s, K = 29 J; a glider K = 3.9 × 10² J; a trolley Δx = 7.0 m, W_net = 54 J). The energy unit now has a motion ladder (Δx → v → a) switched on by a new **The force: steady / varies with time** choice in the This problem row (`varA`); F(t) goes in as a function of t, WK3 F = ma (label W6) gives a(t), ∫dt gives v(t) from v₀, and K = ½mv² finishes. `a` appears in the unit only then (`condVars`); with `varA` on, F, v₀, v and Δx take a forward/backward direction; W = F Δx cos φ is greyed out. Answer keys can hold function givens (`key.fns`), which Check my setup compares term by term. The exam problem is the private stop `ftime/twin` (477 J by hand, stored as 4.8e2; the app agrees). Solvers 358 → 361 and the course test's lesson and stop counts 5 → 6, 15 → 18 (`expr.test.js`, `course.test.js` changed on purpose); 1 more round-trip state.
   Done: full suite 155/155; cache v27. All of Exam 3A's worked problems (#6–#12) are now covered; the multiple-choice questions are not.
 
-## Phase C6: fuller hints (only if the pilot shows they're worth it)
+## Phase C6: fuller hints (merged into phase G1, 2026-11-12)
 **Start with:** `Do phase C6 in ROADMAP.md.` Read plan section 8 (hints).
 - [ ] "Next step": what is sought → which principle → the route with the most steps already done (Andes's rule).
 - [ ] More "What's wrong?" handlers, mined from the slips seen in the pilot (dropped term, wrong component, unit slip, …), each with its test.
