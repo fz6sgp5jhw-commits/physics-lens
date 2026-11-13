@@ -387,6 +387,15 @@ Decided with the user 2026-11-13: a quick explanation comes up for each solved s
 - What changed (11): pack notes in new `js/packs/mech-notes.js` (chapter guides: overview, ideas, common mix-ups; `concept`/`confusion` for 52 key equations; `define`/`confuse` for 31 key quantities), merged into `NOTES` by `packs/index.js` (pack field `notes`). New `js/concepts.js` (pure: `eqCard`, `quantityCard`, `chapterNotes`, `stepCardHTML`, `chapterHTML`; every equation and quantity gets a card even without notes) and the page `concepts.html` + `js/concepts-page.js` (every chapter, anchors `#<chapter>` and `#eq-<id>`, print stylesheet; its CSS is inline in that page because it is a separate document). The sheet card of a solved step gets `<details class="concept">`; Tools ▸ Notes link `#notesLink` opens the page at the current unit. Gate: `tests/concepts.test.js` (5). Not done: concept text only for the key equations and quantities (the rest show meaning, condition and "where it comes from"); the other units' notes are written for the mechanics pack only.
 
 
+## Phase 12: problem playback (asked 2026-11-13, from Molecule Lab's mechanism view)
+The student can play a solved problem as a story: the scene animates, a narration stays in step with it, and two live visual cues show what is going on underneath, the way Molecule Lab shows electron density and an energy profile along a mechanism. The animation, graphs and arrows are drawn from the app's own solved numbers (never invented); the narration is written text tied to each step.
+- [ ] Gate first (`tests/playback.test.js`): for the disc-and-block problem (and one ramp, one rolling, one collision problem) the playback has steps whose narration matches the solved path, the energy graph's K + U (+ work) stays equal to the total at every frame, and the scene at the last frame shows the solved answers.
+- [ ] Playback view: scene + play, pause, step, scrub; each narration step highlights the equation used and the quantity found.
+- [ ] Energy graph along the motion: K (moving), K (turning), U, friction losses and the total, with a marker that follows the scene.
+- [ ] A "density" cue: the bodies are shaded by how much of the energy is in them right now (kinetic share), with force and torque arrows sized to their values, so the student sees where the action is.
+- [ ] Narration written for the four lessons' problems first, then the practice bank; calm mode shows the final frame and a step list with no motion.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
 ## Phase 10: the new look
 **Start with:** `Do phase 10 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
 
