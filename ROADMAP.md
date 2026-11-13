@@ -330,6 +330,10 @@ Done 2026-11-12: engines only, no screen yet (as Q1, Q2). `js/options.js`: `pars
 
 ---
 
+## Phase 11: concept cards and definitions (asked 2026-11-12)
+The app does the mechanics well but trains the mechanism: the student sees equations, not ideas. Add concept cards and definitions: for each quantity and each equation, a short card saying what it means, how it is defined, when it applies and the usual confusions (reuse each equation's `meaning`, `condition`, `kind`; add `concept` text to the pack). Open questions for the user before building: where a card appears (on the sheet after a step, in a side drawer, or both), whether the student must read it before the next step, and whether definitions get a short self-check.
+- [ ] Design with the user, then data in `js/packs/mech.js`, then the card view in a new file.
+
 ## Phase 10: the new look
 **Start with:** `Do phase 10 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
 

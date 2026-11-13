@@ -40,6 +40,9 @@ export async function openApp(browser, url, { calm = true, mode = 'guided', befo
   if (calm) await page.addInitScript(() => { try { localStorage.setItem('rl-calm', '1'); } catch {} });
   // only on the first load: a test that switches mode and reloads keeps what it chose
   await page.addInitScript((m) => { try { if (!sessionStorage.getItem('pl-test')){ sessionStorage.setItem('pl-test', '1'); if (m === 'draw') localStorage.removeItem('pl-mode'); else localStorage.setItem('pl-mode', m); } } catch {} }, mode);
+  // the header's Tools menu holds Practice, Course, the libraries, Board, Notebook and Multiple choice: opening it is part of using them
+  const inMenu = /^#(bankBtn|courseBtn|libBtn|diagBtn|dfSumBtn|boardBtn|nbBtn|mcBtn)$/, click = page.click.bind(page);
+  page.click = async (sel, ...rest) => { if (inMenu.test(sel)) await page.evaluate(() => { document.getElementById('toolsMenu').open = true; }); return click(sel, ...rest); };
   if (before) await before(page);
   await page.goto(url);
   await page.waitForFunction(() => window.__rl && document.getElementById('steps').children.length > 0);

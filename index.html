@@ -55,7 +55,7 @@
   #fieldTrails{mix-blend-mode:screen}
 
   /* app bar */
-  header{position:sticky;top:0;z-index:5;padding:10px 16px 0;max-width:1640px;margin:0 auto}
+  header{position:sticky;top:0;z-index:13;padding:10px 16px 0;max-width:1640px;margin:0 auto}
   .appbar{display:grid;grid-template-columns:auto 1fr auto;gap:6px 18px;align-items:center;padding:4px 10px;
     background:var(--dither),rgba(13,19,64,.94);background-clip:padding-box;border:3px solid transparent;border-image:var(--frame-panel) 6 / 3px stretch;box-shadow:6px 6px 0 rgba(3,4,16,.55)}
   .brand{display:flex;align-items:center;gap:10px}
@@ -95,7 +95,7 @@
   /* layout: one workspace, the canvas and the sheet on the left, the diagrams that write equations on the right */
   main.ws{position:relative;z-index:2;max-width:1640px;margin:0 auto;padding:10px 16px 60px;display:grid;grid-template-columns:minmax(0,1fr) 460px;gap:10px;align-items:start}
   .ws-left{display:flex;flex-direction:column;gap:8px;min-width:0}
-  .ws-right{display:flex;flex-direction:column;gap:8px;min-width:0;position:sticky;top:94px;max-height:calc(100vh - 104px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line-hi) var(--deep)}
+  .ws-right{display:flex;flex-direction:column;gap:8px;min-width:0;position:sticky;top:var(--hdr,94px);max-height:calc(100vh - var(--hdr,94px) - 10px);overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--line-hi) var(--deep)}
   @media (max-width:1100px){main.ws{grid-template-columns:1fr} .ws-right{position:static;max-height:none}}
   @media (max-width:820px){.appbar{grid-template-columns:1fr} .steps,.appbar .tools{grid-column:1 !important;grid-row:auto !important}}
 
@@ -443,7 +443,7 @@
   #fbd svg{display:block;width:100%;max-width:420px;height:auto;margin:6px auto;background:#0b1036;border:3px solid #2d3a8c}
 
   /* library drawer */
-  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,94vw);z-index:12;display:flex;flex-direction:column;transform:translateX(105%);transition:transform .22s ease;
+  .drawer{position:fixed;top:var(--hdr,0px);right:0;bottom:0;width:min(520px,94vw);z-index:12;display:flex;flex-direction:column;transform:translateX(105%);transition:transform .22s ease;
     background:var(--dither),rgba(13,19,64,.97);background-clip:padding-box;border-left:none;border-image:var(--frame-hero) 6 / 6px stretch}
   .drawer.open{transform:none}
   .drawer .dhead{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:3px solid var(--deep)}
@@ -481,6 +481,22 @@
   #matters ul.lims{margin:4px 0 0;padding-left:20px;font:13px/1.6 var(--mono)}
   #matters .rank{font:14px var(--mono);color:var(--found)}
   #matters .statics p.ok b{color:var(--good)} #matters .statics p.bad b{color:var(--bad)}
+
+  /* tools menu and the problem bar pinned under the header */
+  details.menu{position:relative;display:inline-block}
+  details.menu>summary{list-style:none;cursor:pointer;font:650 13px/1 var(--ui);padding:7px 12px;min-height:30px;color:var(--text);background:#1d2670;border:3px solid #4152d4}
+  details.menu>summary::-webkit-details-marker{display:none}
+  details.menu[open]>summary{background:#123a5c}
+  .menubox{position:absolute;right:0;top:calc(100% + 4px);z-index:30;min-width:210px;display:grid;gap:4px;padding:8px;background:var(--felt-lo);border:3px solid var(--line-hi);box-shadow:4px 4px 0 rgba(3,4,16,.6)}
+  .menubox b{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+  .menubox button{text-align:left}
+  .menubox button[hidden]{display:none}
+  .pinbar{grid-column:1 / -1;display:flex;gap:8px;align-items:baseline;padding:3px 8px;font-size:13px;background:var(--inset);border:2px solid var(--line-hi)}
+  .pinbar[hidden]{display:none}
+  .pinbar b{color:var(--cy);flex:none}
+  .pinbar span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pinbar.open span{white-space:normal;max-height:30vh;overflow-y:auto}
+  .pinbar button{flex:none;min-height:0;padding:2px 8px;font-size:12px}
 
   /* multiple-choice aid (js/mc.js) */
   .mcwin{width:min(820px,96vw);max-height:90vh;display:flex;flex-direction:column;border-image:var(--frame-hero) 6 / 6px stretch}
@@ -693,12 +709,26 @@
     </div>
     <div class="tools" style="grid-column:3;grid-row:1">
       <div id="modeBtn" class="seg" role="group" aria-label="Mode" title="Remembered on this device; choosing Drawing first again forgets it"><button data-mode="draw" aria-pressed="true" title="Draw the problem, then set each part">Drawing first</button><button data-mode="guided" aria-pressed="false" title="Step by step: stages, sheet, Hint and Show me">Guided</button></div>
-      <button id="bankBtn" class="go guided-only" title="Practice bank: problems as text only, you set them up">Practice</button>
-      <button id="courseBtn" aria-expanded="false" title="Lessons: long → twin → transfer, any stop in any order">Course</button>
+      <details class="menu" id="toolsMenu"><summary title="Practice, course, references, board, notebook">Tools ▾</summary>
+        <div class="menubox" role="menu">
+          <b>Learn</b>
+          <button id="bankBtn" class="guided-only" title="Practice bank: problems as text only, you set them up">Practice problems</button>
+          <button id="courseBtn" aria-expanded="false" title="Lessons: long → twin → transfer, any stop in any order">Course</button>
+          <b>Reference</b>
+          <button id="libBtn" class="guided-only" aria-expanded="false" title="Open the equation library">Equation library</button>
+          <button id="diagBtn" aria-expanded="false" title="Open the diagram library: every drawing component and what it means">Diagram parts</button>
+          <b>My work</b>
+          <button id="dfSumBtn" class="draw-only" hidden title="Every choice, what is assumed, and any conflicts">Summary of my choices</button>
+          <button id="boardBtn" title="Organize the problem on cards: lay out your solved path, add notes">Board</button>
+          <button id="nbBtn" aria-expanded="false" title="Your saved problems: save, search, open, export">Notebook</button>
+          <button id="mcBtn" title="Multiple-choice aid: pick the principle, scale and rank, signs, vectors, check the options">Multiple choice</button>
+        </div>
+      </details>
       <button id="calmBtn" aria-pressed="false" title="Freeze the background field and turn off animations">Calm mode</button>
       <button id="soundBtn" aria-pressed="false" title="Soft blips (off by default)">Sound</button>
     </div>
     <div class="steps guided-only" id="steps"></div>
+    <div class="pinbar" id="pinBar" hidden><b>Problem</b><span id="pinText"></span><button id="pinToggle" aria-expanded="false" title="Show the whole problem or one line">More</button></div>
     <div class="assistant" aria-live="polite"><span class="aicon" aria-hidden="true">i</span><div id="bubble"></div></div>
   </div>
 </header>
@@ -733,15 +763,9 @@
       <div class="ctool">
         <div class="dtabs guided-only" role="tablist"><button data-dtab="build" aria-pressed="true" title="Draw the setup: shapes and their properties">1 · Setup</button><button data-dtab="forces" aria-pressed="false" title="Draw the forces on the setup">2 · Forces</button><button data-dtab="motion" aria-pressed="false" title="Replay the motion">Motion</button></div>
         <button class="go draw-only" id="doneDraw" title="Every part gets a dot: press it to set what the picture can’t show">Done drawing</button>
-        <button class="draw-only" id="dfSumBtn" hidden title="Every choice, what is assumed, and any conflicts">Summary</button>
         <span class="small draw-only" id="dfCount" aria-live="polite"></span>
         <button class="go" id="replayBtn">▶ Replay</button>
         <span class="small muted guided-only" id="dgNote"></span>
-        <button id="diagBtn" aria-expanded="false" title="Open the diagram library: every drawing component and what it means">Diagrams</button>
-        <button id="libBtn" class="guided-only" aria-expanded="false" title="Open the equation library">Library</button>
-        <button id="mcBtn" title="Multiple-choice aid: pick the principle, scale and rank, signs, vectors, check the options">Multiple choice</button>
-        <button id="boardBtn" title="Organize the problem on cards: lay out your solved path, add notes">Board</button>
-        <button id="nbBtn" aria-expanded="false" title="Your saved problems: save, search, open, export">Notebook</button>
       </div>
       <div class="ctool draw-only" id="dfTools" role="toolbar" aria-label="Drawing-first tools">
         <button data-dftool="select" aria-pressed="true" title="Move and select parts">Select</button>

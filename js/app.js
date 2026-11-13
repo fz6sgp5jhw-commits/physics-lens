@@ -2069,6 +2069,18 @@ function renderForceChips(){
   }).join('');
   box.querySelectorAll('[data-ftarget]').forEach(btn => btn.onclick = () => addTarget(btn.dataset.ftarget));
 }
+// ---------- tools menu and the pinned problem bar ----------
+// the header is sticky, so the problem stays in view while the student works lower down; a menu button closes the menu after use
+$('toolsMenu').addEventListener('click', (e) => { if (e.target.closest('.menubox button')) $('toolsMenu').open = false; });
+document.addEventListener('click', (e) => { if (!e.target.closest('#toolsMenu')) $('toolsMenu').open = false; });
+function syncPin(){
+  const t = $('problem').value.trim();
+  $('pinBar').hidden = !t; $('pinText').textContent = t;
+  document.documentElement.style.setProperty('--hdr', document.querySelector('header').offsetHeight + 8 + 'px');
+}
+$('problem').addEventListener('input', syncPin);
+$('pinToggle').onclick = () => { const on = $('pinBar').classList.toggle('open'); $('pinToggle').setAttribute('aria-expanded', String(on)); $('pinToggle').textContent = on ? 'Less' : 'More'; syncPin(); };
+new ResizeObserver(syncPin).observe(document.querySelector('header'));
 // ---------- library drawer, add-a-given panel ----------
 // two drawers share the right edge: the equation library and the diagram library; opening one closes the other
 const DRAWERS = { libDrawer: 'libBtn', diagDrawer: 'diagBtn', nbDrawer: 'nbBtn', courseDrawer: 'courseBtn' };
@@ -2798,6 +2810,7 @@ function calcHTML(){
     <div class="back">← Going back up with ∫dt needs a start value: ${starts}.</div>`;
 }
 function renderAll(full = true){
+  syncPin();
   if (full) renderUnit();
   $('checkRow').style.display = S.bank ? 'flex' : 'none';
   if (S.givens.inc && S.givens.inc.kind !== 'symbol' && S.givens.inc.val >= 5 && S.givens.inc.val <= 75 && Math.abs(S.build.theta - S.givens.inc.val) > 1e-9) S.build.theta = S.givens.inc.val;
