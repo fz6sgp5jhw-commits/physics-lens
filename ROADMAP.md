@@ -296,10 +296,13 @@ Rules for all three: the student commits to a prediction first and the app then 
 
 ## Phase Q1: scaling and ranking
 **Start with:** `Do phase Q1 in ROADMAP.md.` Read `docs/core-plan.md` section 3 (two-point numeric checking) and `docs/architecture.md` "Conventions and internals"; reuse `isolate` and the ranking/scenario code in `app.js` (`isRank`).
-- [ ] Gate first (`tests/choice-scale.test.js`): skid distance with twice the speed → 4× (d = v²/(2μg), μ and N fixed); 2× the moment of inertia at the same work → ω × 1/√2 (W = ½Iω²); the rolling race (disk, hoop, solid sphere on a ramp) ordered by a = g sinθ/(1 + I/MR²) → sphere, disk, hoop; a wrong "held fixed" choice is explained.
-- [ ] Scaling tool (`js/choice.js`): the student picks the equation chain and what is held fixed, then applies "X → k·X" to one symbol; the code isolates the target with `isolate`, substitutes, simplifies the ratio and shows each step, symbols first.
-- [ ] Ranking tool: each option is a case (shape from the I table, mass, radius, an arrangement of point masses); the student picks the deciding formula; the code orders the cases, shows what cancels (mass, radius), and flags ties.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/choice-scale.test.js`): skid distance with twice the speed → 4× (d = v²/(2μg), μ and N fixed); 2× the moment of inertia at the same work → ω × 1/√2 (W = ½Iω²); the rolling race (disk, hoop, solid sphere on a ramp) ordered by a = g sinθ/(1 + I/MR²) → sphere, disk, hoop; a wrong "held fixed" choice is explained.
+- [x] Scaling tool (`js/choice.js`): the student picks the equation chain and what is held fixed, then applies "X → k·X" to one symbol; the code isolates the target with `isolate`, substitutes, simplifies the ratio and shows each step, symbols first.
+- [x] Ranking tool: each option is a case (shape from the I table, mass, radius, an arrangement of point masses); the student picks the deciding formula; the code orders the cases, shows what cancels (mass, radius), and flags ties.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+
+Done 2026-11-12: `js/choice.js` is the ratio engine (`scaling`, `rank`, `niceRatio`, `SHAPES`), pure maths on `expr.js` with two-point numeric confirmation for root ratios; gate in `tests/choice-scale.test.js` (in `test:fast`). No screen yet: the on-canvas picker for chains, held-fixed symbols and cases is not built, so Q2/Q3 or a later phase must wire it into the UI.
+
 
 ## Phase Q2: principle chooser, sign and direction, vectors
 **Start with:** `Do phase Q2 in ROADMAP.md.` Read `js/course.js` (route card: laws, cues, decoys), `js/torque.js` (lever arm, sign), `js/build.js` (arrows).
