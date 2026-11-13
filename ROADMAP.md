@@ -284,6 +284,41 @@ Asked for by the user after the pilot, to study from PHYS 2210 Sample Exam 3A.
 
 ---
 
+## Multiple-choice aid (phases Q1–Q3)
+Added 2026-11-12. Goal: the app as an empowered drawing board for multiple-choice questions (sample exams 3A, 4A, 4B: 15 questions, "circle the answer and explain your reasoning"). Question types: which principle applies (3A #1, #3; 4B #3), sign or direction of work, torque or force (3A #4; 4A #1; 4B #1), scaling (3A #5; 4A #4), ranking and comparing (4A #2, #3; 4B #2, #4), a quick vector number (3A #2), and facts about rigid bodies (4A #5; 4B #5).
+Rules for all three: the student commits to a prediction first and the app then checks and explains; it never picks the answer. All maths through `expr.js`; new code in new files (`js/choice.js`, `js/vectors.js`), not `app.js`. The written reasoning is built from the student's own steps, since the exam asks for it. Every gate uses answers from outside the app. Run tests through `test-runner`, find code with `code-scout`; the usage stop rule applies.
+
+| Session | Phase | Start with | Model | Effort |
+|---|---|---|---|---|
+| 1 | Q1 (scaling and ranking, one ratio engine) | `Do phase Q1 in ROADMAP.md.` | Opus | High |
+| 2 | Q2 (principle chooser, sign and direction, vectors) | `Do phase Q2 in ROADMAP.md.` | Opus | Medium |
+| 3 | Q3 (checking the options, facts card) | `Do phase Q3 in ROADMAP.md.` | Sonnet | Medium |
+
+## Phase Q1: scaling and ranking
+**Start with:** `Do phase Q1 in ROADMAP.md.` Read `docs/core-plan.md` section 3 (two-point numeric checking) and `docs/architecture.md` "Conventions and internals"; reuse `isolate` and the ranking/scenario code in `app.js` (`isRank`).
+- [ ] Gate first (`tests/choice-scale.test.js`): skid distance with twice the speed → 4× (d = v²/(2μg), μ and N fixed); 2× the moment of inertia at the same work → ω × 1/√2 (W = ½Iω²); the rolling race (disk, hoop, solid sphere on a ramp) ordered by a = g sinθ/(1 + I/MR²) → sphere, disk, hoop; a wrong "held fixed" choice is explained.
+- [ ] Scaling tool (`js/choice.js`): the student picks the equation chain and what is held fixed, then applies "X → k·X" to one symbol; the code isolates the target with `isolate`, substitutes, simplifies the ratio and shows each step, symbols first.
+- [ ] Ranking tool: each option is a case (shape from the I table, mass, radius, an arrangement of point masses); the student picks the deciding formula; the code orders the cases, shows what cancels (mass, radius), and flags ties.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+## Phase Q2: principle chooser, sign and direction, vectors
+**Start with:** `Do phase Q2 in ROADMAP.md.` Read `js/course.js` (route card: laws, cues, decoys), `js/torque.js` (lever arm, sign), `js/build.js` (arrows).
+- [ ] Gate first (`tests/choice-principle.test.js`): the system checklist (net external force zero? net external torque zero? non-conservative work?) leads to the right conserved quantity for canoes (p conserved, K not), air resistance (K gained < 30 J), skater (L conserved, I falls, ω rises); sign of work for a normal force (φ = 90°, zero) and gravity on the way down (positive); torque direction decides the force at A (4B #1); dot product (10, 9, 12)·(5, 4, 0) = 86 (units kN·m → kJ) and cross product (32, 21)×(0.25, −0.18) = −10.8 N·m (k̂), both by hand.
+- [ ] Principle chooser: before the choices are read, the student fills in the system checklist and predicts; the card says what is conserved and what is not, in plain words, from the student's answers.
+- [ ] Sign and direction tool on the canvas: the student draws path and force (or lever arm); the code reports the angle φ or the torque sense and the student picks the sign; the same tool answers "which force is most effective" and "which way must the support push".
+- [ ] Vector calculator (`js/vectors.js`): components in, dot and cross out, with the formula and every product shown; units follow the inputs.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+## Phase Q3: checking the options, and the facts card
+**Start with:** `Do phase Q3 in ROADMAP.md.` Read the SLIPS list and `slipFor` code in `js/course.js` and `app.js`.
+- [ ] Gate first (`tests/choice-check.test.js`): the options are typed as numbers, ratios or statements; the student's derived result is matched to one; a wrong option is explained by the slip that produces it (√2 for 2, forgot to square, sign flipped); the app does not mark any option before the student has committed to a prediction.
+- [ ] Option checker: type the choices, commit to a prediction, then see which option matches your derived result, and why each other option fails (slip handlers as data, each with its test).
+- [ ] Facts card: for "must be true of a rotating rigid body" questions, build the card from each equation's `meaning` and `condition` fields (same ω and α for every point; v, a_t and a_c depend on r).
+- [ ] Reasoning box: the sentence(s) for the exam's "Reasoning:" line are assembled from the student's steps and are editable; never filled in before the student acts.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+---
+
 ## Phase 10: the new look
 **Start with:** `Do phase 10 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
 
