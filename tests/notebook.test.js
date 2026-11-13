@@ -61,9 +61,9 @@ test('save with and without a drawing, reload, search by unit and law, open, exp
     const e1 = cards.find(c => c.id === intoOmega[0]), e2 = eqs.find(c => c !== e1);
     assert.ok(q('alpha').x < e1.x && e1.x < q('w').x && q('w').x < e2.x && e2.x < q('ac').x, 'columns run given → equation → found → equation → target');
     const colour = (sel) => page.$eval(sel, d => getComputedStyle(d).borderTopColor);
-    assert.equal(await colour('[data-card="q:alpha"]'), 'rgb(79, 209, 255)', 'given is cyan');
-    assert.equal(await colour('[data-card="q:w"]'), 'rgb(255, 209, 102)', 'found is amber');
-    assert.equal(await colour('[data-card="q:ac"]'), 'rgb(255, 107, 214)', 'target is pink');
+    assert.equal(await colour('[data-card="q:alpha"]'), 'rgb(31, 143, 224)', 'given is blue ink');
+    assert.equal(await colour('[data-card="q:w"]'), 'rgb(224, 138, 0)', 'found is amber');
+    assert.equal(await colour('[data-card="q:ac"]'), 'rgb(217, 63, 174)', 'target is rose');
     assert.match(await page.textContent('[data-card="q:w"]'), /1\.4/, 'the found value shows on its card');
     assert.equal(await page.locator('.bdlines polyline').count(), await page.evaluate(() => window.__rl.board.arrows.length));
     // a note card is added and kept

@@ -398,8 +398,8 @@ The student can play a solved problem as a story: the scene animates, a narratio
 
 ## Phase 10: the new look (design approved 2026-11-13: the pen-and-ink journal)
 **Start with:** `Do phase 10 in ROADMAP.md.` Read `docs/redesign-plan.md` (the whole file) and open `mockups/redesign-ink.html`: that prototype is the approved look. The earlier brief (pastels, a lemur, cel animation) is replaced by it.
-Resume from: stage 1 (tokens and pages). Nothing is built in the app yet; the prototypes in `mockups/` and the plan are the only work so far.
-- [ ] Stage 1, tokens and pages: paper, ink and magic-ink tokens replace the pixel frames in `index.html`; cards, buttons, inputs, tabs and chips restyled; no sideways scroll on a 375 px phone.
+Resume from: stage 2 (the method strip and the thumb bar). Stage 1 is in the app. Still to decide in stage 2: the pages keep the old order (drawing on the left page, panels on the right), while the plan wants text left and sketch right; the phone still shows 88–127 buttons. The drawing surfaces are dark "ink plates" until stage 3 (see the Look line in `docs/architecture.md`). Fonts are system fallbacks; ask the user before adding font files.
+- [x] Stage 1, tokens and pages: paper, ink and magic-ink tokens replace the pixel frames in `index.html`; cards, buttons, inputs, tabs and chips restyled; no sideways scroll on a 375 px phone. Done 2026-11-13: guided (start and solved) and drawing-first are 375 px wide at a 375 px viewport; the 1440×900 gate passes unchanged; `tests/notebook.test.js` now expects the new state colours on board cards; cache v38.
 - [ ] Stage 2, the method strip and a thumb bar on phones; one stage's tools at a time.
 - [ ] Stage 3, pen-and-ink shapes in `js/build.js` and the Motion canvas; a caption for each drawn part.
 - [ ] Stage 4, magic: the casting circle, drifting motes, the equation that writes itself on a correct step, the wax-seal main action. Calm mode stops all of it.
