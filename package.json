@@ -5,7 +5,7 @@
   "description": "Dev-only: test tooling. The app itself has no build step and no dependencies.",
   "scripts": {
     "test": "npm run test:fast && npm run test:browser",
-    "test:fast": "node --test tests/expr.test.js tests/solvers.test.js tests/solver-snapshot.test.js tests/core-equations.test.js tests/core-engine.test.js tests/choice-scale.test.js tests/recognize.test.js",
+    "test:fast": "node --test tests/expr.test.js tests/solvers.test.js tests/solver-snapshot.test.js tests/core-equations.test.js tests/core-engine.test.js tests/choice-scale.test.js tests/choice-principle.test.js tests/recognize.test.js",
     "test:browser": "node --test tests/core-packs.test.js tests/checker.test.js tests/diagrams.test.js tests/drawfirst-algebra.test.js tests/drawfirst-knowns.test.js tests/drawfirst-setup.test.js tests/drawfirst-toolkit.test.js tests/drawfirst.test.js tests/fbd.test.js tests/homework.test.js tests/ladder.test.js tests/practice.test.js tests/rotation.test.js tests/scenarios.test.js tests/smoke.test.js tests/symbolic.test.js tests/rolling.test.js tests/torque.test.js tests/workspace.test.js tests/notebook.test.js tests/course.test.js"
   },
   "devDependencies": {

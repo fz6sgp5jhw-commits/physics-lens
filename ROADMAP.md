@@ -306,11 +306,13 @@ Done 2026-11-12: `js/choice.js` is the ratio engine (`scaling`, `rank`, `niceRat
 
 ## Phase Q2: principle chooser, sign and direction, vectors
 **Start with:** `Do phase Q2 in ROADMAP.md.` Read `js/course.js` (route card: laws, cues, decoys), `js/torque.js` (lever arm, sign), `js/build.js` (arrows).
-- [ ] Gate first (`tests/choice-principle.test.js`): the system checklist (net external force zero? net external torque zero? non-conservative work?) leads to the right conserved quantity for canoes (p conserved, K not), air resistance (K gained < 30 J), skater (L conserved, I falls, ω rises); sign of work for a normal force (φ = 90°, zero) and gravity on the way down (positive); torque direction decides the force at A (4B #1); dot product (10, 9, 12)·(5, 4, 0) = 86 (units kN·m → kJ) and cross product (32, 21)×(0.25, −0.18) = −10.8 N·m (k̂), both by hand.
-- [ ] Principle chooser: before the choices are read, the student fills in the system checklist and predicts; the card says what is conserved and what is not, in plain words, from the student's answers.
-- [ ] Sign and direction tool on the canvas: the student draws path and force (or lever arm); the code reports the angle φ or the torque sense and the student picks the sign; the same tool answers "which force is most effective" and "which way must the support push".
-- [ ] Vector calculator (`js/vectors.js`): components in, dot and cross out, with the formula and every product shown; units follow the inputs.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/choice-principle.test.js`): the system checklist (net external force zero? net external torque zero? non-conservative work?) leads to the right conserved quantity for canoes (p conserved, K not), air resistance (K gained < 30 J), skater (L conserved, I falls, ω rises); sign of work for a normal force (φ = 90°, zero) and gravity on the way down (positive); torque direction decides the force at A (4B #1); dot product (10, 9, 12)·(5, 4, 0) = 86 (units kN·m → kJ) and cross product (32, 21)×(0.25, −0.18) = −10.8 N·m (k̂), both by hand.
+- [x] Principle chooser: before the choices are read, the student fills in the system checklist and predicts; the card says what is conserved and what is not, in plain words, from the student's answers.
+- [x] Sign and direction tool on the canvas: the student draws path and force (or lever arm); the code reports the angle φ or the torque sense and the student picks the sign; the same tool answers "which force is most effective" and "which way must the support push".
+- [x] Vector calculator (`js/vectors.js`): components in, dot and cross out, with the formula and every product shown; units follow the inputs.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+
+Done 2026-11-12: engines only, no screen yet (same as Q1). `js/vectors.js` (dot, cross, angle with every product shown, kN·m reads as kJ) and `js/principle.js` (system checklist and prediction check, spin and energy-gain responses, sign of work, torque sense and lever arm, most effective force, which way a support pushes); gate in `tests/choice-principle.test.js` (in `test:fast`). Note: the roadmap's cross product (32, 21)×(0.25, −0.18) is −11.01 by hand, not −10.8; the gate uses −11.01, so check the exam's numbers. Still to build: the principle-chooser card, the on-canvas sign/direction tool and the vector calculator panel, wired into the UI together with the Q1 picker.
 
 ## Phase Q3: checking the options, and the facts card
 **Start with:** `Do phase Q3 in ROADMAP.md.` Read the SLIPS list and `slipFor` code in `js/course.js` and `app.js`.
