@@ -16,6 +16,7 @@ import { fromPath, createBoardView } from './board.js';
 import { createMC } from './mc.js';
 import { createCourse, sigMatch } from './course.js';
 import { createGuide } from './guide.js';
+import { stepCardHTML } from './concepts.js';
 import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms } from './pick.js';
 
 const $ = (id) => document.getElementById(id);
@@ -715,14 +716,14 @@ function renderSheet(){
     if (lastP && lastP.kind === 'eq' && lastP.eq === e) card.classList.add('last');
     const nums = stepsOf(e);
     card.innerHTML = `<button class="rm" data-rm="1" title="Remove from sheet">×</button><div class="eqhead">${nums.length ? `<span class="stepno">Step ${nums.map(i => i + 1).join(' · ')}</span>` : ''}<span class="eqlabel">${eq.label}</span><span class="cond">only if ${eq.condition}</span></div>
-      <div class="form">${eq.form}</div>${got.length ? `<div class="found">${got.join('<br>')}</div>` : ''}${nums.map(usesHTML).join('')}${got.length && u.length === 0 ? '' : `<div class="act">${act}</div>`}`;
+      <div class="form">${eq.form}</div>${got.length ? `<div class="found">${got.join('<br>')}</div>` : ''}${nums.map(usesHTML).join('')}${nums.length ? `<details class="concept"${COURSE.active && S.guide && S.guide.level !== 'own' ? ' open' : ''}><summary>What this step means</summary>${stepCardHTML(e)}</details>` : ''}${got.length && u.length === 0 ? '' : `<div class="act">${act}</div>`}`;
     card.addEventListener('click', (ev) => {
       if (S.busy) return;
       if (ev.target.closest('[data-solve], [data-check]') && solveLocked()) return;
       if (ev.target.closest('[data-rm]')){ S.sheet = S.sheet.filter(x => x !== e); renderAll(false); return; }
       const sb = ev.target.closest('[data-solve]'); if (sb){ const n = S.path.length; solve(e, sb.dataset.solve).then(() => { if (S.path.length > n) S.guide?.correct(); }); return; }
       if (ev.target.closest('[data-check]')){ check(e); return; }
-      if (ev.target.closest('.sym')) return;
+      if (ev.target.closest('.sym, .concept')) return;
       if (ok && u.length > 1){ S.guide?.wrong(); dialog('Illegal operation', `<b>TOO MANY UNKNOWNS</b>${eq.label} still has <b>${u.length}</b> unknowns: ${u.map(x => VARS[x].sym).join(' and ')}. One equation can only pin down one unknown. Find one of them first and this one will light up.`); }
     });
     box.appendChild(card);
@@ -2969,6 +2970,7 @@ function renderAll(full = true){
   if (S.dtab !== 'motion') S.build.render(); // labels show given values; a wheel shows its button once ω or α is known
   if (S.dtab === 'forces') renderFBD(); if (S.dtab === 'build') renderBuildUI();
   if (S.mode !== 'draw') WS.render();
+  $('notesLink').href = `concepts.html#${S.ch}`;
   draw();
 }
 async function boot(){

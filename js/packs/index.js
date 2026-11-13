@@ -17,7 +17,7 @@ export function checkSource(p, x){
 
 // Merge packs into one set of tables. Throws, naming both packs, on a collision or a missing prefix.
 export function mergePacks(packs){
-  const out = { packs: {}, quantities: {}, equations: {}, chapters: {}, components: {}, practice: [], lessons: [], slips: [], samples: {}, printOrder: [] };
+  const out = { packs: {}, quantities: {}, equations: {}, chapters: {}, components: {}, practice: [], lessons: [], slips: [], samples: {}, printOrder: [], notes: { chapters: {}, equations: {}, quantities: {} } };
   for (const p of packs){
     if (out.packs[p.id]) throw new Error(`Pack ${p.id} is loaded twice.`);
     out.packs[p.id] = p;
@@ -39,6 +39,7 @@ export function mergePacks(packs){
       for (const st of l.stops) checkSource(p, st.problem);
       l.pack = p.id; out.lessons.push(l);
     }
+    for (const part of ['chapters', 'equations', 'quantities']) Object.assign(out.notes[part], (p.notes || {})[part]);
     out.slips.push(...(p.slips || []));
     out.printOrder.push(...(p.printOrder || []));
   }

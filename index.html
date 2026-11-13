@@ -255,6 +255,8 @@
   .guidewalk{list-style:none;margin:6px 0 0;padding:0;font-size:13px} .guidewalk li.next{color:var(--gold-hi)} .guidewalk li.done{color:#6ee7a0}
   .guideok{color:#6ee7a0} .guidebad{color:var(--gold-hi)}
   .guide-pulse{outline:3px solid #4fd1ff;outline-offset:3px}
+  .menubox a.menulink{display:block;padding:4px 8px;color:inherit;text-decoration:none;border:1px solid transparent} .menubox a.menulink:hover,.menubox a.menulink:focus-visible{border-color:var(--gold-hi)}
+  .concept{margin-top:6px;font-size:13px} .concept summary{cursor:pointer;color:#4fd1ff} .concept p{margin:4px 0}
   .eq.suggest,.lib-eq.suggest{outline:2px dashed #4fd1ff;outline-offset:2px}
   .lookhere{color:#4fd1ff;font-weight:700}
   #lookPop{left:50%;top:120px;transform:translateX(-50%);width:min(520px,92vw);max-height:70vh;overflow:auto}
@@ -731,6 +733,7 @@
           <button id="bankBtn" class="guided-only" title="Practice bank: problems as text only, you set them up">Practice problems</button>
           <button id="courseBtn" aria-expanded="false" title="Lessons: long → twin → transfer, any stop in any order">Course</button>
           <b>Reference</b>
+          <a id="notesLink" class="menulink" href="concepts.html" target="_blank" rel="noopener" title="Notes for this section: ideas, definitions and every equation, written out. Opens a page you can print">Notes: concepts and definitions ↗</a>
           <button id="libBtn" class="guided-only" aria-expanded="false" title="Open the equation library">Equation library</button>
           <button id="diagBtn" aria-expanded="false" title="Open the diagram library: every drawing component and what it means">Diagram parts</button>
           <b>My work</b>

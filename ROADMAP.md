@@ -381,7 +381,11 @@ Done 2026-11-12: engines only, no screen yet (as Q1, Q2). `js/options.js`: `pars
 
 ## Phase 11: concept cards and definitions (asked 2026-11-12)
 The app does the mechanics well but trains the mechanism: the student sees equations, not ideas. Add concept cards and definitions: for each quantity and each equation, a short card saying what it means, how it is defined, when it applies and the usual confusions (reuse each equation's `meaning`, `condition`, `kind`; add `concept` text to the pack). Open questions for the user before building: where a card appears (on the sheet after a step, in a side drawer, or both), whether the student must read it before the next step, and whether definitions get a short self-check.
-- [ ] Design with the user, then data in `js/packs/mech.js`, then the card view in a new file.
+- [x] Design with the user, then data in `js/packs/mech.js`, then the card view in a new file.
+
+Decided with the user 2026-11-13: a quick explanation comes up for each solved step (collapsed under the step, open by default in a lesson at the Walk/Prompt levels), and a notes page for the whole section holds the fuller explanations and definitions. Never forced. No self-check on definitions.
+- What changed (11): pack notes in new `js/packs/mech-notes.js` (chapter guides: overview, ideas, common mix-ups; `concept`/`confusion` for 52 key equations; `define`/`confuse` for 31 key quantities), merged into `NOTES` by `packs/index.js` (pack field `notes`). New `js/concepts.js` (pure: `eqCard`, `quantityCard`, `chapterNotes`, `stepCardHTML`, `chapterHTML`; every equation and quantity gets a card even without notes) and the page `concepts.html` + `js/concepts-page.js` (every chapter, anchors `#<chapter>` and `#eq-<id>`, print stylesheet; its CSS is inline in that page because it is a separate document). The sheet card of a solved step gets `<details class="concept">`; Tools ▸ Notes link `#notesLink` opens the page at the current unit. Gate: `tests/concepts.test.js` (5). Not done: concept text only for the key equations and quantities (the rest show meaning, condition and "where it comes from"); the other units' notes are written for the mechanics pack only.
+
 
 ## Phase 10: the new look
 **Start with:** `Do phase 10 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`

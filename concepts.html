@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physics Lens: notes</title>
+<link rel="icon" href="./icons/icon-192.png">
+<style>
+  :root{--bg:#0b0d1f;--panel:#14172e;--text:#e8ebff;--muted:#9aa0c8;--line:#2c3260;--gold:#ffd98a;--cyan:#4fd1ff;--green:#6ee7a0}
+  @media (prefers-color-scheme:light){:root{--bg:#fff;--panel:#f4f5fb;--text:#14172e;--muted:#555a80;--line:#cfd3ea;--gold:#8a5a1e;--cyan:#0b6a9a;--green:#17703f}}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,sans-serif}
+  header{position:sticky;top:0;background:var(--panel);border-bottom:1px solid var(--line);padding:8px 16px;display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;z-index:2}
+  header a,header button{color:var(--cyan);font:inherit} header button{background:none;border:1px solid var(--line);padding:2px 10px;cursor:pointer}
+  #notesToc{display:flex;flex-wrap:wrap;gap:6px 12px}
+  main{max-width:860px;margin:0 auto;padding:16px}
+  h1{font-size:22px;margin:8px 0} h2{font-size:21px;border-bottom:2px solid var(--gold);padding-bottom:4px;margin-top:40px} h3{font-size:17px;color:var(--gold);margin:22px 0 4px}
+  h4{font-size:16px;margin:0 0 4px} .n-lead{font-size:17px}
+  .n-tag{background:var(--panel);border:1px solid var(--line);padding:0 6px;font-size:13px} .n-form{font-family:ui-monospace,Menlo,monospace} .n-kind{font-size:12px;color:var(--muted);font-weight:400}
+  .n-eq{border-left:3px solid var(--line);padding:2px 12px;margin:14px 0} .n-eq.n-hit{border-left-color:var(--gold);background:var(--panel)}
+  .n-watch{color:var(--gold)} .n-def{color:var(--muted)} .n-calc,.n-cond{color:var(--muted);margin:2px 0} .n-sech{font-size:17px;margin-top:24px} .small{font-size:13px} .muted{color:var(--muted)}
+  table.n-defs{border-collapse:collapse;width:100%;font-size:15px} .n-defs th,.n-defs td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top}
+  sub,sup{line-height:0}
+  @media print{header{display:none} body{background:#fff;color:#000;font-size:11pt} .n-chapter{break-before:page} .n-eq{break-inside:avoid} .n-watch,h3{color:#000} a{color:#000}}
+</style>
+</head>
+<body>
+<header><a href="./">← Physics Lens</a><strong>Notes</strong><nav id="notesToc" aria-label="Sections"></nav><button id="notesPrint" title="Print or save as PDF">Print</button></header>
+<main><h1>Notes: mechanics</h1><p class="muted">Each section: what it is about, the ideas to keep, the usual mix-ups, every quantity and every equation with what it means and when it applies. Print it or save it as a PDF to keep with your notes.</p><div id="notesBody"></div></main>
+<script type="module" src="js/concepts-page.js"></script>
+</body>
+</html>

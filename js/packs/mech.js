@@ -2,6 +2,7 @@
 // (chapters), the diagram library and the practice bank. All values are stored in SI units. Mechanics ids stay bare
 // (bare: true); every other pack prefixes its ids with its own id and an underscore. Loaded by js/packs/index.js.
 import { fmt } from '../expr.js';
+import * as NOTES from './mech-notes.js';
 
 const TAU = 2 * Math.PI;
 
@@ -1491,5 +1492,5 @@ export default {
   id: 'mech', name: 'Mechanics', bare: true,
   // licences are open question 4 in docs/core-plan.md (CC BY-SA 4.0 is the recommendation for content)
   license: { code: 'not chosen yet', content: 'not chosen yet' },
-  quantities: VARS, equations: EQS, chapters: CHAPTERS, components: COMPONENTS, practice: PRACTICE, lessons: LESSONS, slips: SLIPS, printOrder: PRINT_ORDER,
+  quantities: VARS, equations: EQS, chapters: CHAPTERS, components: COMPONENTS, practice: PRACTICE, lessons: LESSONS, slips: SLIPS, printOrder: PRINT_ORDER, notes: { chapters: NOTES.chapters, equations: NOTES.equations, quantities: NOTES.quantities },
 };
