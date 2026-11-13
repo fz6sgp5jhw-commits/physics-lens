@@ -21,11 +21,12 @@ G3 needs the checks from session 1 and the levels from session 3, so it cannot m
 
 ## Phase G1: help picking equations (replaces C6)
 **Start with:** `Do phase G1 in ROADMAP.md.` Read `hintFor` in `js/app.js` and the hint code in `js/course.js`; new code in `js/pick.js`.
-- [ ] Gate first (`tests/pick.test.js`): for the disc-and-block problem the helper names the sought quantity, the principle (Στ = Iα for the disc, ΣF = ma for the block, a = Rα linking them) and the equations to gather, from the structure of the problem, never a number.
-- [ ] "What am I looking for?" sheet: the target, what is known, what is missing, and strategies for gathering symbolic formulas (one law per body, then the link between bodies, then count unknowns against equations).
-- [ ] The suggested formulas glow in the library and on the sheet as part of the hints; the glow never reveals an answer, only which equation to look at, and only after the student has named what they are looking for.
-- [ ] "Next step" hint: what is sought, then which principle, then the route with the most steps already done. More "What's wrong?" handlers (dropped term, wrong component, unit slip), each with its test.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/pick.test.js`): for the disc-and-block problem the helper names the sought quantity, the principle (Στ = Iα for the disc, ΣF = ma for the block, a = Rα linking them) and the equations to gather, from the structure of the problem, never a number.
+- [x] "What am I looking for?" sheet: the target, what is known, what is missing, and strategies for gathering symbolic formulas (one law per body, then the link between bodies, then count unknowns against equations).
+- [x] The suggested formulas glow in the library and on the sheet as part of the hints; the glow never reveals an answer, only which equation to look at, and only after the student has named what they are looking for.
+- [x] "Next step" hint: what is sought, then which principle, then the route with the most steps already done. More "What's wrong?" handlers (dropped term, wrong component, unit slip), each with its test.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+- What changed (G1): new `js/pick.js` (pure): `routes`/`plan` find the smallest set of equations with as many equations as unknowns for the open targets (equations flagged `shortcut` in a pack, like D6 and V6, are left out), say it as principle → links → count in words, never a number; also `unitSlip` and `dropTerms`. Packs gained a `principle` line on the equations used by the disc problem. Guided mode: a "What am I looking for?" button (`#lookBtn`, popup `#lookPop`) asks for the target first, then shows sought, missing, the gathering strategy and, with hints on, the laws and a button that lights the formulas (`.suggest`, library and sheet, never gathers). The Hint on a missing equation now goes sought → principle → equation, and the teaching hint lights the card. "What's wrong?" now also names a unit slip (×100, ×1000, rad/deg, rev) and a term left out of one equation. Gate: `tests/pick.test.js` (7). C6 is covered here.
 
 ## Phase G2: fading guide levels and a demo first
 **Start with:** `Do phase G2 in ROADMAP.md.` Read `js/course.js` (help switches, stars); new code in `js/guide.js`.

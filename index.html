@@ -250,6 +250,10 @@
   .eq.dim{opacity:.6}
   .eq.faded{opacity:.35}
   /* equation cards glow when they can be solved */
+  .eq.suggest,.lib-eq.suggest{outline:2px dashed #4fd1ff;outline-offset:2px}
+  .lookhere{color:#4fd1ff;font-weight:700}
+  #lookPop{left:50%;top:120px;transform:translateX(-50%);width:min(520px,92vw);max-height:70vh;overflow:auto}
+  #lookPop ol{margin:4px 0 4px 18px;padding:0}
   .eq.lit,.lib-eq.lit{border-image:var(--frame-pink) 6 / 3px stretch;box-shadow:0 0 0 0 transparent,0 0 18px rgba(255,107,214,.35);background:var(--dither),#1e0f3a;background-clip:padding-box}
   .eq.lit{animation:glow 2s ease-in-out infinite}
   @keyframes glow{50%{box-shadow:0 0 30px rgba(255,107,214,.6)}}
@@ -817,12 +821,13 @@
         </div>
       </div>
     </section>
+    <div class="pop" id="lookPop" hidden role="dialog" aria-label="What am I looking for?"></div>
     <section class="card" id="sheetWin" data-stage="3">
       <div class="calc" id="calcSolve"></div>
       <div class="locknote" id="sheetLock" hidden></div>
       <div class="sheethead">
         <div class="targets" id="targets"></div>
-        <div class="modes"><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="Gather what’s needed and walk the shortest path">Show me the path</button></div>
+        <div class="modes"><button id="lookBtn" title="Say what you are looking for, and how to gather the formulas">What am I looking for?</button><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="Gather what’s needed and walk the shortest path">Show me the path</button></div>
       </div>
       <div class="eq spancard" id="spanCard" hidden></div>
       <div class="sheet-status" id="sheetStatus"></div>

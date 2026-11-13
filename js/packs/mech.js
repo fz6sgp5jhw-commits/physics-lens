@@ -465,7 +465,7 @@ const EQS = {
     calc: '∫ x² (M/L) dx from 0 to L = ML²/3. The parallel-axis theorem agrees: ML²/12 + M(L/2)² = ML²/3.',
   },
   J3: {
-    label: 'I3', eq: '{Icm} = ½{M}{R}²', kind: 'rel', cue: 'a solid disc or cylinder', meaning: 'Solid disc or cylinder about its axle.', condition: 'solid disc or cylinder',
+    label: 'I3', eq: '{Icm} = ½{M}{R}²', kind: 'rel', principle: 'I = ½MR² for a solid disc', cue: 'a solid disc or cylinder', meaning: 'Solid disc or cylinder about its axle.', condition: 'solid disc or cylinder',
     applies: c => c.shape === 'disc', needs: 'a solid disc or cylinder', calc: 'Add up thin rings: ∫ r² (2M r/R²) dr from 0 to R = ½MR².',
   },
   J4: {
@@ -496,13 +496,13 @@ const EQS = {
     },
   },
   J9: {
-    label: 'I9', eq: '{I} = {Icm}', kind: 'rel', cue: 'the axis passes through the centre of mass',
+    label: 'I9', eq: '{I} = {Icm}', kind: 'rel', principle: 'the axis is through the centre, so I is the centre value', cue: 'the axis passes through the centre of mass',
     meaning: 'The body turns about its own centre of mass, so its I is the centre value.', condition: 'axis through the centre of mass', applies: c => c.axis === 'centre',
     needs: 'an axis through the centre of mass', calc: 'The parallel-axis theorem with d = 0.',
   },
   // ---- rotational dynamics: Στ = Iα, and a string unwinding from a disc ----
   D2: {
-    label: 'D2', eq: '{tnet} = {I}{alpha}', kind: 'law', cue: 'a net torque and an angular acceleration',
+    label: 'D2', eq: '{tnet} = {I}{alpha}', kind: 'law', principle: 'Στ = Iα for a turning body', cue: 'a net torque and an angular acceleration',
     meaning: 'Newton’s second law for turning: the net torque sets the angular acceleration.', condition: 'rigid body, fixed axis',
     calc: 'Add F = ma for every bit of the body, times its distance from the axis: Σ r F⊥ = Σ m r² α.',
   },
@@ -513,12 +513,12 @@ const EQS = {
     calc: 'The rim’s tangential acceleration is Rα, and the string carries it to the mass.',
   },
   D4: {
-    label: 'D4', eq: '{Tn}{R} = {I}{alpha}', kind: 'law', cue: 'only the string turns the disc',
+    label: 'D4', eq: '{Tn}{R} = {I}{alpha}', kind: 'law', principle: 'Στ = Iα for the disc', cue: 'only the string turns the disc',
     meaning: 'The disc: only the string turns it (the axle’s force and the weight act at the centre, with no lever arm).', condition: 'frictionless axle, string at the rim',
     calc: 'Στ = Iα with one torque: the tension at the rim, lever arm R, perpendicular to the radius.',
   },
   D5: {
-    label: 'D5', eq: '{m}{g} − {Tn} = {m}{a}', kind: 'law', cue: 'the hanging mass: weight down, string up',
+    label: 'D5', eq: '{m}{g} − {Tn} = {m}{a}', kind: 'law', principle: 'ΣF = ma for the hanging block', cue: 'the hanging mass: weight down, string up',
     meaning: 'The hanging mass: gravity down, the string up; the difference accelerates it.', condition: '+ down for the hanging mass',
     calc: 'Newton’s second law for the hanging mass, + down.',
     solve: {
@@ -526,7 +526,7 @@ const EQS = {
     },
   },
   D6: {
-    label: 'D6', eq: '{a} = {m}{g} / ({m} + {I} / {R}²)', kind: 'rel', cue: 'the hanging mass and the disc as one system',
+    label: 'D6', eq: '{a} = {m}{g} / ({m} + {I} / {R}²)', kind: 'rel', shortcut: true, cue: 'the hanging mass and the disc as one system',
     meaning: 'Whole system: the hanging weight accelerates the mass and spins the disc, which acts like an extra mass I/R².',
     condition: 'frictionless axle, string doesn’t slip', calc: 'Put T = Iα/R and α = a/R into mg − T = ma: mg − Ia/R² = ma.',
     solve: {
@@ -553,7 +553,7 @@ const EQS = {
 
   // ---- energy with rotation (phase C3) ----
   EN1: {
-    label: 'E1', eq: '{K0} + {U0} + {Wnc} = {K} + {U}', kind: 'law', cue: 'heights and speeds at two moments, with no time asked',
+    label: 'E1', eq: '{K0} + {U0} + {Wnc} = {K} + {U}', kind: 'law', principle: 'energy: what is gained pays for what is lost', cue: 'heights and speeds at two moments, with no time asked',
     meaning: 'Energy is conserved: what it starts with, plus the work friction or a push does, is what it ends with. K counts moving and turning.',
     condition: 'gravity the only other force that does work', calc: 'The work–energy theorem with gravity’s work written as −ΔU: W_nc + W_grav = ΔK and W_grav = U₀ − U.',
   },
@@ -568,7 +568,7 @@ const EQS = {
     applies: c => c.body !== 'hang' && c.ground !== false, needs: 'the body itself moving up or down (not a hanging mass), with heights measured from where it ends', calc: 'Gravity’s work on the way down is Mgh, stored as U₀.',
   },
   EN4: {
-    label: 'E4', eq: '{U0} = {m}{g}{h}', kind: 'def', cue: 'the hanging mass starts higher up',
+    label: 'E4', eq: '{U0} = {m}{g}{h}', kind: 'def', principle: 'the height the block starts at gives its starting energy', cue: 'the hanging mass starts higher up',
     meaning: 'Gravitational potential energy of the hanging mass, measured from where it ends. The disc’s centre doesn’t move, so its U doesn’t change.',
     condition: 'h measured from where the mass ends (U = 0 there)', applies: c => c.body === 'hang', needs: 'a hanging mass turning a disc (the body: turned by a hanging mass)',
     calc: 'Gravity’s work on the falling mass is mgh, stored as U₀.',
@@ -598,13 +598,13 @@ const EQS = {
   },
   // ---- rolling without slipping, and a string that doesn't slip on a disc ----
   RO1: {
-    label: 'V1', eq: '{v} = {R}{w}', kind: 'rel', cue: 'rolls without slipping (or a string unwinds without slipping)',
+    label: 'V1', eq: '{v} = {R}{w}', kind: 'rel', principle: 'v = Rω: the string links the block to the rim', cue: 'rolls without slipping (or a string unwinds without slipping)',
     meaning: 'Rolling without slipping: the point touching the ground is at rest, so the centre moves at v = Rω. A string that doesn’t slip moves with the rim, so the same holds.',
     condition: 'rolls without slipping, or the string doesn’t slip', applies: c => c.body !== 'spin', needs: 'rolling, or a hanging mass on a string',
     calc: 'In one turn the body rolls its circumference 2πR forward, so distance = Rθ; differentiate: v = Rω.',
   },
   RO2: {
-    label: 'V2', eq: '{a} = {R}{alpha}', kind: 'rel', cue: 'rolls without slipping and speeds up',
+    label: 'V2', eq: '{a} = {R}{alpha}', kind: 'rel', principle: 'a = Rα: the string links the block to the rim', cue: 'rolls without slipping and speeds up',
     meaning: 'Rolling without slipping, differentiated once more: the centre’s acceleration is a = Rα.', condition: 'rolls without slipping, or the string doesn’t slip',
     applies: c => c.body !== 'spin', needs: 'rolling, or a hanging mass on a string', calc: 'Differentiate v = Rω: a = Rα.',
   },
@@ -624,7 +624,7 @@ const EQS = {
     solve: { v: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the speed, not the direction, so the positive root is kept.' }) }, R: null },
   },
   RO5: {
-    label: 'V5', eq: '{K} = ½{m}{v}² + ½{I}{w}²', kind: 'rel', cue: 'a falling mass spins a disc on a string',
+    label: 'V5', eq: '{K} = ½{m}{v}² + ½{I}{w}²', kind: 'rel', principle: 'the energy of the block and of the disc together', cue: 'a falling mass spins a disc on a string',
     meaning: 'The hanging mass moves and the disc turns: K counts both.', condition: 'the disc turns on a fixed axle',
     applies: c => c.body === 'hang', needs: 'a hanging mass turning a disc',
     calc: 'The mass has ½mv²; the disc’s centre stays put, so it has only ½Iω².',
@@ -632,7 +632,7 @@ const EQS = {
              w: { pick: () => ({ branch: 1, note: 'Kinetic energy gives the spin rate, not the direction, so the positive root is kept.' }) } },
   },
   RO6: {
-    label: 'V6', eq: '{K} = ½({m} + {I} / {R}²){v}²', kind: 'rel', cue: 'the mass and the disc’s energy from the mass’s speed',
+    label: 'V6', eq: '{K} = ½({m} + {I} / {R}²){v}²', kind: 'rel', shortcut: true, cue: 'the mass and the disc’s energy from the mass’s speed',
     meaning: 'Shortcut: put ω = v/R into K = ½mv² + ½Iω². The disc acts like an extra mass I/R².',
     condition: 'string doesn’t slip, fixed axle', applies: c => c.body === 'hang', needs: 'a hanging mass turning a disc',
     calc: '½I(v/R)² = ½(I/R²)v², added to ½mv².',
@@ -1464,6 +1464,7 @@ const LESSONS = [
 // and what to say when that edit turns the app's answer into the student's. The most specific comes first.
 const SLIPS = [
   { id: 'trig', edit: 'swapTrig', says: 'Your number is what you get with <b>sin and cos swapped</b> in {eq}. Check which side of the triangle is opposite the angle: the component along the angle’s side uses cos, the one across from it sin.' },
+  { id: 'drop', edit: 'dropTerm', says: 'Your number is what you get with <b>one term left out</b> of {eq}. Check that every force, torque or energy that acts made it into the equation.' },
   { id: 'sign', edit: 'flipSign', says: 'Your number is what you get with <b>{q} the other way round</b>: a sign slip. Check which way you took as + and the direction of {q}.' },
 ];
 

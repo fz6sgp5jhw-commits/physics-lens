@@ -14,6 +14,7 @@ import { createNotebook } from './notebook.js';
 import { fromPath, createBoardView } from './board.js';
 import { createMC } from './mc.js';
 import { createCourse, sigMatch } from './course.js';
+import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms } from './pick.js';
 
 const $ = (id) => document.getElementById(id);
 // text the student typed or pasted is escaped before it goes into HTML
@@ -509,6 +510,40 @@ function syncDrawnConds(){
 }
 
 // ---------- 3. library ----------
+// ---------- help picking equations (phase G1): the suggested formulas glow, only after the student has named a target ----------
+S.suggest = [];
+const suggested = (e) => S.help.hints && S.targets.length > 0 && S.suggest.includes(e);
+const pickInput = () => ({ targets: S.targets.filter(t => VARS[t] && !isFn(t) && !isRank(t)), known: knownSet(), eqs: appEqs(), EQS, VARS });
+const curPlan = () => pickPlan(pickInput());
+function setSuggest(list){ S.suggest = list; renderLibrary(); renderSheet(); }
+function renderLook(){
+  const pop = $('lookPop'), named = S.targets.length > 0;
+  let html = '<div class="row"><b>What am I looking for?</b><button class="dfmini" data-lookclose title="Close (Esc)">×</button></div>';
+  if (!S.condOk || !userGivens()) html += '<p class="small">Add your givens and set the conditions first: what is known decides what can be found.</p>';
+  else if (!named){
+    const opts = chVars().filter(x => VARS[x] && !known(x)).map(x => `<option value="${x}">${VARS[x].plain}: ${nm(x)}</option>`).join('');
+    html += `<p class="small">Say what the question asks for. Naming it is your decision; everything else follows from it.</p><div class="row"><select id="lookSel" aria-label="What the question asks for">${opts}</select><button id="lookSet">I’m looking for this</button></div>`;
+  } else {
+    const p = curPlan(), L = looking({ targets: S.targets, known: knownSet(), VARS, plan: p });
+    html += `<p class="small"><b>Looking for:</b> ${L.sought.join(', ') || 'everything is found'}</p>`;
+    if (!p.none) html += `<p class="small"><b>Missing, so it needs an equation of its own:</b> ${L.missing.join(', ') || 'nothing else'}</p>`;
+    html += `<div class="small"><b>How to gather the formulas:</b><ol>${STRATEGY.map(x => `<li>${esc(x)}</li>`).join('')}</ol></div>`;
+    if (S.help.hints && !p.none) html += `<details class="small"><summary>Which laws and links to look for</summary><p>${p.lines.map(esc).join('</p><p>')}</p></details>
+      <div class="row"><button id="lookGlow">${S.suggest.length ? 'Stop lighting them' : 'Light up those formulas'}</button></div><p class="small muted">The glow marks which formulas to look at in the library and on your sheet. It never gives an answer.</p>`;
+    else if (p.none && p.lines.length) html += `<p class="small warn">${esc(p.lines[0])}</p>`;
+    else if (!S.help.hints) html += '<p class="small muted">Hints are off in this stop, so the formulas are not suggested.</p>';
+  }
+  pop.innerHTML = html; pop.hidden = false;
+}
+$('lookBtn').onclick = () => { const pop = $('lookPop'); if (pop.hidden) renderLook(); else pop.hidden = true; };
+$('lookPop').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.lookclose !== undefined) $('lookPop').hidden = true;
+  else if (b.id === 'lookSet'){ addTarget($('lookSel').value); renderLook(); }
+  else if (b.id === 'lookGlow'){ setSuggest(S.suggest.length ? [] : curPlan().eqs); renderLook(); }
+});
+$('lookPop').addEventListener('keydown', (e) => { if (e.key === 'Escape') $('lookPop').hidden = true; });
+
 function renderLibrary(){
   const lib = $('lib'); lib.innerHTML = '';
   const ks = knownSet(), ready = S.condOk && Object.keys(S.givens).length > 0;
@@ -540,6 +575,7 @@ function renderLibrary(){
         const on = S.sheet.includes(e);
         if (on) cls += ' onsheet';
         if (active && S.focus.length && eq.vars.some(v => S.focus.includes(v))) cls += ' rel';
+        if (active && suggested(e)){ cls += ' suggest'; status += ' <span class="lookhere">look here</span>'; }
         html += `<div class="${cls}" data-eq="${e}"><div><div class="lmeta"><span class="tag">${eq.label}</span><span>only if ${eq.condition}</span></div><div class="lform">${eq.form}</div></div>
           ${active ? `<button class="gbtn ${on ? '' : 'go'}" data-gather="${e}">${on ? '✓ On sheet' : '+ Gather'}</button>` : ''}
           <div class="lmean">${eq.meaning} <span class="lmeta" style="display:inline-flex">${status}</span></div>
@@ -665,6 +701,7 @@ function renderSheet(){
     const rel = S.focus.length && eq.vars.some(v => S.focus.includes(v));
     card.className = 'eq ' + (!ok ? 'dim' : (s || fu) ? (S.help.glow ? 'lit' : 'ready') : u.length === 0 ? 'done' : 'dim') + (S.focus.length ? (rel ? ' rel' : ' faded') : '');
     card.dataset.eq = e;
+    if (suggested(e)) card.classList.add('suggest');
     let act;
     if (!ok) act = `<span class="small warn">Doesn’t apply now (needs ${naReason(e)})</span>`;
     else if (s) act = `<button class="go" data-solve="${s}">Solve for ${VARS[s].sym} ▶</button>${s === curTarget() ? '<span class="small hot">← target!</span>' : ''}`;
@@ -1215,8 +1252,9 @@ function hintFor(){
   const miss = lp.find(s => s.kind === 'eq' && !S.sheet.includes(s.eq));
   if (!miss) return 'Your motion ladder can get there: look at the buttons on its rungs.';
   const sec = chapter().sections.find(x => x.eqs.includes(miss.eq)), e = EQS[miss.eq];
-  return { key: 'miss' + miss.eq, point: sheetStructure(baseOf(cur)) || 'Your sheet is missing a link.',
-    teach: `Look for an equation that connects <b>${e.vars.map(x => VARS[x].sym).join(', ')}</b>, in the library section “${sec.title}”: it’s for ${e.cue}.`,
+  const pl = curPlan(), step = pl.steps.find(x => x.eq === miss.eq), sought = `You’re looking for <b>${symOf(cur)}</b> (${nm(baseOf(cur))}). `;
+  return { key: 'miss' + miss.eq, point: sought + (sheetStructure(baseOf(cur)) || 'Your sheet is missing a link.'),
+    teach: `${step ? `The principle to look for: <i>${step.principle}</i>. ` : ''}Look for an equation that connects <b>${e.vars.map(x => VARS[x].sym).join(', ')}</b>, in the library section “${sec.title}”: it’s for ${e.cue}.`, glow: [miss.eq],
     bottom: `Gather <b>${e.label}</b>: ${e.form}. I’ve put it on your sheet.`, act: () => { if (!S.sheet.includes(miss.eq)){ S.sheet.push(miss.eq); renderAll(false); } } };
 }
 // what the sheet's equations can and can't pin down (C1's matching): an unknown no equation can take, and equations that add nothing
@@ -1238,6 +1276,7 @@ $('hintBtn').onclick = () => {
   if (typeof h === 'string'){ hintAt = { key: null, level: 0 }; say(h); return; }
   hintAt = { key: h.key, level: hintAt.key === h.key ? Math.min(3, hintAt.level + 1) : 1 };
   const lv = hintAt.level;
+  if (lv >= 2 && h.glow) setSuggest(h.glow);   // the teaching hint lights the formula's card; it still doesn't gather it
   if (lv === 3){ h.act?.(); COURSE.bottomOut(); }
   say(`<span class="hlv">${['', 'Hint', 'Teaching hint', 'Bottom-out hint'][lv]}</span> ${[0, h.point, h.teach, h.bottom][lv]}${lv < 3 ? ` <i>Press Hint again for more${COURSE.active && lv === 2 ? ' (the next one costs a star)' : ''}.</i>` : ''}`);
 };
@@ -2763,10 +2802,14 @@ const SLIP_EDITS = {
   // sin and cos swapped in one step
   swapTrig: () => S.path.map((p, i) => p.kind === 'eq' && !p.gen && !p.fn && hasTrig(p.tree) ? { edit: { step: i, tree: swapTrig(p.tree) }, eq: EQS[p.eq].label } : null).filter(Boolean),
   // one given, or the answer itself, the other way round
+  // one term of a sum left out of one step's equation
+  dropTerm: () => S.path.flatMap((p, i) => p.kind === 'eq' && !p.gen && !p.fn && p.tree ? dropTerms(p.tree).map(d => ({ edit: { step: i, tree: d.tree }, eq: EQS[p.eq].label })) : []),
   flipSign: (t) => [...Object.entries(S.givens).filter(([, g]) => g.val).map(([id]) => ({ edit: { given: id }, q: VARS[id].sym })), { edit: {}, flipAnswer: true, q: VARS[t].sym }],
 };
 function whatsWrong(t, typed){
   if (!S.path.length || !known(t)) return null;
+  const right = S.found[t] ? S.found[t].val : val(t), us = unitSlip(right, typed, sigMatch);
+  if (us) return `Your number is the right one with a <b>unit slip</b>: it looks like ${us.says}. Check the unit each given is in before it goes into an equation.`;
   for (const slip of SLIPS) for (const c of SLIP_EDITS[slip.edit](t)){
     let x; try { x = replay(c.edit)[t]; } catch { continue; }
     if (c.flipAnswer) x = -x;
@@ -2787,7 +2830,7 @@ const COURSE = S.course = createCourse({
   app: { load: loadLesson, setHelp, say, ask, dialog, esc, openMap: () => setDrawer(true, 'courseDrawer'),
     eqLabel: (e) => `${EQS[e].label} (${textOf(EQS[e].form)})`, eqKind: (e) => EQS[e].kind || 'law',
     targets: () => S.targets.filter(t => VARS[t]).map(t => [t, `${letter(S.targets.indexOf(t))} ${VARS[t].plain}`, unitOf(t)]),
-    check: checkAnswer, wrong: (t, typed) => whatsWrong(t, typed) || 'None of the usual slips (sin and cos swapped, a sign flipped) gives your number. Compare your steps with the app’s, one line at a time.' },
+    check: checkAnswer, wrong: (t, typed) => whatsWrong(t, typed) || 'None of the usual slips (a unit mix-up, sin and cos swapped, a sign flipped, a term left out) gives your number. Compare your steps with the app’s, one line at a time.' },
 });
 
 // ---------- assemble ----------
