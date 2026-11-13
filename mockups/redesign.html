@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physics Lens: redesign prototype</title>
+<!-- A look-and-feel prototype only (phase 10). Not the app: nothing here solves physics. The real build restyles index.html. -->
+<style>
+  :root{
+    --ink:#0d0819; --night:#120b26; --desk:#1a1136; --wood:#241848; --par:#f3e6c4; --pin:#3a2a14;
+    --blue:#3fb8ff; --grn:#3ddc84; --vio:#a66bff; --amb:#ffb52e; --red:#ff5a4f; --mag:#ff6bd6; --grey:#c9c2dd;
+    --text:#efe8ff; --muted:#b9a9e6;
+    --display:'Luminari','Almendra','Palatino Linotype',Palatino,Georgia,serif;
+    --body:'Avenir Next','Nunito','Segoe UI',system-ui,sans-serif;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{font:15px/1.5 var(--body);color:var(--text);background:
+      radial-gradient(900px 500px at 18% -10%,rgba(166,107,255,.28),transparent 60%),
+      radial-gradient(700px 480px at 92% 8%,rgba(63,184,255,.20),transparent 60%),
+      radial-gradient(800px 600px at 60% 110%,rgba(61,220,132,.14),transparent 60%),
+      var(--night);overflow-x:hidden}
+  #sky{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+  .app{position:relative;z-index:1;max-width:1320px;margin:0 auto;padding:14px 16px 96px}
+
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px}
+  .brand{font:700 30px/1 var(--display);color:var(--amb);text-shadow:0 0 18px rgba(255,181,46,.55),0 2px 0 var(--ink);letter-spacing:.5px}
+  .brand small{display:block;font:italic 13px/1.3 var(--display);color:var(--muted);text-shadow:none;letter-spacing:0}
+  .where{color:var(--muted)}
+  .stars{margin-left:auto;font-size:20px;color:var(--amb);text-shadow:0 0 12px rgba(255,181,46,.8)}
+  .stars .off{opacity:.25;text-shadow:none}
+
+  .grid{display:grid;grid-template-columns:230px minmax(0,1fr) 340px;gap:14px;align-items:start}
+  .col{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+  .panel{background:linear-gradient(160deg,rgba(54,36,104,.92),rgba(30,19,62,.94));border:3px solid var(--ink);border-radius:18px 12px 18px 12px;
+    box-shadow:0 0 0 1px rgba(166,107,255,.35) inset,0 10px 26px rgba(0,0,0,.45);padding:12px 14px}
+  .panel h3{font:700 19px/1.1 var(--display);color:#dccbff;margin:0 0 8px;text-shadow:0 0 12px rgba(166,107,255,.6)}
+
+  /* the method: steps that light up */
+  .step{display:flex;align-items:center;gap:10px;width:100%;padding:7px 6px;margin:2px 0;border:0;background:none;color:var(--muted);font:inherit;text-align:left;border-radius:10px;cursor:pointer}
+  .step .dot{flex:0 0 26px;height:26px;border-radius:50%;border:2.5px solid var(--ink);display:grid;place-items:center;font-weight:700;font-size:13px;background:#3a2a66;color:var(--text)}
+  .step.done{color:#bff5d6}.step.done .dot{background:var(--grn);color:var(--ink);box-shadow:0 0 12px rgba(61,220,132,.7)}
+  .step.now{color:#fff;font-weight:700;background:rgba(255,181,46,.12)}
+  .step.now .dot{background:var(--amb);color:var(--ink);box-shadow:0 0 0 0 rgba(255,181,46,.7);animation:pulse 1.8s ease-out infinite}
+  .step:focus-visible,.btn:focus-visible,.tool:focus-visible{outline:3px solid #fff;outline-offset:2px}
+  @keyframes pulse{to{box-shadow:0 0 0 14px rgba(255,181,46,0)}}
+
+  /* quantities: glowing chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px}
+  .chip{font:700 15px/1 var(--mono);color:var(--ink);padding:7px 12px;border-radius:999px;border:2.5px solid var(--ink);position:relative}
+  .chip.given{background:var(--blue);box-shadow:0 0 14px rgba(63,184,255,.75)}
+  .chip.found{background:var(--amb);box-shadow:0 0 14px rgba(255,181,46,.75)}
+  .chip.target{background:var(--mag);box-shadow:0 0 16px rgba(255,107,214,.85);animation:breathe 2.4s ease-in-out infinite}
+  .chip.unknown{background:var(--grey);opacity:.8}
+  @keyframes breathe{50%{box-shadow:0 0 26px rgba(255,107,214,1)}}
+  .legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;border:1.5px solid var(--ink)}
+
+  /* the stage: the drawing inside a casting circle */
+  .stage{padding:0;overflow:hidden;position:relative;border-radius:22px 14px 22px 14px}
+  .stage svg{display:block;width:100%;height:auto}
+  .circle{transform-origin:300px 250px;animation:turn 60s linear infinite}
+  .circle2{transform-origin:300px 250px;animation:turn 90s linear infinite reverse}
+  @keyframes turn{to{transform:rotate(360deg)}}
+  .halo{animation:glow 3.2s ease-in-out infinite}
+  @keyframes glow{50%{opacity:.55}}
+  .spin{transform-origin:240px 200px}
+  .stage.cast .spin{animation:turn 2.4s cubic-bezier(.3,0,.2,1) 1}
+  .weight{opacity:0;transform:translateY(-14px);transition:opacity .5s,transform .5s}
+  .stage.cast .weight{opacity:1;transform:none}
+  .ask{transition:opacity .3s}.stage.cast .ask{opacity:0}
+  .burst{opacity:0;transform-origin:372px 372px;transform:scale(.2)}
+  .stage.cast .burst{animation:pop .9s ease-out 1}
+  @keyframes pop{30%{opacity:1;transform:scale(1.15)}100%{opacity:0;transform:scale(1.6)}}
+  .tag{position:absolute;left:14px;top:12px;font:700 15px/1 var(--display);color:var(--ink);background:var(--amb);border:2.5px solid var(--ink);border-radius:12px 6px 12px 6px;padding:5px 12px;transform:rotate(-3deg);box-shadow:0 0 16px rgba(255,181,46,.6)}
+
+  /* the page: parchment that teaches */
+  .page{background:
+      radial-gradient(120% 90% at 20% 0%,rgba(255,255,255,.55),transparent 55%),
+      radial-gradient(90% 80% at 100% 100%,rgba(154,110,40,.28),transparent 60%),var(--par);
+    color:var(--pin);border:3px solid var(--ink);border-radius:8px 20px 10px 18px;padding:16px 18px;box-shadow:0 0 0 1px rgba(122,90,42,.6) inset,0 10px 26px rgba(0,0,0,.5);position:relative}
+  .page h3{font:700 22px/1.1 var(--display);color:#6a1f3a;margin:0 0 6px}
+  .page p{margin:0 0 8px}
+  .page .rule{height:10px;margin:10px 0;background:radial-gradient(circle,#9a7a3a 1.4px,transparent 1.6px) 0 50%/12px 4px repeat-x}
+  .page .warn{font:italic 14px/1.4 var(--display);color:#7a2a12}
+  .page .line{font:15px/1.6 var(--mono);background:rgba(58,42,20,.08);border-left:4px solid #6a1f3a;padding:4px 10px;margin:6px 0;border-radius:0 8px 8px 0}
+  .page .line.lit{border-left-color:#1f9a57;background:rgba(61,220,132,.18);animation:ignite .9s ease-out 1}
+  @keyframes ignite{0%{box-shadow:0 0 0 0 rgba(61,220,132,.9)}100%{box-shadow:0 0 0 18px rgba(61,220,132,0)}}
+  .hidden{display:none}
+
+  .btn{font:700 17px/1 var(--display);color:var(--ink);background:linear-gradient(180deg,#ffd27a,var(--amb));border:3px solid var(--ink);border-radius:16px 10px 16px 10px;padding:12px 20px;cursor:pointer;
+    box-shadow:0 0 22px rgba(255,181,46,.55),0 5px 0 #7a4a00;transition:transform .08s,box-shadow .08s;position:relative;overflow:hidden}
+  .btn:active{transform:translateY(4px);box-shadow:0 0 22px rgba(255,181,46,.55),0 1px 0 #7a4a00}
+  .btn::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 40%,rgba(255,255,255,.7) 50%,transparent 60%);transform:translateX(-120%);animation:shimmer 3.5s ease-in-out infinite}
+  @keyframes shimmer{60%,100%{transform:translateX(120%)}}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .ghost{font:600 14px/1 var(--body);color:var(--text);background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.25);border-radius:12px;padding:10px 14px;cursor:pointer}
+
+  /* thumb bar: phones only */
+  .tray{display:none}
+  .tool{flex:1;min-height:56px;border:3px solid var(--ink);border-radius:14px 10px 14px 10px;font:700 12px/1.1 var(--body);color:var(--ink);display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;cursor:pointer}
+  .tool b{font-size:20px;line-height:1}
+
+  @media (max-width:1000px){
+    .grid{grid-template-columns:minmax(0,1fr)}
+    .method{order:1}.stagecol{order:2}.teach{order:3}
+    .method .steps{display:flex;gap:4px;overflow-x:auto;padding-bottom:4px}
+    .method .step{flex:0 0 auto;width:auto;flex-direction:column;gap:3px;font-size:11px;padding:4px 8px;text-align:center}
+    .method h3,.shelf h3{font-size:16px}
+    .brand{font-size:24px}
+    .tray{display:flex;gap:8px;position:fixed;left:0;right:0;bottom:0;z-index:5;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:linear-gradient(180deg,rgba(18,11,38,0),var(--night) 30%)}
+    .desk-only{display:none}
+  }
+  @media (prefers-reduced-motion:reduce){*,*::after{animation:none !important;transition:none !important}}
+  body.calm *,body.calm *::after{animation:none !important;transition:none !important}
+</style>
+</head>
+<body>
+<canvas id="sky" aria-hidden="true"></canvas>
+<div class="app">
+  <header>
+    <div class="brand">Physics Lens<small>you cast the physics, it keeps the books</small></div>
+    <span class="where">Disc and block · stop 1 of 3</span>
+    <span class="stars" id="stars" aria-label="1 of 3 stars">★<span class="off">★★</span></span>
+    <button class="ghost" id="calm" aria-pressed="false">Calm mode</button>
+  </header>
+
+  <div class="grid">
+    <div class="col method">
+      <section class="panel">
+        <h3>The method</h3>
+        <div class="steps">
+          <button class="step done"><span class="dot">✓</span>Gather the givens</button>
+          <button class="step done"><span class="dot">✓</span>Sketch the setup</button>
+          <button class="step now" id="s3"><span class="dot">3</span>Name the forces</button>
+          <button class="step" id="s4"><span class="dot">4</span>Set conditions</button>
+          <button class="step"><span class="dot">5</span>Work the equations</button>
+          <button class="step"><span class="dot">6</span>Play it back</button>
+        </div>
+      </section>
+      <section class="panel shelf">
+        <h3>You know and want</h3>
+        <div class="chips">
+          <span class="chip given">M</span><span class="chip given">R</span><span class="chip given">m</span><span class="chip given">g</span>
+          <span class="chip found">I</span><span class="chip target">a ?</span><span class="chip unknown">T</span><span class="chip unknown">α</span>
+        </div>
+        <div class="legend"><span><i style="background:var(--blue)"></i>given</span><span><i style="background:var(--amb)"></i>found</span><span><i style="background:var(--mag)"></i>target</span><span><i style="background:var(--grey)"></i>unknown</span></div>
+      </section>
+    </div>
+
+    <div class="col stagecol">
+      <section class="panel stage" id="stage" aria-label="Your drawing">
+        <span class="tag">Free-body sketch</span>
+        <svg viewBox="0 0 600 470" role="img" aria-label="A disc on an axle with a block hanging from a string. The tension is drawn; the block's weight is not yet.">
+          <defs>
+            <radialGradient id="orb" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#a66bff" stop-opacity=".75"/><stop offset=".55" stop-color="#6b3fc2" stop-opacity=".25"/><stop offset="1" stop-color="#6b3fc2" stop-opacity="0"/></radialGradient>
+            <radialGradient id="disc" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#d7bcff"/><stop offset=".45" stop-color="#a66bff"/><stop offset="1" stop-color="#5b33ad"/></radialGradient>
+            <linearGradient id="blk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8ff5bd"/><stop offset=".5" stop-color="#3ddc84"/><stop offset="1" stop-color="#1a8a4c"/></linearGradient>
+            <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="5"/></filter>
+          </defs>
+          <rect width="600" height="470" fill="#140d2a"/>
+          <circle class="halo" cx="300" cy="250" r="230" fill="url(#orb)"/>
+          <!-- the casting circle: a ring of the symbols this problem uses -->
+          <g class="circle" fill="none" stroke="#7d5fd6" stroke-opacity=".55">
+            <circle cx="300" cy="250" r="205" stroke-width="2"/><circle cx="300" cy="250" r="188" stroke-width="1" stroke-dasharray="3 9"/>
+            <g fill="#bfa8ff" fill-opacity=".8" stroke="none" font-family="Georgia,serif" font-size="20" text-anchor="middle">
+              <text x="300" y="60">Σ</text><text x="441" y="118">τ</text><text x="498" y="258">α</text><text x="441" y="400">ω</text><text x="300" y="456">I</text><text x="159" y="400">a</text><text x="102" y="258">T</text><text x="159" y="118">g</text>
+            </g>
+          </g>
+          <g class="circle2" fill="none" stroke="#3fb8ff" stroke-opacity=".35" stroke-width="1.5"><polygon points="300,84 444,333 156,333"/><polygon points="300,416 156,167 444,167"/></g>
+          <!-- disc -->
+          <g class="spin">
+            <circle cx="240" cy="200" r="96" fill="url(#disc)" stroke="#0d0819" stroke-width="7"/>
+            <path d="M240 296 A96 96 0 0 0 332 228 A120 120 0 0 1 178 274 A96 96 0 0 0 240 296Z" fill="#3d2085" fill-opacity=".75"/>
+            <path d="M172 158 Q196 118 240 114" fill="none" stroke="#f2e8ff" stroke-width="9" stroke-linecap="round"/>
+            <line x1="240" y1="200" x2="240" y2="112" stroke="#0d0819" stroke-width="4" stroke-linecap="round" opacity=".5"/>
+          </g>
+          <circle cx="240" cy="200" r="11" fill="#0d0819"/>
+          <!-- string and block -->
+          <line x1="336" y1="200" x2="336" y2="330" stroke="#f3e6c4" stroke-width="5"/>
+          <rect x="290" y="330" width="92" height="74" rx="9" fill="url(#blk)" stroke="#0d0819" stroke-width="7"/>
+          <path d="M294 400 H378 V366 L330 400Z" fill="#12733d" fill-opacity=".7"/>
+          <path d="M304 346 H336" stroke="#e2fff0" stroke-width="7" stroke-linecap="round"/>
+          <!-- tension -->
+          <line x1="336" y1="322" x2="336" y2="262" stroke="#3fb8ff" stroke-width="16" filter="url(#soft)" opacity=".8"/>
+          <line x1="336" y1="322" x2="336" y2="262" stroke="#3fb8ff" stroke-width="9"/><path d="M319 270 L336 236 L353 270Z" fill="#3fb8ff" stroke="#0d0819" stroke-width="4"/>
+          <text x="362" y="282" font-family="Georgia,serif" font-size="30" fill="#f3e6c4">T</text>
+          <!-- the missing weight: a question until the student adds it -->
+          <g class="ask"><line x1="440" y1="336" x2="440" y2="402" stroke="#ffb52e" stroke-width="6" stroke-dasharray="10 8"/><path d="M426 396 L440 424 L454 396Z" fill="none" stroke="#ffb52e" stroke-width="5"/>
+            <text x="462" y="376" font-family="Georgia,serif" font-style="italic" font-size="22" fill="#ffb52e">missing?</text></g>
+          <g class="weight"><line x1="336" y1="410" x2="336" y2="444" stroke="#ffb52e" stroke-width="16" filter="url(#soft)" opacity=".8"/>
+            <line x1="336" y1="410" x2="336" y2="440" stroke="#ffb52e" stroke-width="9"/><path d="M319 434 L336 466 L353 434Z" fill="#ffb52e" stroke="#0d0819" stroke-width="4"/>
+            <text x="362" y="450" font-family="Georgia,serif" font-size="28" fill="#f3e6c4">mg</text></g>
+          <path class="burst" d="M372 312 l12 36 38 -8 -26 28 26 28 -38 -8 -12 36 -12 -36 -38 8 26 -28 -26 -28 38 8z" fill="#ffe9a8" stroke="#0d0819" stroke-width="4"/>
+        </svg>
+      </section>
+      <div class="row desk-only">
+        <button class="btn" id="cast">Add the weight</button>
+        <button class="ghost">Hint</button><button class="ghost">Undo</button><button class="ghost">Open my notes</button>
+      </div>
+    </div>
+
+    <div class="col teach">
+      <section class="page" aria-live="polite">
+        <div id="before">
+          <h3>Naming the forces</h3>
+          <p>A force is a push or pull from something you can point to. Go body by body and ask what touches it. Then add gravity.</p>
+          <div class="rule"></div>
+          <h3>What matters here</h3>
+          <p>The block has two forces and one is drawn. What acts on it the whole time, even at rest?</p>
+          <div class="rule"></div>
+          <p class="warn">Take care: the tension is not the weight while the block speeds up.</p>
+        </div>
+        <div id="after" class="hidden">
+          <h3>That's both forces</h3>
+          <p>Weight down, tension up. Their difference is what speeds the block up, so its equation writes itself from your drawing:</p>
+          <div class="line lit">m·g − T = m·a</div>
+          <div class="rule"></div>
+          <h3>Why this matters next</h3>
+          <p>The same T also turns the disc. That shared tension is what links the two bodies, so your next equation is for the disc.</p>
+          <p class="warn">One star earned. Next: set the conditions.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="tray">
+  <button class="tool" style="background:var(--blue)"><b>↑</b>Force</button>
+  <button class="tool" id="castM" style="background:var(--amb);transform:rotate(-3deg);box-shadow:0 0 18px rgba(255,181,46,.7)"><b>↓</b>Weight</button>
+  <button class="tool" style="background:var(--vio)"><b>↶</b>Undo</button>
+  <button class="tool" style="background:var(--grn)"><b>?</b>Hint</button>
+  <button class="tool" style="background:var(--par)"><b>✎</b>Notes</button>
+</div>
+
+<script type="module">
+// drifting sparks behind everything; they hold still in calm mode and with "reduce motion"
+const sky = document.getElementById('sky'), g = sky.getContext('2d');
+const still = () => document.body.classList.contains('calm') || matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COLORS = ['#a66bff', '#3fb8ff', '#3ddc84', '#ffb52e', '#ffe9a8'];
+let sparks = [];
+function size(){
+  sky.width = innerWidth * devicePixelRatio; sky.height = innerHeight * devicePixelRatio;
+  sparks = Array.from({ length: Math.round(innerWidth * innerHeight / 14000) }, () => ({ x: Math.random() * sky.width, y: Math.random() * sky.height, r: (0.6 + Math.random() * 1.8) * devicePixelRatio, v: 0.08 + Math.random() * 0.25, p: Math.random() * 6.28, c: COLORS[Math.floor(Math.random() * COLORS.length)] }));
+}
+function frame(t){
+  g.clearRect(0, 0, sky.width, sky.height);
+  for (const s of sparks){
+    if (!still()){ s.y -= s.v * devicePixelRatio; if (s.y < -5) s.y = sky.height + 5; }
+    g.globalAlpha = 0.35 + 0.45 * Math.abs(Math.sin(still() ? s.p : t / 900 + s.p));
+    g.fillStyle = s.c; g.beginPath(); g.arc(s.x, s.y, s.r, 0, 6.28); g.fill();
+  }
+  requestAnimationFrame(frame);
+}
+addEventListener('resize', size); size(); requestAnimationFrame(frame);
+
+// the one interaction: add the missing force, and the page answers
+function cast(){
+  const stage = document.getElementById('stage');
+  if (stage.classList.contains('cast')) return;
+  stage.classList.add('cast');
+  document.getElementById('before').classList.add('hidden');
+  document.getElementById('after').classList.remove('hidden');
+  const s3 = document.getElementById('s3'), s4 = document.getElementById('s4');
+  s3.classList.replace('now', 'done'); s3.querySelector('.dot').textContent = '✓';
+  s4.classList.add('now');
+  const st = document.getElementById('stars'); st.innerHTML = '★★<span class="off">★</span>'; st.setAttribute('aria-label', '2 of 3 stars');
+  document.getElementById('cast').textContent = 'On to conditions';
+}
+document.getElementById('cast').onclick = cast;
+document.getElementById('castM').onclick = cast;
+document.getElementById('calm').onclick = (e) => { const on = document.body.classList.toggle('calm'); e.currentTarget.setAttribute('aria-pressed', String(on)); };
+</script>
+</body>
+</html>

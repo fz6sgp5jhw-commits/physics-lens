@@ -396,14 +396,15 @@ The student can play a solved problem as a story: the scene animates, a narratio
 - [ ] Narration written for the four lessons' problems first, then the practice bank; calm mode shows the final frame and a step list with no motion.
 - [ ] All tests pass. Cache bumped. One line here on what changed.
 
-## Phase 10: the new look
-**Start with:** `Do phase 10 in ROADMAP.md. Show me a mockup of the main screen before changing index.html.`
-
-Mood: late-'90s/early-2000s TV and film animation and science shows: bold outlines, flat cel colour, playful science-show energy, a hint of anime-era mecha UI panels and handheld-game menus. These are mood references only. Draw nothing from those shows: no characters, logos, title lettering or recognisable designs.
-- [ ] Palette: soft pastels, like a 2020s K-pop album cover (sky blue, bubblegum pink, cream, soft lilac), with one bright accent. The four variable-state colours keep their meanings and stay readable (checked for contrast).
-- [ ] One small **original lemur** character, in that cel-animated style, as an occasional guide (for example beside the hint line). It never covers content, holds still in calm mode, and is not a copy of any TV lemur. Lift the old "no cartoon gags" rule for this one character only, and update the smoke test that forbids `#mascot` on purpose.
-- [ ] Field background, panels, buttons, tabs and toolbar restyled together. Calm mode and the 1440×900 layout check still pass.
-- [ ] Update the UI rules in `CLAUDE.md` to describe the new look.
+## Phase 10: the new look (design approved 2026-11-13: the pen-and-ink journal)
+**Start with:** `Do phase 10 in ROADMAP.md.` Read `docs/redesign-plan.md` (the whole file) and open `mockups/redesign-ink.html`: that prototype is the approved look. The earlier brief (pastels, a lemur, cel animation) is replaced by it.
+Resume from: stage 1 (tokens and pages). Nothing is built in the app yet; the prototypes in `mockups/` and the plan are the only work so far.
+- [ ] Stage 1, tokens and pages: paper, ink and magic-ink tokens replace the pixel frames in `index.html`; cards, buttons, inputs, tabs and chips restyled; no sideways scroll on a 375 px phone.
+- [ ] Stage 2, the method strip and a thumb bar on phones; one stage's tools at a time.
+- [ ] Stage 3, pen-and-ink shapes in `js/build.js` and the Motion canvas; a caption for each drawn part.
+- [ ] Stage 4, magic: the casting circle, drifting motes, the equation that writes itself on a correct step, the wax-seal main action. Calm mode stops all of it.
+- [ ] Stage 5, `concepts.html` restyled to match; `mockups/` deleted.
+- [ ] Stage 6, UI rules in `CLAUDE.md` updated; state colours and text checked for contrast on paper; the 1440×900 layout gate rewritten on purpose; full suite green; cache bumped. One line here on what changed.
 
 ---
 
