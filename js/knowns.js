@@ -77,15 +77,15 @@ export function createKnowns({ panel, setup: getSetup, build: B, say }){
     const parts = S().list();
     for (const p of parts){
       const shape = B.shape(p.id);
-      for (const d of nameables(p)){ const e = p.names && p.names[d.key]; if (e) add(nameOf(p, d), shown(e), 'card'); else if (d.optional) add(nameOf(p, d), 'not given', 'drawing', { unknown: true }); }
+      for (const d of nameables(p)){ const e = p.names && p.names[d.key]; if (e) add(nameOf(p, d), shown(e), 'card', { qty: d.qty }); else if (d.optional) add(nameOf(p, d), 'not given', 'drawing', { unknown: true, qty: d.qty }); }
       if (p.kind === 'rod'){
-        if (shape && shape.props.length) add('L_rod', shape.props.length, 'drawing');
-        if (p.answers.mass === 'light') add('M_rod', '0', 'card');
+        if (shape && shape.props.length) add('L_rod', shape.props.length, 'drawing', { qty: 'length' });
+        if (p.answers.mass === 'light') add('M_rod', '0', 'card', { qty: 'mass' });
       }
       if (p.kind === 'wheel'){
-        if (shape && shape.props.radius) add('R_disc', shape.props.radius, 'drawing');
-        if (p.answers.mass === 'light') add('M_disc', '0', 'card');
-        if (p.answers.shape in I_CM) add('I_cm', `${I_CM[p.answers.shape]}M_disc·R_disc²`, 'card');
+        if (shape && shape.props.radius) add('R_disc', shape.props.radius, 'drawing', { qty: 'length' });
+        if (p.answers.mass === 'light') add('M_disc', '0', 'card', { qty: 'mass' });
+        if (p.answers.shape in I_CM) add('I_cm', `${I_CM[p.answers.shape]}M_disc·R_disc²`, 'card', { qty: 'inertia' });
       }
       if (p.kind === 'pulley' && !p.off.light) add('M_pulley', '0', 'assumed');
       if (p.kind === 'string' && !p.off.ideal) add(`m_string${sub(p.n)}`, '0', 'assumed');
@@ -157,7 +157,7 @@ export function createKnowns({ panel, setup: getSetup, build: B, say }){
     const list = entries();
     const row = (e) => {
       const mk = markOf(e.name), cls = mk === 'off' ? 'off' : mk === 'target' ? 'target' : e.unknown ? 'unknown' : 'given';
-      return `<li class="kn ${cls}" data-kn="${esc(e.name)}"><b>${esc(e.name)}</b> = ${esc(e.value)} <span class="small muted">${e.source}</span>
+      return `<li class="kn ${cls}" data-kn="${esc(e.name)}" draggable="${e.unknown ? 'false' : 'true'}" title="Drag onto a symbol in the algebra to put it in"><b>${esc(e.name)}</b> = ${esc(e.value)} <span class="small muted">${e.source}</span>
         <button class="dfmini" data-ktarget="${esc(e.name)}" aria-pressed="${mk === 'target'}">Target</button> <button class="dfmini" data-koff="${esc(e.name)}" aria-pressed="${mk === 'off'}">Not needed</button></li>`;
     };
     const targets = st.targets.map(n => `<li class="kn target" data-kn="${esc(n)}"><b>${esc(n)}</b> = ? <span class="small muted">target</span> <button class="dfmini" data-kdel="${esc(n)}">Remove</button></li>`).join('');

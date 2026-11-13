@@ -7,6 +7,8 @@
 // Design: docs/drawing-first-plan.md, sections 7 and 8.
 import { parse as exprParse, toRat, toText, symbol, addSamples, MathError } from './expr.js';
 import { VARS, EQS, CHAPTERS } from './data.js';
+import { createReview } from './review.js';
+import { evalTree, buildEnv, dimOfTree, dimStr, Unjudged } from './checks.js';
 
 const esc = (t) => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -44,7 +46,7 @@ export function display(id){
 }
 
 // ---------------------------------------------------------------- parsing (one line, Python-style or the app's own notation)
-// nodes: num {v, s} · sym {id} · add {a: []} · neg {a} · mul {a: []} · div {n, d} · pow {b, e} · sqrt {a} · fn {f, a}
+// nodes: num {v, s, dim?} · q {v (SI), s} · sym {id} · add {a: []} · neg {a} · mul {a: []} · div {n, d} · pow {b, e} · sqrt {a} · fn {f, a}
 const SUP = { '²': 2, '³': 3, '⁴': 4, '⁵': 5 };
 export class InputError extends Error {}
 export function parse(src){
@@ -121,21 +123,22 @@ export function parseEq(src){
 }
 
 // ---------------------------------------------------------------- printing (one line; text or HTML)
-const RANK = { add: 1, neg: 2, mul: 3, div: 3, pow: 4, sqrt: 5, fn: 5, sym: 5, num: 5 };
+const RANK = { add: 1, neg: 2, mul: 3, div: 3, pow: 4, sqrt: 5, fn: 5, sym: 5, num: 5, q: 5 };
 const SUPC = '⁰¹²³⁴⁵⁶⁷⁸⁹';
 const fmt = (v) => String(+v.toPrecision(12));
 export function print(n, o = {}){
   const P = (x) => print(x, o), wrap = (x, below) => RANK[x.t] <= below ? `(${P(x)})` : P(x);
   switch (n.t){
     case 'num': return n.s || fmt(n.v);
-    case 'sym': { const d = display(n.id), cls = o.cls ? o.cls(n.id) : ''; return o.html ? `<span class="sym${cls ? ' ' + cls : ''}">${d.html}</span>` : d.text; }
+    case 'q': return n.s;   // a number with its unit, from "put in my values"
+    case 'sym': { const d = display(n.id), cls = o.cls ? o.cls(n.id) : ''; return o.html ? `<span class="sym${cls ? ' ' + cls : ''}" data-sym="${esc(n.id)}">${d.html}</span>` : d.text; }
     case 'add': return n.a.map((t, j) => t.t === 'neg' ? (j ? ' − ' : '−') + wrap(t.a, 2) : (j ? ' + ' : '') + P(t)).join('');
     case 'neg': return '−' + wrap(n.a, 2);
     case 'mul': {
       let out = '';
       n.a.forEach((f, j) => {
         const s = f.t === 'div' || RANK[f.t] <= 2 ? `(${P(f)})` : P(f), plain = o.html ? print(f, { ...o, html: false }) : s;
-        if (j){ const prev = n.a[j - 1], under = (x) => !o.html && x.t === 'sym' && /_/.test(display(x.id).text); out += prev.t === 'fn' || f.t === 'fn' ? ' ' : /^[0-9.½]/.test(plain) || under(f) || under(prev) ? '·' : ''; }
+        if (j){ const prev = n.a[j - 1], under = (x) => !o.html && x.t === 'sym' && /_/.test(display(x.id).text); const hasQ = (x) => x.t === 'q' || (x.t === 'pow' && x.b.t === 'q'); out += prev.t === 'fn' || f.t === 'fn' ? ' ' : /^[0-9.½]/.test(plain) || under(f) || under(prev) || hasQ(f) || hasQ(prev) ? '·' : ''; }
         out += s;
       });
       return out;
@@ -231,6 +234,60 @@ export function applyOp(eq, op, at){
   e[at.side] = fromTerms(ts);
   return e;
 }
+
+// ---------------------------------------------------------------- pieces of a term (condensing) and moving across the =
+// A piece is any bracketed or compound part inside a term; a path ([ 'a', 1, 'n' ]) says where it sits.
+const KIDS = { add: ['a'], mul: ['a'], neg: ['a'], sqrt: ['a'], fn: ['a'], div: ['n', 'd'], pow: ['b', 'e'] };
+export function pieces(term){
+  const out = [], seen = new Set();
+  const walk = (n, path, root) => {
+    if (!root && ['add', 'mul', 'div', 'pow', 'sqrt', 'fn'].includes(n.t) && !seen.has(print(n))){ seen.add(print(n)); out.push({ path, node: n }); }
+    for (const k of KIDS[n.t] || []) { if (Array.isArray(n[k])) n[k].forEach((c, j) => walk(c, [...path, k, j])); else walk(n[k], [...path, k]); }
+  };
+  if (term.t === 'neg') walk(term.a, ['a'], true); else walk(term, [], true);
+  return out;
+}
+export const getAt = (n, path) => path.reduce((x, k) => x[k], n);
+export function setAt(n, path, v){
+  if (!path.length) return v;
+  const e = clone(n); let x = e;
+  path.slice(0, -1).forEach(k => { x = x[k]; });
+  x[path.at(-1)] = v; return e;
+}
+// every part of the line that prints the same as the piece becomes the symbol
+export function replacePiece(n, piece, sym){
+  const key = print(piece), go = (x) => print(x) === key && x.t !== 'sym' ? { t: 'sym', id: sym } : Object.fromEntries(Object.entries(x).map(([k, v]) => [k, Array.isArray(v) ? v.map(go) : v && typeof v === 'object' ? go(v) : v]));
+  return go(n);
+}
+// drag a term across =: it leaves its side and lands on the other with its sign flipped
+export function moveAcross(eq, side, i){
+  const e = clone(eq), ts = [...termsOf(e[side])], t = ts.splice(i, 1)[0], other = side === 'l' ? 'r' : 'l';
+  e[side] = ts.length ? fromTerms(ts) : { t: 'num', v: 0 };
+  e[other] = fromTerms([...termsOf(e[other]).filter(x => !(x.t === 'num' && x.v === 0)), t.t === 'neg' ? t.a : { t: 'neg', a: t }]);
+  return e;
+}
+// drag a factor across =: from the top of a fraction it divides the other side, from the bottom it multiplies it
+function takeOut(t, f){
+  const same = (x) => print(x) === print(f), rebuild = (a) => a.length === 1 ? a[0] : { t: 'mul', a };
+  if (t.t === 'mul'){ const k = t.a.findIndex(same); if (k >= 0) return { rest: rebuild(t.a.filter((_, j) => j !== k)), top: true }; }
+  if (t.t === 'div'){
+    if (same(t.d)) return { rest: t.n, top: false };
+    if (t.d.t === 'mul'){ const k = t.d.a.findIndex(same); if (k >= 0) return { rest: { t: 'div', n: t.n, d: rebuild(t.d.a.filter((_, j) => j !== k)) }, top: false }; }
+    const r = takeOut(t.n, f); if (r && r.top) return { rest: { t: 'div', n: r.rest, d: t.d }, top: true };
+  }
+  return null;
+}
+export function moveFactor(eq, side, i, f){
+  const e = clone(eq), ts = termsOf(e[side]);
+  if (ts.length > 1) throw new InputError('A factor can cross the = only when it multiplies the whole side. Move the other terms across first.');
+  const r = ts[0].t === 'neg' ? null : takeOut(ts[0], f);
+  if (!r) throw new InputError(`${print(f)} isn’t a factor of the whole side, so it can’t cross the = on its own.`);
+  const other = side === 'l' ? 'r' : 'l';
+  e[side] = r.rest;
+  e[other] = r.top ? { t: 'div', n: e[other], d: clone(f) } : times(e[other], clone(f));
+  return { eq: e, top: r.top };
+}
+
 // what a line says it did
 export function describe(op, at){
   const x = op.x ? print(op.x) : '';
@@ -283,18 +340,21 @@ export function sheet(query = '', nMasses = 1){
 }
 
 // ---------------------------------------------------------------- the workspace (UI)
-export function createWorkspace({ panel, knowns, masses, say }){
-  const st = { lines: [], cur: -1, sel: null, n: null, msg: '', ac: [] };
+export function createWorkspace({ panel, knowns, masses, say, tk = () => null }){
+  const st = { lines: [], cur: -1, sel: null, n: null, msg: '', ac: [], names: {}, look: [], drag: null };
   const $ = (id) => document.getElementById(id);
   const pop = (id) => { let p = $(id); if (!p){ p = document.createElement('div'); p.id = id; p.className = 'pop algpop'; p.hidden = true; document.body.appendChild(p); } return p; };
   const menu = pop('algMenu'), sh = pop('algSheet');
   const active = () => st.lines.slice(0, st.cur + 1);
+  // what the checks need: the knowns list, the targets and the pieces the student named
+  const ctx = () => ({ knowns: knowns().entries(), targets: knowns().targets, names: st.names });
+  const review = createReview({ lines: active, ctx, tk, add: (eq, how, extra) => add(eq, how, extra), redraw: () => render(), look: (ids) => { st.look = ids; }, });
 
   // ---- symbols: the knowns list (names and values), targets, and every symbol on an active line
   function known(){
     const out = [];
     for (const e of knowns().entries()){
-      let v = null; try { v = parse(e.value); } catch {}
+      let v = null; if (!/^[\d.]+\s*\S/.test(String(e.value))) try { v = parse(e.value); } catch {}   // “2 kg” is a number with a unit: it goes in last, not as a symbol
       out.push({ id: toId(e.name), name: e.name, value: v, source: e.source });
     }
     return out;
@@ -303,6 +363,7 @@ export function createWorkspace({ panel, knowns, masses, say }){
     const s = new Set();
     for (const k of known()){ if (k.id) s.add(k.id); if (k.value) symsOf(k.value).forEach(x => s.add(x)); }
     for (const t of knowns().targets){ const id = toId(t); if (id) s.add(id); }
+    for (const id of Object.keys(st.names)) s.add(id);
     for (const L of active()){ symsOf(L.l).forEach(x => s.add(x)); symsOf(L.r).forEach(x => s.add(x)); }
     return s;
   }
@@ -321,34 +382,35 @@ export function createWorkspace({ panel, knowns, masses, say }){
   }
 
   // ---- lines
-  function add(eq, how){
+  function add(eq, how, extra = {}){
     st.lines = st.lines.slice(0, st.cur + 1);
-    st.lines.push({ ...eq, how });
+    st.lines.push({ ...eq, how, ...extra });
     st.cur = st.lines.length - 1; st.sel = null; st.msg = '';
     closeMenu(); render();
   }
   function run(op, at, lineIx){
-    try { add(applyOp(st.lines[lineIx], op, at), describe(op, at)); return true; }
+    try { add(applyOp(st.lines[lineIx], op, at), describe(op, at), { op, one: !!at }); return true; }
     catch (err){ if (!(err instanceof MathError || err instanceof InputError)) throw err; st.msg = err.message; render(); return false; }
   }
   const sideHTML = (side, i, live) => termsOf(st.lines[i][side]).map((t, j) => {
     const neg = t.t === 'neg', body = print(neg && j ? t.a : t, { html: true, cls });
     const op = j ? (neg ? ' − ' : ' + ') : '';
     const on = st.sel && st.sel.line === i && st.sel.side === side && st.sel.i === j;
-    return op + (live ? `<button class="algterm${on ? ' on' : ''}" data-line="${i}" data-side="${side}" data-term="${j}" title="Tap for what you can do with this term">${body}</button>` : `<span class="algterm">${body}</span>`);
+    return op + (live ? `<button class="algterm${on ? ' on' : ''}" draggable="true" data-line="${i}" data-side="${side}" data-term="${j}" title="Tap for what you can do with this term; drag it across the = to move it">${body}</button>` : `<span class="algterm">${body}</span>`);
   }).join('');
   function render(){
     const rows = st.lines.map((L, i) => {
-      const live = i <= st.cur;
-      return `<li class="algline${live ? '' : ' grey'}${i === st.cur ? ' cur' : ''}" data-line="${i}"><span class="algeq">${sideHTML('l', i, live)} = ${sideHTML('r', i, live)}</span>
-        <span class="small muted alghow">${esc(L.how)}</span>${i !== st.cur ? `<button class="dfmini" data-back="${i}" title="${live ? 'Continue from this line; the lines after it are greyed until you do' : 'Bring the lines back up to here'}">Back to here</button>` : ''}</li>`;
+      const live = i <= st.cur && !L.fixed;
+      return `<li class="algline${i <= st.cur ? '' : ' grey'}${i === st.cur ? ' cur' : ''}" data-line="${i}"><span class="algeq"><span class="algside" data-side="l">${sideHTML('l', i, live)}</span> <span class="algsign" data-drop="${i}" title="Drop a term here to move it across">=</span> <span class="algside" data-side="r">${sideHTML('r', i, live)}</span></span>
+        <span class="small muted alghow">${esc(L.how)}</span>${i !== st.cur ? `<button class="dfmini" data-back="${i}" title="${i <= st.cur ? 'Continue from this line; the lines after it are greyed until you do' : 'Bring the lines back up to here'}">Back to here</button>` : ''}</li>`;
     }).join('');
     panel.innerHTML = `<div class="titlebar"><h2>Algebra</h2><button id="algSheetBtn" title="Every relationship in the library, by idea (or press / in the line box)">Formula sheet</button><button id="algUndo" title="Step back one line; later lines stay greyed until you continue">Undo</button></div>
       <div class="body"><ol class="alglines" id="algLines">${rows || '<li class="small muted">Pick a relationship from the <b>Formula sheet</b>, or type a line below.</li>'}</ol>
       <div class="row algrow"><input id="algIn" type="text" autocomplete="off" spellcheck="false" placeholder="Type a line (I = m_1*r_1**2) · / for the sheet" aria-label="Type a line or an operation"><button id="algGo">Add</button></div>
       <div class="algac" id="algAc"></div>
       <p class="small" id="algMsg" aria-live="polite">${esc(st.msg)}</p>
-      <p class="small muted">Tap a term for what you can do with it; hold <b>Shift</b> to do it to both sides. Enter applies a typed operation (/ 2, * m, ^2, sqrt, simplify) to the term you picked; Shift+Enter to both sides, and Shift+Enter on r_1 = L/2 swaps r₁ for L/2 everywhere.</p></div>`;
+      ${review.html()}
+      <p class="small muted">Tap a term for what you can do with it; hold <b>Shift</b> to do it to both sides. Enter applies a typed operation (/ 2, * m, ^2, sqrt, simplify) to the term you picked; Shift+Enter to both sides, and Shift+Enter on r_1 = L/2 swaps r₁ for L/2 everywhere. You can also drag a term across the =, or a known from the Knowns card onto a symbol.</p></div>`;
   }
 
   // ---- autocomplete: only defined symbols
@@ -369,6 +431,7 @@ export function createWorkspace({ panel, knowns, masses, say }){
   function closeMenu(){ menu.hidden = true; st.menu = null; }
   function substitutes(id, lineIx){
     const out = [], seen = new Set(), push = (v, from) => { const k = print(v); if (seen.has(k) || (v.t === 'sym' && v.id === id)) return; seen.add(k); out.push({ v, from }); };
+    if (st.names[id]) push(st.names[id], 'your name for this piece');
     for (const k of known()) if (k.id === id && k.value) push(k.value, `${k.name} (${k.source})`);
     active().forEach((L, j) => { if (j === lineIx) return; for (const [a, b] of [[L.l, L.r], [L.r, L.l]]) if (a.t === 'sym' && a.id === id && !symsOf(b).includes(id)) push(b, `line ${j + 1}`); });
     for (const k of known()) if (k.value && out.length < 8) push(k.value, `${k.name} (${k.source})`);
@@ -377,13 +440,15 @@ export function createWorkspace({ panel, knowns, masses, say }){
   const termBtn = (sel) => panel.querySelector(`button[data-line="${sel.line}"][data-side="${sel.side}"][data-term="${sel.i}"]`);
   function openMenu(sel){
     st.sel = sel; render();
-    const t = termsOf(st.lines[sel.line][sel.side])[sel.i], opnds = factorsOf(t), subs = symsOf(t).map(id => ({ id, cands: substitutes(id, sel.line) }));
-    st.menu = { opnds, subs, opnd: 0 };
-    const chips = opnds.map((x, j) => `<button class="dfmini" data-opnd="${j}" aria-pressed="${j === 0}">${print(x, { html: true })}</button>`).join('');
+    const t = termsOf(st.lines[sel.line][sel.side])[sel.i], opnds = factorsOf(t), subs = symsOf(t).map(id => ({ id, cands: substitutes(id, sel.line) })), pcs = pieces(t);
+    st.menu = { opnds, subs, opnd: 0, pcs, pc: -1 };
+    const chips = opnds.map((x, j) => `<button class="dfmini" draggable="true" data-opnd="${j}" aria-pressed="${j === 0}" title="Pick it for ÷ × + −, or drag it across the =">${print(x, { html: true })}</button>`).join('');
     menu.innerHTML = `<div class="row"><span class="small">Term <b class="algmono">${print(t, { html: true })}</b></span><label class="small"><input type="checkbox" id="algBoth"> Both sides (or hold Shift)</label><button class="dfmini" data-close title="Close (Esc)">×</button></div>
       <div class="row small">By: ${chips}</div>
       <div class="row">${[['div', '÷'], ['mul', '×'], ['add', '+'], ['sub', '−']].map(([k, s]) => `<button data-op="${k}" title="${s} the one picked under By">${s}</button>`).join('')}<button data-op="sq">Square</button><button data-op="sqrt">√</button><button data-op="simp" title="Collect and cancel, exactly">Simplify</button></div>
       ${subs.map((s, a) => `<div class="row small"><span class="algmono">${display(s.id).html} =</span> ${s.cands.map((c, b) => `<button class="dfmini" data-subsym="${esc(s.id)}" data-subval="${esc(print(c.v))}" data-sub="${a}:${b}" title="${esc(c.from)}">${print(c.v, { html: true })}</button>`).join('') || '<span class="muted">nothing known yet: type it below, like ' + esc(s.id) + ' = …</span>'}</div>`).join('')}
+      ${pcs.length ? `<div class="row small">A piece: ${pcs.map((c, j) => `<button class="dfmini" data-piece="${j}" aria-pressed="false">${print(c.node, { html: true })}</button>`).join('')}</div>
+      <div class="row small"><input id="algPieceName" type="text" size="4" autocomplete="off" spellcheck="false" placeholder="A" aria-label="A name for the picked piece"><button class="dfmini" data-pc="name" title="Call the picked piece by this name everywhere on the line (you can expand it back)">Name it</button><button class="dfmini" data-pc="num" title="Work the picked piece out in numbers, from the knowns">In numbers</button><button class="dfmini" data-pc="simp" title="Simplify only the picked piece">Simplify it</button></div>` : ''}
       <input id="algOp" type="text" autocomplete="off" spellcheck="false" placeholder="/ 2 · * m · ^2 · sqrt · simplify · ${esc(subs[0]?.id || 'x')} = …" aria-label="Type an operation for this term">
       <div class="algac" id="algOpAc"></div><div class="small hot" id="algOpErr"></div>`;
     const r = termBtn(sel).getBoundingClientRect();
@@ -395,6 +460,8 @@ export function createWorkspace({ panel, knowns, masses, say }){
     const b = e.target.closest('button'); if (!b || !st.menu) return;
     const { line, side, i } = st.sel, at = both(e) ? null : { side, i };
     if (b.dataset.close !== undefined){ closeMenu(); st.sel = null; render(); return; }
+    if (b.dataset.piece){ st.menu.pc = +b.dataset.piece; menu.querySelectorAll('[data-piece]').forEach(c => c.setAttribute('aria-pressed', String(c === b))); return; }
+    if (b.dataset.pc) return pieceAction(b.dataset.pc, line, side, i);
     if (b.dataset.opnd){ st.menu.opnd = +b.dataset.opnd; menu.querySelectorAll('[data-opnd]').forEach(c => c.setAttribute('aria-pressed', String(c === b))); return; }
     if (b.dataset.ac) return acceptAc(+b.dataset.ac);
     if (b.dataset.op) run({ k: b.dataset.op, x: st.menu.opnds[st.menu.opnd] }, at, line);
@@ -411,6 +478,75 @@ export function createWorkspace({ panel, knowns, masses, say }){
     catch (err){ if (!(err instanceof InputError)) throw err; $('algOpErr').textContent = err.message; }
   });
 
+  // ---- condensing: name a piece, work it out in numbers, simplify it: each is its own line
+  function pieceAction(kind, lineIx, side, i){
+    const err = (m) => { $('algOpErr').textContent = m; }, pc = st.menu.pcs[st.menu.pc];
+    if (!pc) return err('Pick a piece first (the buttons under “A piece”).');
+    const eq = st.lines[lineIx], terms = [...termsOf(eq[side])];
+    const put = (v) => { const ts = [...terms]; ts[i] = setAt(ts[i], pc.path, v); return { ...eq, [side]: fromTerms(ts) }; };
+    const piece = pc.node, txt = print(piece);
+    try {
+      if (kind === 'simp'){
+        const r = simplify(piece); if (print(r) === txt) return err(`${txt} is already as simple as it gets.`);
+        add(put(r), `${txt} simplified`);
+      } else if (kind === 'num'){
+        const env = buildEnv(ctx(), 0, { numeric: true }), v = evalTree(piece, env), d = dimOfTree(piece, ctx());
+        const s = String(+v.toPrecision(6));
+        add(put({ t: 'num', v, s, ...(d ? { dim: d } : {}) }), `${txt} = ${s}${d && Object.keys(d).length ? ' ' + dimStr(d) : ''}`);
+      } else {
+        const name = $('algPieceName').value.trim(), id = toId(name);
+        if (!id) return err('A name looks like A, B or I_a.');
+        if (defined().has(id)) return err(`${display(id).text} is already used in this problem. Pick another name.`);
+        st.names[id] = clone(piece);
+        add({ l: replacePiece(eq.l, piece, id), r: replacePiece(eq.r, piece, id) }, `${display(id).text} = ${txt}`);
+      }
+    } catch (e) {
+      if (e instanceof Unjudged) return err(`I need a number with a unit for ${display(e.id).text}: give it one on its card or in the knowns list.`);
+      if (e instanceof MathError || e instanceof InputError) return err(e.message);
+      throw e;
+    }
+  }
+
+  // ---- drag shortcuts (phase 9): a term across the =, a factor across the =, a known onto a symbol. Each does what the menu does.
+  panel.addEventListener('dragstart', (e) => {
+    const t = e.target.closest?.('button[data-term]');
+    if (t) st.drag = { kind: 'term', line: +t.dataset.line, side: t.dataset.side, i: +t.dataset.term };
+    else return;
+    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'term');
+  });
+  menu.addEventListener('dragstart', (e) => {
+    const c = e.target.closest?.('button[data-opnd]'); if (!c || !st.sel) return;
+    const j = +c.dataset.opnd; st.drag = j === 0 ? { kind: 'term', ...st.sel } : { kind: 'factor', ...st.sel, f: st.menu.opnds[j] };
+    e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'factor');
+  });
+  document.addEventListener('dragstart', (e) => {
+    const li = e.target.closest?.('#dfKnowns [data-kn]'); if (!li) return;
+    st.drag = { kind: 'known', name: li.dataset.kn }; e.dataTransfer.effectAllowed = 'copy'; e.dataTransfer.setData('text/plain', 'known');
+  });
+  document.addEventListener('dragend', () => { st.drag = null; panel.querySelectorAll('.over').forEach(x => x.classList.remove('over')); });
+  const target = (e) => {
+    const d = st.drag; if (!d) return null;
+    if (d.kind === 'known'){ const s = e.target.closest?.('.algline:not(.grey) [data-sym]'); return s ? { el: s } : null; }
+    const el = e.target.closest?.('.algsign, .algside'); if (!el) return null;
+    const line = +el.closest('.algline').dataset.line, side = el.classList.contains('algsign') ? null : el.dataset.side;
+    return line === d.line && side !== d.side ? { el } : null;
+  };
+  panel.addEventListener('dragover', (e) => { const t = target(e); panel.querySelectorAll('.over').forEach(x => x.classList.remove('over')); if (t){ e.preventDefault(); t.el.classList.add('over'); } });
+  panel.addEventListener('drop', (e) => {
+    const t = target(e), d = st.drag; st.drag = null; if (!t) return;
+    e.preventDefault();
+    try {
+      if (d.kind === 'known'){
+        const k = known().find(x => x.name === d.name), id = t.el.dataset.sym, lineIx = +t.el.closest('.algline').dataset.line;
+        if (!k || !k.value) throw new InputError(`${d.name} has no value to put in: it is a number with a unit (those go in last) or it isn’t given.`);
+        if (k.value.t === 'sym' && k.value.id === id) throw new InputError('That would replace a symbol with itself.');
+        run({ k: 'subst', sym: id, x: k.value }, null, lineIx); return;
+      }
+      if (d.kind === 'term') add(moveAcross(st.lines[d.line], d.side, d.i), `${print(termsOf(st.lines[d.line][d.side])[d.i])} moved across the =, its sign flips`);
+      else { const r = moveFactor(st.lines[d.line], d.side, d.i, d.f); add(r.eq, `${print(d.f)} moved across the =, ${r.top ? 'it now divides the other side' : 'it now multiplies the other side'}`); }
+    } catch (err) { if (!(err instanceof InputError || err instanceof MathError)) throw err; st.msg = err.message; render(); }
+  });
+
   // ---- the formula sheet popup
   function openSheet(){
     if (st.n === null) st.n = Math.max(1, masses());
@@ -420,7 +556,8 @@ export function createWorkspace({ panel, knowns, masses, say }){
   function listSheet(){
     const q = $('algSheetQ').value;
     st.sheet = sheet(q, st.n).flatMap(g => g.items);
-    $('algSheetList').innerHTML = sheet(q, st.n).map(g => `<div class="algsg"><div class="subhead">${esc(g.title)} <span class="muted small">${esc(g.chapter)}</span></div>${g.items.map(it => `<div class="algse">
+    const looks = (g) => st.look.length && g.items.some(it => it.vars.some(v => st.look.includes(v)));
+    $('algSheetList').innerHTML = sheet(q, st.n).map(g => `<div class="algsg${looks(g) ? ' look' : ''}"><div class="subhead">${esc(g.title)} <span class="muted small">${esc(g.chapter)}</span>${looks(g) ? ' <span class="small algwarn">look here</span>' : ''}</div>${g.items.map(it => `<div class="algse">
       <button class="algpick" data-pick="${esc(it.key)}">${eqText(it.line, { html: true })}</button><span class="small muted">${esc(it.name)}</span>
       ${it.key === 'Isum' ? `<span class="small algsn"><button class="dfmini" data-sheetn="-1" aria-label="One mass fewer">−</button> <span id="algSheetN">${st.n}</span> mass${st.n === 1 ? '' : 'es'} <button class="dfmini" data-sheetn="1" aria-label="One more mass">+</button></span>` : ''}</div>`).join('')}</div>`).join('') || '<p class="small muted">Nothing matches. Try a word like “inertia”, “torque” or a symbol like I.</p>';
     st.pick = q.trim() ? 0 : -1; markPick();   // neutral: nothing is marked until the student searches or uses the arrows
@@ -461,6 +598,7 @@ export function createWorkspace({ panel, knowns, masses, say }){
   }
   panel.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
+    if (review.click(b)) return;
     if (b.id === 'algSheetBtn') return openSheet();
     if (b.id === 'algUndo'){ if (st.cur >= 0){ st.cur--; st.sel = null; closeMenu(); render(); } return; }
     if (b.id === 'algGo'){ if (enter($('algIn').value, e.shiftKey)) $('algIn').focus(); return; }
@@ -476,6 +614,6 @@ export function createWorkspace({ panel, knowns, masses, say }){
     else if (e.key === 'Enter'){ e.preventDefault(); if (enter(e.target.value, e.shiftKey)) $('algIn').focus(); }
   });
 
-  function clear(){ st.lines = []; st.cur = -1; st.sel = null; st.n = null; st.msg = ''; closeMenu(); sh.hidden = true; render(); }
-  return { render, clear, state: () => ({ lines: st.lines.map(L => eqText(L)), cur: st.cur, how: st.lines.map(L => L.how) }) };
+  function clear(){ st.lines = []; st.cur = -1; st.sel = null; st.n = null; st.msg = ''; st.names = {}; st.look = []; review.clear(); closeMenu(); sh.hidden = true; render(); }
+  return { render, clear, state: () => ({ lines: st.lines.map(L => eqText(L)), cur: st.cur, how: st.lines.map(L => L.how), names: Object.fromEntries(Object.entries(st.names).map(([k, v]) => [k, print(v)])), review: review.state() }) };
 }

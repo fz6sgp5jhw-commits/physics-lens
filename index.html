@@ -651,6 +651,13 @@
   .algterm{font:inherit;color:inherit;background:none;border:1px dashed transparent;border-image:none;padding:0 3px;margin:0;box-shadow:none;cursor:pointer;text-shadow:none}
   button.algterm:hover,button.algterm:focus-visible,.algterm.on{border-color:var(--gold-hi);background:rgba(255,209,102,.08)}
   span.algterm{cursor:default}
+  #dfWork .algsign{padding:0 4px;border-radius:4px} #dfWork .algsign.over,#dfWork .algside.over,#dfWork [data-sym].over{outline:2px dashed var(--gold-hi);background:rgba(255,209,102,.1)}
+  #dfWork .algrev{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12)}
+  #dfWork .algstars{color:var(--gold-hi);letter-spacing:2px;font-size:18px}
+  #dfWork .algsolved{color:#6ee7a0;letter-spacing:1px}
+  #dfWork .algpass{color:#6ee7a0} #dfWork .algwarn,.algsg.look .algwarn{color:var(--gold-hi)}
+  .algsg.look{border-left:3px solid var(--gold-hi);padding-left:6px}
+  #dfKnowns .kn[draggable="true"]{cursor:grab}
   .alghow{margin-left:auto;font-family:var(--ui)}
   .algrow input{flex:1;min-width:0;font-family:var(--mono)}
   .algac{display:flex;flex-wrap:wrap;gap:4px}

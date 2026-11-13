@@ -266,8 +266,8 @@ export function createToolkit({ build: B, tools, hit, say, setup: getSetup, bar 
   // what the toolkit adds to the knowns list
   function knowns(){
     const d = data(), out = [];
-    for (const [key, v] of Object.entries(d.coords)) if (at(key)) out.push({ name: `x(${titleOf(key)})`, value: v, source: 'toolkit' });
-    for (const m of d.dims) if (at(m.a) && at(m.b)) out.push({ name: `gap ${titleOf(m.a)}–${titleOf(m.b)}`, value: m.text, source: 'toolkit' });
+    for (const [key, v] of Object.entries(d.coords)) if (at(key)) out.push({ name: `x(${titleOf(key)})`, value: v, source: 'toolkit', qty: 'length' });
+    for (const m of d.dims) if (at(m.a) && at(m.b)) out.push({ name: `gap ${titleOf(m.a)}–${titleOf(m.b)}`, value: m.text, source: 'toolkit', qty: 'length' });
     return out;
   }
 

@@ -206,16 +206,21 @@ Sessions (decided 2026-11-08): four build sessions, grouped so each reads shared
 
 ## Phase 8b: condensing, checks, numbers, rewards
 **Start with:** `Do phases 8b and 9 in ROADMAP.md.` (session 4) Read plan sections 8 (condensing), 9 and 10.
-- [ ] Condensing: name a selected piece (A = …, expandable), work a piece out in numbers, simplify a selected part (each its own line).
-- [ ] The code's own answer for the setup (the first scope: I = Σmr² from the clamped point masses and their positions; beams and discs through `torque.js`), used only by the checks.
-- [ ] Two checks the student can use whenever before the answer, and a final check (technique: two-point numeric checking, `docs/core-plan.md` section 3): pass or something to look at; revise, or ask for a correction (names the first line that doesn't follow and why, never writes it). After a failed check the formula sheet can highlight the group to look in.
-- [ ] Numbers last with units and the unit check; a star per passed check, SOLVED only at the final one.
-- [ ] Gate (`tests/drawfirst-checks.test.js`): parts A (mL²/2) and B (5mL²/4) end to end; a planted sign slip is found by a check with its line named; a swapped sin/cos label on a split force is flagged.
+- [x] Condensing: name a selected piece (A = …, expandable), work a piece out in numbers, simplify a selected part (each its own line).
+- [x] The code's own answer for the setup (the first scope: I = Σmr² from the clamped point masses and their positions; beams and discs through `torque.js`), used only by the checks.
+- [x] Two checks the student can use whenever before the answer, and a final check (technique: two-point numeric checking, `docs/core-plan.md` section 3): pass or something to look at; revise, or ask for a correction (names the first line that doesn't follow and why, never writes it). After a failed check the formula sheet can highlight the group to look in.
+- [x] Numbers last with units and the unit check; a star per passed check, SOLVED only at the final one.
+- [x] Gate (`tests/drawfirst-checks.test.js`): parts A (mL²/2) and B (5mL²/4) end to end; a planted sign slip is found by a check with its line named; a swapped sin/cos label on a split force is flagged.
+
+- What changed (8b): new `js/checks.js` (pure: `evalTree`, `buildEnv` puts the knowns' values at two "ugly" points, `reference` is the code's own answer, `runCheck`, `checkLabels`, `unitCheck`, `putValues`) and `js/review.js` (the strip under the lines: two checks, final check, stars, SOLVED, Put in my values, unit check). A line is judged by whether it is true at both points; the reason is worked out from the line's own operation (one-sided op, wrong replacement, a sign flip in one term, a missing factor). Pieces: the term menu lists the bracketed/compound parts of the term; Name it replaces the piece everywhere on the line and `A` is offered back as a substitution; In numbers and Simplify it each add a line. Knowns entries now carry `qty` (mass, length…) so the unit check knows kinds of quantity; a known like `2 kg` is a number with a unit and is no longer read as symbols. The reference covers point masses (blocks with `x(Block k)` coordinates measured from the rotation axis, and a light rod) and a disc's I_cm; a rod with mass, or a quantity it doesn't cover, makes the check say it cannot judge instead of passing. Final check can be tried again until it passes. 8 tests in the gate.
+  Not covered: beam statics through `torque.js` (a statics reference), and the relationship-versus-freedoms comparison beyond what the numbers show.
 
 ## Phase 9: drag shortcuts (optional)
 **Start with:** done in session 4, after 8b (skip it if the stop rule triggers first). Read plan section 8.
-- [ ] Drag a term across = (its sign flips, or it moves from top to bottom of a fraction), and drag a known onto a symbol to substitute it. Both are shortcuts for what the tap menu already does.
-- [ ] Gate: the phase 8a mouse route redone with drags.
+- [x] Drag a term across = (its sign flips, or it moves from top to bottom of a fraction), and drag a known onto a symbol to substitute it. Both are shortcuts for what the tap menu already does.
+- [x] Gate: the phase 8a mouse route redone with drags.
+
+- What changed (9): in `js/algebra.js`, terms are `draggable`; dropping on the = (or the other side) calls `moveAcross`; the factor chips in the term menu drag too (`moveFactor`: from the top of a fraction it divides the other side, from the bottom it multiplies it; refused unless the factor multiplies the whole side); a row of the Knowns card dragged onto a symbol substitutes it (same `subst` line as the menu). Gate: `tests/drawfirst-drag.test.js` (2). The Knowns card sits above the algebra card, so a long line can need a tall window to drag between them; the tap menu stays the route that always works.
 
 ---
 

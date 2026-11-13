@@ -1895,7 +1895,7 @@ TOOLS = S.tools = createTools({ svg: $('bd'), wrap: $('bd').parentElement, bar: 
 CN = createConnect({ build: S.build, tools: TOOLS, say });
 TK = S.tk = createToolkit({ build: S.build, tools: TOOLS, hit: CN.hit, say, setup: () => DF, bar: $('dfTools') });
 KN.addSource(TK.knowns);
-const WS = S.ws = createWorkspace({ panel: $('dfWork'), knowns: () => KN, masses: () => S.build.shapes.filter(s => s.kind === 'block' || s.kind === 'particle').length, say });
+const WS = S.ws = createWorkspace({ panel: $('dfWork'), knowns: () => KN, masses: () => S.build.shapes.filter(s => s.kind === 'block' || s.kind === 'particle').length, say, tk: () => S.tk.state() });
 WS.render();
 
 // ---------- modes: drawing-first (the default) or guided (today's stages, sheet, Hint and Show me) ----------
