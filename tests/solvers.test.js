@@ -114,6 +114,7 @@ export const STATES = {
     glanceState({ m1: 2, m2: 2, v1i: 40, th1: 30, th2: 45 }),
     glanceState({ m1: 1.5, m2: 4, v1i: 8, th1: 50, th2: 20 }),
     graphState({ m: 4.6, v0: 0.45, Fai: 2, Faf: 30, dxa: 5, Fbi: 30, Fbf: 12, dxb: 5 }),
+    { ch: 'energy', cond: { collide: 'free', varA: true }, s: { m: 0.26, a: 12, Fp: 3.12 } }, // F = ma at one moment, when the force varies with time
   ],
 };
 

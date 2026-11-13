@@ -712,12 +712,19 @@ const EQS = {
   WK1: {
     label: 'W1', eq: '{WF} = {Fp}{dx} cos {phi}', kind: 'def', cue: 'a steady force acts while the body moves a distance',
     meaning: 'Work by a constant force: only the part of the force along the motion counts.', condition: 'constant force, straight path; φ is the angle between the force and the motion',
+    applies: c => !c.varA, needs: 'a steady force (this one changes with time)',
     calc: 'W = F·d, the dot product: F d cos φ. A force at right angles to the motion (φ = 90°) does no work.',
     solve: { phi: { guard: v => Math.abs(v.WF) > Math.abs(v.Fp * v.dx) ? err('The work can’t be bigger than F times the distance: one of them is mistyped.') : null } },
   },
   WK2: {
     label: 'W2', eq: '{Pavg} = {WF} / {t}', kind: 'def', cue: 'work done in a stated time',
     meaning: 'Average power: how fast the force does work.', condition: 'the work W_F done over the time t', calc: 'Power is the rate of doing work; over a whole interval the average is W / t.',
+  },
+  WK3: {
+    label: 'W6', eq: '{Fp} = {m}{a}', kind: 'law', cue: 'one force along the motion, changing with time',
+    meaning: 'Newton’s second law at every moment: the force sets the acceleration, so a force that changes with time gives an acceleration that changes with time.',
+    condition: 'F is the only force along the motion (the net force)', applies: c => !!c.varA, needs: 'a force that varies with time',
+    calc: 'With F(t) known, a(t) = F(t)/m. The area under a(t) is the change in velocity: v(t) = v₀ + ∫a dt.',
   },
   EW1: {
     label: 'M1', eq: '{K0} + {U0} + {Us0} + {Wnc} = {K} + {U} + {Us}', kind: 'law', cue: 'speeds, heights or a spring at two moments, with no time asked',
@@ -827,6 +834,7 @@ for (const n of [1, 2, 3, 4, 5]){ EQS['X' + n].label = 'K' + n; EQS['E' + n].lab
 // ---------- chapters ----------
 // the drawing templates offered in the Build tab: [template, icon]
 const SCENES = [['incline', 'incline'], ['pulley', 'tpulley'], ['blocks', 'blocks'], ['wheel', 'twheel']];
+const FWD = ['forward', 'backward']; // + and − along the line of motion
 const CHAPTERS = {
   incline: {
     // unit hooks (app.js reads them through hook(); missing ones take the default there)
@@ -1004,7 +1012,7 @@ const CHAPTERS = {
   },
   // work, energy and momentum for a body that slides, swings or collides. No motion picture yet.
   energy: {
-    startCond: { collide: 'free' },
+    startCond: { collide: 'free', varA: false },
     title: 'Work, energy & p', short: 'Energy', forcesOptional: true,
     vars: ['m', 'g', 'h', 'inc', 'dx', 't', 'v0', 'v', 'Fp', 'phi', 'WF', 'Pavg', 'Wnet', 'K0', 'K', 'U0', 'U', 'Us0', 'Us', 'Wnc', 'ks', 'xs',
       'mu', 'W', 'Wperp', 'N', 'f', 'm1', 'm2', 'v1i', 'v2i', 'v1f', 'v2f', 'th1', 'th2', 'Fai', 'Faf', 'dxa', 'Fbi', 'Fbf', 'dxb', 'Wga', 'Wgb'],
@@ -1012,14 +1020,17 @@ const CHAPTERS = {
       phi: 'angle between the force and the direction of motion', h: 'height difference between the start and the end (or the height body 2 rises)',
       U0: 'gravitational potential energy at the start', U: 'gravitational potential energy at the end', Wnc: 'work by friction or another non-conservative force',
       Wnet: 'net work by all the forces', W: 'weight (mg): a force, not work', Wperp: 'weight component into the surface', N: 'normal force',
-      inc: 'angle of the slope (from horizontal)', m1: 'mass of body 1', m2: 'mass of body 2', t: 'time the work takes' },
-    dirs: { dx: false, v0: false, h: false, v1f: c => c.collide === 'glance' ? false : null, v2f: c => c.collide === 'glance' ? false : null }, // speeds in two dimensions
+      inc: 'angle of the slope (from horizontal)', m1: 'mass of body 1', m2: 'mass of body 2', t: 'time the work takes', a: 'acceleration along the motion' },
+    condVars: { varA: ['a'] }, // only asked about when the force varies with time
+    // a force that varies with time: Δx(t) → v(t) → a(t), with F(t) = m a(t) feeding the bottom rung
+    ladder: { rungs: ['dx', 'v', 'a'], start: { dx: null, v: 'v0' }, zeroNote: { dx: 'Δx is measured from where it starts, so Δx(0) = 0.' } },
+    dirs: { dx: c => c.varA ? FWD : false, v0: c => c.varA ? FWD : false, v: c => c.varA ? FWD : null, a: FWD, Fp: c => c.varA ? FWD : null, h: false, v1f: c => c.collide === 'glance' ? false : null, v2f: c => c.collide === 'glance' ? false : null }, // speeds in two dimensions
     axis: 'Collision velocities: + is <b>to the right</b>. Work and energies carry their own sign: W<sub>nc</sub> is − when friction takes energy out. Distances, heights and speeds are sizes.',
     stuck: 'Every term of the energy law needs a value or an equation: which are zero (from rest, ends at rest, no spring, where heights are measured from)? For a collision, which way is each body moving?',
     intro: `<p><b>Work</b> is a force acting over a distance: W = F Δx cos φ. Only the part of the force along the motion counts. <b>Power</b> is how fast work is done.</p>
       <p><b>Energy</b> links two moments with no time: K₀ + U₀ + U<sub>s0</sub> + W<sub>nc</sub> = K + U + U<sub>s</sub>. Decide what each term is at the start and the end; friction’s work is −f Δx. <b>Momentum</b> links just before and just after a collision: m₁v₁ + m₂v₂ stays the same. Many problems need both: momentum for the hit, energy for the motion after it.</p>`,
     sections: [
-      { title: 'Work and power', note: 'Work by one steady force, the work–energy theorem, and average power.', eqs: ['WK1', 'WK2', 'EN2', 'GA1', 'GA2', 'GA3'] },
+      { title: 'Work and power', note: 'Work by one steady force, the work–energy theorem, and average power. A force that varies with time goes through F = ma and the motion ladder instead.', eqs: ['WK1', 'WK2', 'EN2', 'WK3', 'GA1', 'GA2', 'GA3'] },
       { title: 'Energy at two moments', note: 'Conservation of energy with gravity and a spring. Each term is a definition; the conditions say which are zero.', eqs: ['EW1', 'EW2', 'EW3', 'EW4', 'EW5', 'EW6', 'EW7'] },
       { title: 'Friction along the path', note: 'Friction’s work, and the friction force from the normal force on a slope (θ = 0 on level ground).', eqs: ['EW8', 'I4', 'I3', 'I2', 'N2', 'GEO4'] },
       { title: 'Momentum and collisions', note: 'Momentum is conserved through the collision; energy takes over afterwards.', eqs: ['MO1', 'MO2', 'MO3', 'MO4', 'MO5', 'MO6', 'MO7', 'MO8'] },
@@ -1028,6 +1039,7 @@ const CHAPTERS = {
       { key: 'collide', type: 'choice', label: 'If two bodies collide', options: [['free', 'They bounce apart'], ['stick', 'They stick together'], ['elastic', 'Elastic: no kinetic energy lost'], ['glance', 'Glancing: they leave at angles']] },
       { key: 'equal', type: 'toggle', label: 'The two bodies have equal mass' },
       { key: 'graph', type: 'toggle', label: 'The force is given as a force–position graph' },
+      { key: 'varA', type: 'choice', label: 'The force', options: [[false, 'Steady'], [true, 'Varies with time']], ask: ['The force:', [[false, 'steady'], [true, 'varies with time (a function of t)']]] },
       { key: 'rough', type: 'toggle', label: 'Kinetic friction acts along the path' },
       { key: 'along', type: 'hidden', label: 'The force points along the motion (φ = 0)', sets: { phi: 0 } },
       { key: 'rest', type: 'hidden', label: 'Starts from rest', sets: { K0: 0 } },
@@ -1410,6 +1422,40 @@ const LESSONS = [
         problem: { original: true, title: 'Cart pushed by a growing force', text: 'A 1.5 kg cart rolls along a frictionless level track at 1.0 m/s. A forward force then acts on it: the force rises steadily from 0 to 12 N over the first 2.0 m and stays at 12 N for the next 3.0 m. How fast is the cart moving at the end of those 5.0 m?',
           key: { givens: { m: [1.5, 'kg'], v0: [1, 'm/s'], Fai: [0, 'N', 0], Faf: [12, 'N', 0], dxa: [2, 'm'], Fbi: [12, 'N', 0], Fbf: [12, 'N', 0], dxb: [3, 'm'] }, cond: { graph: true }, targets: ['v'] },
           answers: { v: '8.1' } } },
+    ],
+  },
+  {
+    id: 'ftime', chapter: 'energy', title: 'A force that changes with time', objectives: ['F(t) gives a(t) by Newton’s second law', 'the area under a(t) is the change in velocity', 'kinetic energy from the speed at one moment'],
+    recap: 'When the force changes with time, the acceleration does too, so the constant-acceleration equations and W = F Δx are both out. Newton’s second law still holds at every moment: a(t) = F(t)/m. Integrate once for v(t) (the start velocity is the constant), put in the time, and K = ½mv² gives the kinetic energy. Integrate again for how far it went.',
+    stops: [
+      { kind: 'long', mode: 'guided', help: FULL,
+        prompts: [
+          { when: 'start', text: 'The force is a formula in t, not one number. Pick “varies with time” under This problem, then give F as a function of t.' },
+          { when: 'conditions', text: 'Is the force steady? If not, which equations stop working?' },
+          { when: 'solve', text: 'F(t) gives a(t). What do you do to an acceleration to get a velocity, and what else do you need to know?' },
+        ],
+        route: { laws: ['forces'], why: 'The force changes with time, so the acceleration is not constant: Newton’s second law gives a(t), and integrating it gives v(t). Kinetic energy then follows from its definition.',
+          cues: ['The force is given as a function of time', 'It starts from rest: v₀ = 0', 'This is the only force along the motion'],
+          decoys: ['The acceleration is constant', 'The work is F Δx with the force at the end'] },
+        problem: { original: true, title: 'Puck pushed harder and harder', text: 'A 0.50 kg puck rests on a frictionless air table. From t = 0 a forward force F = (0.9t² + 1.5t) N acts on it, with t in seconds. Find the puck’s speed and its kinetic energy at t = 2.0 s.',
+          key: { givens: { m: [0.5, 'kg'], v0: [0, 'm/s', 0], t: [2, 's'] }, fns: { Fp: '0.9t² + 1.5t' }, cond: { varA: true }, targets: ['v', 'K'] },
+          answers: { v: '11', K: '29' } } },
+      { kind: 'twin', mode: 'guided', help: TWIN,
+        prompts: [{ when: 'start', text: 'Same route, new force. It pushes backward at first: let the signs in F(t) carry that.' }],
+        route: { laws: ['forces'], why: 'A force that changes with time: F = ma gives a(t), the integral gives v, and K = ½mv².',
+          cues: ['The force is given as a function of time', 'It starts from rest: v₀ = 0', 'This is the only force along the motion'],
+          decoys: ['The acceleration is constant', 'The force is always forward'] },
+        problem: { original: true, title: 'Glider on an air track', text: 'A 350 g glider is at rest on a level air track. Between t = 0 and t = 3.0 s the only horizontal force on it is F = (2t² + 3t − 5) N, with t in seconds. How much kinetic energy does the glider have at t = 3.0 s?',
+          key: { givens: { m: [350, 'g'], v0: [0, 'm/s', 0], t: [3, 's'] }, fns: { Fp: '2t² + 3t − 5' }, cond: { varA: true }, targets: ['K'] },
+          answers: { K: '3.9e2' } } },
+      { kind: 'transfer', mode: 'guided', help: NONE,
+        prompts: [{ when: 'start', text: 'It is already moving, and the question asks how far. How many times do you integrate, and what is each start value?' }],
+        route: { laws: ['forces'], why: 'F = ma gives a(t); one integral gives v(t), starting from v₀, and a second gives the distance. The force is not steady, so its work is not F Δx: the work–energy theorem gives it from the kinetic energies.',
+          cues: ['The force is given as a function of time', 'It is already moving at t = 0', 'This is the only force along the motion'],
+          decoys: ['It starts from rest', 'The work is F Δx with the force at the end'] },
+        problem: { original: true, title: 'Trolley with a growing push', text: 'A 2.0 kg trolley rolls forward at 1.5 m/s on a frictionless level floor. From t = 0 a forward force F = (6t) N acts on it, with t in seconds. How far does the trolley travel in the first 2.0 s, and how much work does the force do on it in that time?',
+          key: { givens: { m: [2, 'kg'], v0: [1.5, 'm/s', 0], t: [2, 's'] }, fns: { Fp: '6t' }, cond: { varA: true }, targets: ['dx', 'Wnet'] },
+          answers: { dx: '7.0', Wnet: '54' } } },
     ],
   },
 ];

@@ -80,7 +80,8 @@ const HOOKS = {
 const hook = (k, ch = S.ch) => CHAPTERS[ch]?.[k] ?? HOOKS[k];
 const DRAW_UNIT = Object.keys(CHAPTERS).find(c => CHAPTERS[c].drawFirst) || Object.keys(CHAPTERS)[0];
 const K = () => chapter().kin;
-const chVars = () => [...chapter().vars, ...(S.cond.rim ? chapter().rimVars || [] : []), ...S.custom];
+// a unit's quantities, plus the ones a condition brings in (rimVars; condVars: { conditionKey: [ids] })
+const chVars = () => [...chapter().vars, ...(S.cond.rim ? chapter().rimVars || [] : []), ...Object.entries(chapter().condVars || {}).flatMap(([k, ids]) => S.cond[k] ? ids : []), ...S.custom];
 const sectionOk = (sec) => !sec.applies || sec.applies(S.cond);
 const chEqs = () => chapter().sections.flatMap(sec => sec.eqs.map(e => ({ e, sec })));
 const applies = (e) => { const sec = chapter().sections.find(s => s.eqs.includes(e)); return (!sec || sectionOk(sec)) && (!EQS[e].applies || EQS[e].applies(S.cond)); };
@@ -1297,6 +1298,16 @@ $('checkSetup').onclick = () => {
     else if (close(-g.val, want)){ lines.push(`✗ ${VARS[id].sym}: right size, but the <b>direction is backwards</b>.`); bad++; }
     else { lines.push(`✗ ${VARS[id].sym}: the value doesn’t match the problem. Check the number and the unit.`); bad++; }
   }
+  // a given that is a function of time: the same polynomial, coefficient by coefficient
+  for (const [id, text] of Object.entries(p.key.fns || {})){
+    const f = S.funcs[id], want = X.parseFn(text).poly.map(c => X.numValue(c));
+    const got = f && f.from === 'given' && f.poly.every(c => X.isNumeric(c)) ? f.poly.map(c => X.numValue(c)) : null;
+    const same = got && Array.from({ length: Math.max(got.length, want.length) }, (_, k) => [got[k] || 0, want[k] || 0]).every(([a, b]) => Math.abs(a - b) <= 0.01 * Math.max(1e-9, Math.abs(b)));
+    if (same) lines.push(`✓ ${VARS[id].sym}(t) = ${polyHTML(f.poly)}`);
+    else if (got){ lines.push(`✗ ${VARS[id].sym}(t) doesn’t match the problem. Check each term’s number, its sign and its power of t.`); bad++; }
+    else { lines.push(`✗ <b>${VARS[id].sym}</b> (${nm(id)}) is given as a <b>function of time</b>: pick “varies with time” under This problem, then give it as a function of t.`); bad++; }
+  }
+  for (const id of Object.keys(S.funcs)) if (S.funcs[id].from === 'given' && !(id in (p.key.fns || {}))){ lines.push(`? ${VARS[id].sym}(t) isn’t stated in the problem as a function of time.`); bad++; }
   for (const id of Object.keys(S.givens)) if (!(id in p.key.givens)){ lines.push(`? ${VARS[id].sym} isn’t stated in the problem. If you worked it out, it belongs in the path, not the givens.`); bad++; }
   for (const [k, want] of Object.entries(p.key.cond)){
     const c = chapter().conditions.find(x => x.key === k); if (!c) continue;

@@ -44,7 +44,7 @@ test('every stop: apply its answer key, solve, and match the stored answers to t
         await page.click('#courseClose');
       }
       const keys = await page.evaluate((own) => window.__rl.course.lessons.flatMap(l => l.stops.filter(s => !own || s.local).map(s => `${l.id}/${s.kind}`)), !!file);
-      assert.ok(keys.length >= (file ? 1 : 15), `stops to run: ${keys}`);
+      assert.ok(keys.length >= (file ? 1 : 18), `stops to run: ${keys}`);
       for (const k of keys){
         assert.equal(await openStop(page, k), true, k);
         const st = await stopOf(page);
@@ -71,8 +71,8 @@ test('the map, route card, kind tap, help switches, stars and progress', async (
   try {
     // the map is always open: every stop of both lessons can be opened, in any order
     await page.click('#courseBtn');
-    assert.equal(await page.locator('#courseBody .clesson').count(), 5);
-    assert.equal(await page.locator('#courseBody [data-stop]:not([disabled])').count(), 15);
+    assert.equal(await page.locator('#courseBody .clesson').count(), 6);
+    assert.equal(await page.locator('#courseBody [data-stop]:not([disabled])').count(), 18);
     await page.click('[data-stop="roll/transfer"]');
     assert.equal(await page.evaluate(() => window.__rl.mode), 'guided', 'lessons run in guided mode');
     assert.match(await page.inputValue('#problem'), /swing/);

@@ -93,11 +93,13 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
       if (!q || !Array.isArray(g) || !(g[0] === null || Number.isFinite(g[0])) || !(g[1] === q.unit || (q.units && g[1] in q.units))) continue;
       givens[id] = [g[0], g[1], g[2] === 1 ? 1 : 0];
     }
+    // givens that are functions of time: numbers and t only, as typed in the function box
+    const fns = Object.fromEntries(Object.entries(p.key.fns || {}).filter(([id, f]) => vars[id] && typeof f === 'string' && /^[0-9t\s.+\-−^²³⁴⁵/()]{1,80}$/.test(f)));
     const cond = Object.fromEntries(Object.entries(p.key.cond || {}).filter(([k, v]) => /^\w{1,40}$/.test(k) && (typeof v === 'boolean' || (typeof v === 'string' && /^\w{1,40}$/.test(v)))));
     const targets = (Array.isArray(p.key.targets) ? p.key.targets : []).filter(t => vars[t]).slice(0, 6);
     const answers = Object.fromEntries(Object.entries(p.answers || {}).filter(([id, a]) => targets.includes(id) && typeof a === 'string' && /^[−-]?\d*\.?\d+(e[−-]?\d+)?$/i.test(a)));
     if (!targets.length) return null;
-    return { ...(p.original ? { original: true } : { source: src }), title: str(p.title, 120) || 'Untitled', text: str(p.text, 4000), key: { givens, cond, targets }, answers };
+    return { ...(p.original ? { original: true } : { source: src }), title: str(p.title, 120) || 'Untitled', text: str(p.text, 4000), key: { givens, ...(Object.keys(fns).length ? { fns } : {}), cond, targets }, answers };
   }
   async function importLocal(file){
     let raw; try { raw = JSON.parse(await file.text()); } catch { app.say('That file isn’t readable JSON.'); return; }

@@ -126,6 +126,7 @@ export async function applyKey(page, p, { skip = [], flip = [], condOverride = {
     if (isHidden){ viaCond.add(c); continue; }
     await addGiven(page, id, mag, unit, flip.includes(id) ? 1 - (dir || 0) : (dir || 0), { symbol: symbols || mag === null }); // null: the problem gives no size
   }
+  for (const [id, fn] of Object.entries(p.key.fns || {})) await addFunction(page, id, fn);
   // hidden givens that the key doesn't use must be off (earth defaults on in incline/pulley)
   for (const c of new Set(Object.values(hidden))) await setCondition(page, c, viaCond.has(c));
   await confirmConditions(page);
