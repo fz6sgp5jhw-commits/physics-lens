@@ -64,6 +64,16 @@ function collideState({ m1, m2, v1i, v2i, collide, v1f, g = 9.81 }){
   return { ch: 'energy', cond: { collide }, s: { m1, m2, v1i, v2i, v1f, v2f, g, h: v2f * v2f / (2 * g) } };
 }
 
+// a glancing collision (body 2 at rest before, the bodies leaving on opposite sides), and work as the area under a force–position graph
+function glanceState({ m1, m2, v1i, th1, th2 }){
+  const equal = m1 === m2, v2f = m1 * v1i / (m2 * (Math.cos(rad(th2)) + Math.sin(rad(th2)) / Math.tan(rad(th1)))), v1f = m2 * v2f * Math.sin(rad(th2)) / (m1 * Math.sin(rad(th1)));
+  return { ch: 'energy', cond: { collide: 'glance', equal }, s: { ...(equal ? {} : { m1, m2 }), v1i, th1, th2, v1f, v2f } };
+}
+function graphState({ m, v0, Fai, Faf, dxa, Fbi, Fbf, dxb }){
+  const Wga = 0.5 * (Fai + Faf) * dxa, Wgb = 0.5 * (Fbi + Fbf) * dxb, K0 = 0.5 * m * v0 * v0, K = K0 + Wga + Wgb;
+  return { ch: 'energy', cond: { collide: 'free', graph: true }, s: { m, v0, Fai, Faf, dxa, Fbi, Fbf, dxb, Wga, Wgb, Wnet: Wga + Wgb, K0, K, v: Math.sqrt(2 * K / m) } };
+}
+
 export const STATES = {
   incline: [
     inclineState({ m: 3, inc: 35, friction: false, up: false, v0: 0, t: 1.5 }),
@@ -101,6 +111,9 @@ export const STATES = {
     collideState({ m1: 1.5, m2: 6, v1i: 9, v2i: 0, v1f: -5.4, collide: 'free' }),
     collideState({ m1: 0.5, m2: 2.5, v1i: 6, v2i: 0, collide: 'stick' }),
     collideState({ m1: 2, m2: 3, v1i: 4, v2i: -1, collide: 'elastic' }),
+    glanceState({ m1: 2, m2: 2, v1i: 40, th1: 30, th2: 45 }),
+    glanceState({ m1: 1.5, m2: 4, v1i: 8, th1: 50, th2: 20 }),
+    graphState({ m: 4.6, v0: 0.45, Fai: 2, Faf: 30, dxa: 5, Fbi: 30, Fbf: 12, dxb: 5 }),
   ],
 };
 

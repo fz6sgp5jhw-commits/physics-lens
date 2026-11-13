@@ -108,6 +108,16 @@ const VARS = {
   v2i:   { sym: 'v<sub>2i</sub>', plain: 'v_2i', name: 'velocity of body 2 before the collision', unit: 'm/s', units: { 'm/s': 1, 'km/h': 1 / 3.6 }, dir: ['to the right', 'to the left'] },
   v1f:   { sym: 'v<sub>1f</sub>', plain: 'v_1f', name: 'velocity of body 1 after the collision', unit: 'm/s', units: { 'm/s': 1, 'km/h': 1 / 3.6 }, dir: ['to the right', 'to the left'] },
   v2f:   { sym: 'v<sub>2f</sub>', plain: 'v_2f', name: 'velocity of body 2 after the collision', unit: 'm/s', units: { 'm/s': 1, 'km/h': 1 / 3.6 }, dir: ['to the right', 'to the left'] },
+  th1:   { sym: 'θ<sub>1</sub>', plain: 'θ_1', name: 'angle of body 1’s path after the collision, from the line it came in on', unit: '°', units: { '°': 1, rad: 180 / Math.PI } },
+  th2:   { sym: 'θ<sub>2</sub>', plain: 'θ_2', name: 'angle of body 2’s path after the collision, on the other side of that line', unit: '°', units: { '°': 1, rad: 180 / Math.PI } },
+  Fai:   { sym: 'F<sub>a0</sub>', plain: 'F_a0', name: 'force at the start of stretch a of the graph', unit: 'N', units: { N: 1, kN: 1000 }, dir: ['along the motion', 'against the motion'] },
+  Faf:   { sym: 'F<sub>a1</sub>', plain: 'F_a1', name: 'force at the end of stretch a', unit: 'N', units: { N: 1, kN: 1000 }, dir: ['along the motion', 'against the motion'] },
+  Fbi:   { sym: 'F<sub>b0</sub>', plain: 'F_b0', name: 'force at the start of stretch b', unit: 'N', units: { N: 1, kN: 1000 }, dir: ['along the motion', 'against the motion'] },
+  Fbf:   { sym: 'F<sub>b1</sub>', plain: 'F_b1', name: 'force at the end of stretch b', unit: 'N', units: { N: 1, kN: 1000 }, dir: ['along the motion', 'against the motion'] },
+  dxa:   { sym: 'Δx<sub>a</sub>', plain: 'Δx_a', name: 'length of stretch a along the position axis', unit: 'm', units: { m: 1, cm: 0.01 } },
+  dxb:   { sym: 'Δx<sub>b</sub>', plain: 'Δx_b', name: 'length of stretch b along the position axis', unit: 'm', units: { m: 1, cm: 0.01 } },
+  Wga:   { sym: 'W<sub>a</sub>', plain: 'W_a', name: 'work over stretch a (the area under it)', unit: 'J', units: { J: 1 } },
+  Wgb:   { sym: 'W<sub>b</sub>', plain: 'W_b', name: 'work over stretch b (the area under it)', unit: 'J', units: { J: 1 } },
 };
 
 const V = (id) => `<span class="sym" data-v="${id}">${VARS[id].sym}</span>`;
@@ -754,7 +764,7 @@ const EQS = {
   MO1: {
     label: 'P1', eq: '{m1}{v1i} + {m2}{v2i} = {m1}{v1f} + {m2}{v2f}', kind: 'law', cue: 'two bodies collide or push apart, with no outside push along the line',
     meaning: 'Momentum is conserved: the total mv just before equals the total just after. Velocities carry their direction as a sign.',
-    condition: 'no net outside force along the line during the collision', calc: 'The bodies push on each other with equal and opposite forces for the same time, so what one gains in mv the other loses.',
+    condition: 'no net outside force along the line during the collision', applies: c => c.collide !== 'glance', needs: 'a collision along one line', calc: 'The bodies push on each other with equal and opposite forces for the same time, so what one gains in mv the other loses.',
   },
   MO2: {
     label: 'P2', eq: '{v1f} = {v2f}', kind: 'rel', cue: 'they stick together', meaning: 'After a perfectly inelastic collision the two bodies move as one.',
@@ -764,6 +774,45 @@ const EQS = {
     label: 'P3', eq: '{v1i} − {v2i} = {v2f} − {v1f}', kind: 'rel', cue: 'an elastic collision: no kinetic energy is lost',
     meaning: 'In an elastic collision along a line, the bodies separate as fast as they approached.', condition: 'elastic collision along a line',
     applies: c => c.collide === 'elastic', needs: 'an elastic collision', calc: 'Combine conservation of momentum with conservation of kinetic energy and divide one by the other.',
+  },
+  MO5: {
+    label: 'P5', eq: '{m1}{v1i} = {m1}{v1f} cos {th1} + {m2}{v2f} cos {th2}', kind: 'law', cue: 'a glancing collision: momentum along the line body 1 came in on',
+    meaning: 'Momentum is a vector, so it is conserved along each axis. Along the incoming line, body 1’s momentum is shared between the two forward parts.',
+    condition: 'body 2 at rest before; angles measured from the incoming line', applies: c => c.collide === 'glance' && !c.equal, needs: 'a glancing collision (two dimensions) between different masses',
+    calc: 'Take x along body 1’s incoming velocity: each body’s x part after is its speed times the cosine of its angle.', solve: { th1: null, th2: null },
+  },
+  MO6: {
+    label: 'P6', eq: '{m1}{v1f} sin {th1} = {m2}{v2f} sin {th2}', kind: 'law', cue: 'a glancing collision: momentum across the incoming line',
+    meaning: 'There was no sideways momentum before, so the two sideways parts after must cancel: the bodies go off on opposite sides.',
+    condition: 'body 2 at rest before; the bodies leave on opposite sides of the incoming line', applies: c => c.collide === 'glance' && !c.equal, needs: 'a glancing collision (two dimensions) between different masses',
+    calc: 'Take y across the incoming line: the total y momentum is zero before, so m₁v₁f sin θ₁ − m₂v₂f sin θ₂ = 0.', solve: { th1: null, th2: null },
+  },
+  MO7: {
+    label: 'P7', eq: '{v1i} = {v1f} cos {th1} + {v2f} cos {th2}', kind: 'law', cue: 'a glancing collision between equal masses: along the incoming line',
+    meaning: 'Momentum along the incoming line, with the equal masses divided out: the incoming speed is shared between the two forward parts.',
+    condition: 'equal masses; body 2 at rest before; angles measured from the incoming line', applies: c => c.collide === 'glance' && !!c.equal, needs: 'a glancing collision between equal masses',
+    calc: 'm v₁ᵢ = m v₁f cos θ₁ + m v₂f cos θ₂, and the same m divides out of every term.', solve: { th1: null, th2: null },
+  },
+  MO8: {
+    label: 'P8', eq: '{v1f} sin {th1} = {v2f} sin {th2}', kind: 'law', cue: 'a glancing collision between equal masses: across the incoming line',
+    meaning: 'No sideways momentum before, so the two sideways parts after cancel; with equal masses the mass divides out.',
+    condition: 'equal masses; body 2 at rest before; the bodies leave on opposite sides of the incoming line', applies: c => c.collide === 'glance' && !!c.equal, needs: 'a glancing collision between equal masses',
+    calc: 'm v₁f sin θ₁ − m v₂f sin θ₂ = 0, and the same m divides out.', solve: { th1: null, th2: null },
+  },
+  GA1: {
+    label: 'W3', eq: '{Wga} = ½({Fai} + {Faf}){dxa}', kind: 'def', cue: 'a force–position graph: one straight stretch of it',
+    meaning: 'Work is the area under the force–position graph. Under one straight stretch that area is a trapezoid (a triangle if the force starts at zero, a rectangle if it stays level).',
+    condition: 'the force changes steadily (or not at all) over the stretch', applies: c => !!c.graph, needs: 'a force given as a force–position graph', calc: 'W = ∫F dx, the area under the graph: the average of the two end forces times the length.',
+  },
+  GA2: {
+    label: 'W4', eq: '{Wgb} = ½({Fbi} + {Fbf}){dxb}', kind: 'def', cue: 'a force–position graph: the next straight stretch',
+    meaning: 'The area under the second straight stretch of the graph.', condition: 'the force changes steadily (or not at all) over the stretch',
+    applies: c => !!c.graph, needs: 'a force given as a force–position graph', calc: 'W = ∫F dx, the area under the graph: the average of the two end forces times the length.',
+  },
+  GA3: {
+    label: 'W5', eq: '{Wnet} = {Wga} + {Wgb}', kind: 'def', cue: 'the whole area under the graph, stretch by stretch',
+    meaning: 'The work over the whole distance is the sum of the areas of its stretches.', condition: 'the graphed force is the only one that does work; two stretches',
+    applies: c => !!c.graph, needs: 'a force given as a force–position graph', calc: 'An integral over the whole distance is the sum of the integrals over its parts.',
   },
   MO4: {
     label: 'P4', eq: '½{m2}{v2f}² = {m2}{g}{h}', kind: 'law', cue: 'after the collision, body 2 swings or rises to a height h',
@@ -958,25 +1007,27 @@ const CHAPTERS = {
     startCond: { collide: 'free' },
     title: 'Work, energy & p', short: 'Energy', forcesOptional: true,
     vars: ['m', 'g', 'h', 'inc', 'dx', 't', 'v0', 'v', 'Fp', 'phi', 'WF', 'Pavg', 'Wnet', 'K0', 'K', 'U0', 'U', 'Us0', 'Us', 'Wnc', 'ks', 'xs',
-      'mu', 'W', 'Wperp', 'N', 'f', 'm1', 'm2', 'v1i', 'v2i', 'v1f', 'v2f'],
+      'mu', 'W', 'Wperp', 'N', 'f', 'm1', 'm2', 'v1i', 'v2i', 'v1f', 'v2f', 'th1', 'th2', 'Fai', 'Faf', 'dxa', 'Fbi', 'Fbf', 'dxb', 'Wga', 'Wgb'],
     names: { m: 'mass of the body', dx: 'distance it moves along its path', v0: 'speed at the start', v: 'speed at the end', Fp: 'the force F (size)',
       phi: 'angle between the force and the direction of motion', h: 'height difference between the start and the end (or the height body 2 rises)',
       U0: 'gravitational potential energy at the start', U: 'gravitational potential energy at the end', Wnc: 'work by friction or another non-conservative force',
       Wnet: 'net work by all the forces', W: 'weight (mg): a force, not work', Wperp: 'weight component into the surface', N: 'normal force',
       inc: 'angle of the slope (from horizontal)', m1: 'mass of body 1', m2: 'mass of body 2', t: 'time the work takes' },
-    dirs: { dx: false, v0: false, h: false },
+    dirs: { dx: false, v0: false, h: false, v1f: c => c.collide === 'glance' ? false : null, v2f: c => c.collide === 'glance' ? false : null }, // speeds in two dimensions
     axis: 'Collision velocities: + is <b>to the right</b>. Work and energies carry their own sign: W<sub>nc</sub> is − when friction takes energy out. Distances, heights and speeds are sizes.',
     stuck: 'Every term of the energy law needs a value or an equation: which are zero (from rest, ends at rest, no spring, where heights are measured from)? For a collision, which way is each body moving?',
     intro: `<p><b>Work</b> is a force acting over a distance: W = F Δx cos φ. Only the part of the force along the motion counts. <b>Power</b> is how fast work is done.</p>
       <p><b>Energy</b> links two moments with no time: K₀ + U₀ + U<sub>s0</sub> + W<sub>nc</sub> = K + U + U<sub>s</sub>. Decide what each term is at the start and the end; friction’s work is −f Δx. <b>Momentum</b> links just before and just after a collision: m₁v₁ + m₂v₂ stays the same. Many problems need both: momentum for the hit, energy for the motion after it.</p>`,
     sections: [
-      { title: 'Work and power', note: 'Work by one steady force, the work–energy theorem, and average power.', eqs: ['WK1', 'WK2', 'EN2'] },
+      { title: 'Work and power', note: 'Work by one steady force, the work–energy theorem, and average power.', eqs: ['WK1', 'WK2', 'EN2', 'GA1', 'GA2', 'GA3'] },
       { title: 'Energy at two moments', note: 'Conservation of energy with gravity and a spring. Each term is a definition; the conditions say which are zero.', eqs: ['EW1', 'EW2', 'EW3', 'EW4', 'EW5', 'EW6', 'EW7'] },
       { title: 'Friction along the path', note: 'Friction’s work, and the friction force from the normal force on a slope (θ = 0 on level ground).', eqs: ['EW8', 'I4', 'I3', 'I2', 'N2', 'GEO4'] },
-      { title: 'Momentum and collisions', note: 'Momentum is conserved through the collision; energy takes over afterwards.', eqs: ['MO1', 'MO2', 'MO3', 'MO4'] },
+      { title: 'Momentum and collisions', note: 'Momentum is conserved through the collision; energy takes over afterwards.', eqs: ['MO1', 'MO2', 'MO3', 'MO4', 'MO5', 'MO6', 'MO7', 'MO8'] },
     ],
     conditions: [
-      { key: 'collide', type: 'choice', label: 'If two bodies collide', options: [['free', 'They bounce apart'], ['stick', 'They stick together'], ['elastic', 'Elastic: no kinetic energy lost']] },
+      { key: 'collide', type: 'choice', label: 'If two bodies collide', options: [['free', 'They bounce apart'], ['stick', 'They stick together'], ['elastic', 'Elastic: no kinetic energy lost'], ['glance', 'Glancing: they leave at angles']] },
+      { key: 'equal', type: 'toggle', label: 'The two bodies have equal mass' },
+      { key: 'graph', type: 'toggle', label: 'The force is given as a force–position graph' },
       { key: 'rough', type: 'toggle', label: 'Kinetic friction acts along the path' },
       { key: 'along', type: 'hidden', label: 'The force points along the motion (φ = 0)', sets: { phi: 0 } },
       { key: 'rest', type: 'hidden', label: 'Starts from rest', sets: { K0: 0 } },
@@ -1157,14 +1208,15 @@ const SAMPLE = {
   theta: 8, w0: 2, w: 6, alpha: 1.5, r: 0.5, s: 4, v: 3, at: 0.75, ac: 18, atot: 18.02,
   dth: 8, dtrav: 8, nrev: 1.27, wavg: 4, aavg: 1.5,
   L: 2, M: 1.5, R: 0.2, Hx: 5, Hy: 5, dP: 0.3, dm: 0.3, dT: 0.4, dF: 0.5, phi: 30, beta: 20, xh: 0.4, hc: 0.12, tau: 5, rt: 0.5, tnet: 5, I: 0.4, Icm: 0.1, dpa: 0.35,
+  th1: 30, th2: 45, Fai: 5, Faf: 20, Fbi: 20, Fbf: 20, dxa: 2, dxb: 3, Wga: 25, Wgb: 60,
   WF: 30, Pavg: 15, ks: 200, xs: 0.1, Us0: 1, Us: 1, v1i: 3, v2i: 1, v1f: 1, v2f: 2,
   K: 20, K0: 5, U: 2, U0: 20, Wnc: 3, Wnet: 15, Ktr: 14, Krot: 6, h: 1, fs: 3, D: 0.4, Li: 2, Lf: 2, Ii: 0.4, If: 0.2, wi: 5, wf: 10,
 };
 for (const [id, x] of Object.entries(SAMPLE)) VARS[id].sample = x;
 // Order symbols are written in a product: coefficient-like first (μk m g), then the rest.
 const PRINT_ORDER = ['mu', 'mus', 'r', 'rt', 'R', 'm', 'M', 'm1', 'm2', 'mA', 'mB', 'g', 'h', 'W', 'W1', 'W2', 'Wpar', 'Wperp', 'N', 'N1', 'NA', 'NB', 'f', 'fA', 'fB', 'F', 'Fp', 'P', 'Tn', 'inc',
-  'Hx', 'Hy', 'fs', 'tau', 'tnet', 'Wnet', 'Wnc', 'WF', 'Pavg', 'ks', 'K0', 'K', 'Ktr', 'Krot', 'U0', 'U', 'Us0', 'Us', 'Li', 'Lf', 'I', 'Icm', 'Ii', 'If', 'dpa', 'D', 'L', 'dP', 'dm', 'dT', 'dF', 'xh', 'hc', 'phi', 'beta',
-  'dx', 'xs', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'wi', 'wf', 'v', 'v1i', 'v2i', 'v1f', 'v2f', 'a', 'alpha', 'at', 'ac', 'atot', 'dth', 'dtrav', 'nrev', 'wavg', 'aavg', 't'];
+  'Hx', 'Hy', 'fs', 'tau', 'tnet', 'Fai', 'Faf', 'Fbi', 'Fbf', 'Wnet', 'Wnc', 'WF', 'Wga', 'Wgb', 'Pavg', 'ks', 'K0', 'K', 'Ktr', 'Krot', 'U0', 'U', 'Us0', 'Us', 'Li', 'Lf', 'I', 'Icm', 'Ii', 'If', 'dpa', 'D', 'L', 'dP', 'dm', 'dT', 'dF', 'xh', 'hc', 'phi', 'beta',
+  'dx', 'dxa', 'dxb', 'xs', 'th1', 'th2', 'theta', 's', 'v0', 'w0', 'vf', 'w', 'wi', 'wf', 'v', 'v1i', 'v2i', 'v1f', 'v2f', 'a', 'alpha', 'at', 'ac', 'atot', 'dth', 'dtrav', 'nrev', 'wavg', 'aavg', 't'];
 
 // ---------- course: lessons as data (phase C5, docs/core-plan.md section 8) ----------
 // Each lesson: long (full help, two routes that agree) → twin (same pathway, new scenario, no Show me or glow) →
@@ -1324,6 +1376,40 @@ const LESSONS = [
         problem: { original: true, title: 'Clay hits a hanging block', text: 'A 0.50 kg ball of clay moving horizontally at 6.0 m/s hits a 2.5 kg block that hangs at rest from a long light cord, and sticks to it. How high above its starting level does the block (with the clay) swing?',
           key: { givens: { m1: [0.5, 'kg'], v1i: [6, 'm/s', 0], m2: [2.5, 'kg'], v2i: [0, 'm/s', 0], g: [9.81, 'm/s²'] }, cond: { collide: 'stick', rest2: true, earth: true }, targets: ['h'] },
           answers: { h: '0.051' } } },
+    ],
+  },
+  {
+    id: 'glance', chapter: 'energy', title: 'Glancing collisions and a force graph', objectives: ['momentum is a vector: x and y separately', 'equal masses cancel', 'work is the area under F against x'],
+    recap: 'In a glancing collision, write momentum twice: along the incoming line, and across it (where the total is zero, so the two sideways parts cancel). Two equations, two unknown speeds, solved together. For a force that changes with position, the work is the area under the force–position graph, taken stretch by stretch; the work–energy theorem then gives the speed.',
+    stops: [
+      { kind: 'long', mode: 'guided', help: FULL,
+        prompts: [
+          { when: 'start', text: 'Draw before and after. Put the x axis along puck 1’s incoming velocity: what is each puck’s x part and y part afterwards?' },
+          { when: 'conditions', text: 'Do they leave along one line or at angles? Are the masses equal? If they are, the mass divides out of every term.' },
+          { when: 'solve', text: 'Two unknown speeds: you need two equations with them, one for each axis.' },
+        ],
+        route: { laws: ['pmomentum'], why: 'A collision: momentum is conserved, and it is a vector, so it gives one equation along the incoming line and one across it. Nothing says the collision is elastic, so energy is not used.',
+          cues: ['Puck 2 is at rest before the hit', 'The pucks leave on opposite sides of the incoming line', 'Equal masses: the mass cancels'],
+          decoys: ['Kinetic energy is conserved', 'The pucks stick together', 'Only the momentum along the incoming line matters'] },
+        problem: { original: true, title: 'Two pucks on an air table', text: 'A puck sliding at 6.0 m/s on an air table strikes an identical puck at rest. Afterwards the first puck moves at 25° to its original direction and the second moves at 40° on the other side of that direction. Find the speed of each puck after the collision.',
+          key: { givens: { v1i: [6, 'm/s', 0], th1: [25, '°'], th2: [40, '°'] }, cond: { collide: 'glance', equal: true }, targets: ['v1f', 'v2f'] },
+          answers: { v1f: '4.3', v2f: '2.8' } } },
+      { kind: 'twin', mode: 'guided', help: TWIN,
+        prompts: [{ when: 'start', text: 'Same picture, new numbers. Which axis is x? Write momentum along it and across it.' }],
+        route: { laws: ['pmomentum'], why: 'Momentum along the incoming line and across it: two equations for the two speeds.',
+          cues: ['Ball 2 is at rest before the hit', 'The balls leave on opposite sides of the incoming line', 'Equal masses: the mass cancels'],
+          decoys: ['Kinetic energy is conserved', 'Only the momentum along the incoming line matters'] },
+        problem: { original: true, title: 'Cue ball and object ball', text: 'A cue ball moving at 3.0 m/s strikes an object ball of the same mass at rest. The cue ball leaves at 35° to its original direction and the object ball at 55° on the other side. Find the speed of each ball after the collision.',
+          key: { givens: { v1i: [3, 'm/s', 0], th1: [35, '°'], th2: [55, '°'] }, cond: { collide: 'glance', equal: true }, targets: ['v1f', 'v2f'] },
+          answers: { v1f: '2.5', v2f: '1.7' } } },
+      { kind: 'transfer', mode: 'guided', help: NONE,
+        prompts: [{ when: 'start', text: 'The force is not constant, so F Δx won’t do. What does the area under a force–position graph mean?' }],
+        route: { laws: ['work'], why: 'The force changes with position, so its work is the area under the graph; the work–energy theorem turns that work into a change of kinetic energy.',
+          cues: ['The work is the area under the force–position graph', 'The track is frictionless, so this force does all the work', 'The cart is already moving at the start: K₀ is not zero'],
+          decoys: ['The force is constant, so W = F Δx with the largest force', 'The cart starts from rest'] },
+        problem: { original: true, title: 'Cart pushed by a growing force', text: 'A 1.5 kg cart rolls along a frictionless level track at 1.0 m/s. A forward force then acts on it: the force rises steadily from 0 to 12 N over the first 2.0 m and stays at 12 N for the next 3.0 m. How fast is the cart moving at the end of those 5.0 m?',
+          key: { givens: { m: [1.5, 'kg'], v0: [1, 'm/s'], Fai: [0, 'N', 0], Faf: [12, 'N', 0], dxa: [2, 'm'], Fbi: [12, 'N', 0], Fbf: [12, 'N', 0], dxb: [3, 'm'] }, cond: { graph: true }, targets: ['v'] },
+          answers: { v: '8.1' } } },
     ],
   },
 ];

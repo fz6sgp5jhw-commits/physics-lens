@@ -110,8 +110,8 @@ const solvable = (e, ks) => { const u = unknownsOf(e, ks); return u.length === 1
 const plain = (id) => VARS[id].plain;
 const nm = (id) => (chapter().names && chapter().names[id]) || VARS[id].name;
 // direction words; on a ramp the student can choose + up the slope, which swaps them
-// direction words: the unit's own, else the quantity's; a unit can say false (a size with no direction there)
-const dr = (id) => { const d = (chapter().dirs?.[id] ?? VARS[id].dir) || null; return d && hook('slopeAxis') && S.cond.upAxis ? [d[1], d[0]] : d; };
+// direction words: the unit's own, else the quantity's; a unit can say false (a size with no direction there), or decide from the conditions
+const dr = (id) => { let o = chapter().dirs?.[id]; if (typeof o === 'function') o = o(S.cond); const d = (o ?? VARS[id].dir) || null; return d && hook('slopeAxis') && S.cond.upAxis ? [d[1], d[0]] : d; };
 const unitOf = (id) => VARS[id].unit;
 const calm = () => document.body.classList.contains('calm');
 const userGivens = () => Object.values(S.givens).filter(g => g.from === 'you').length + Object.values(S.funcs).filter(f => f.from === 'given').length;
