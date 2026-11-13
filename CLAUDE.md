@@ -9,7 +9,7 @@ A guided problem-solving lens for intro calculus-based mechanics, used in classr
 **How the code works** (state, solvers, templates, path finding, tests in detail): `docs/architecture.md`. Read the section you need, not the whole file.
 
 ## Stack (keep it this way)
-Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dependencies, no web fonts (system UI font for text, system monospace for equations). All CSS lives in `index.html`.
+Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dependencies. Fonts (changed 2026-11-13): display and text fonts are allowed if they are open-licensed (OFL or similar), stored in the repo (`fonts/`, with their licence file) and loaded only from the app's own files, never from a font CDN; each has a system fallback, and equations keep a monospace face. All CSS lives in `index.html`.
 - Run: `python3 -m http.server` in the repo root, open http://localhost:8000
 - Hosted: GitHub Pages from `main` (repo `fz6sgp5jhw-commits/physics-lens`). Installable offline app (`manifest.webmanifest`, `sw.js`).
 - Files: `js/packs/` subject packs (`mech.js` all mechanics data; `index.js` merges them) · `js/data.js` merged tables and solvers derived at load · `js/systems.js` systems of equations · `js/expr.js` expression engine · `js/app.js` state, UI, solving, checking · `js/torque.js` beam/disc free-body math (lever arms, Στ) · `js/build.js` drawing canvas · `js/recognize.js` freehand-stroke rules · `js/field.js` animated background · `tests/` Node test runner + playwright-core (drives installed Chrome; app state is `window.__rl`).
@@ -30,7 +30,7 @@ Plain HTML + ES modules. No build step, no framework, no bundler, no runtime dep
 - Variable colours mean the same everywhere: given cyan `#4fd1ff`, found amber `#ffd166`, target pink `#ff6bd6`, unknown grey. A restyle may change shades but must keep four distinct, accessible state colours.
 - Decoration never covers equations, numbers or the drawing. Calm mode stops all motion and honours "reduce motion".
 - Keep element ids and the classes the JS or tests use. If a change needs a different structure, list the changed ids/classes in the commit message.
-- Art is original only: no copyrighted characters, logos or real people, even "in the style of".
+- Art is drawn for this app (changed 2026-11-13): it may be similar in mood, palette, line and shading to references the user gives, but never copies, traces or reuses a specific character, logo, illustration or real person.
 - UI text: plain, short, second person; it explains the physics behind every error.
 
 ## Data and safety
