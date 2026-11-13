@@ -316,11 +316,13 @@ Done 2026-11-12: engines only, no screen yet (same as Q1). `js/vectors.js` (dot,
 
 ## Phase Q3: checking the options, and the facts card
 **Start with:** `Do phase Q3 in ROADMAP.md.` Read the SLIPS list and `slipFor` code in `js/course.js` and `app.js`.
-- [ ] Gate first (`tests/choice-check.test.js`): the options are typed as numbers, ratios or statements; the student's derived result is matched to one; a wrong option is explained by the slip that produces it (√2 for 2, forgot to square, sign flipped); the app does not mark any option before the student has committed to a prediction.
-- [ ] Option checker: type the choices, commit to a prediction, then see which option matches your derived result, and why each other option fails (slip handlers as data, each with its test).
-- [ ] Facts card: for "must be true of a rotating rigid body" questions, build the card from each equation's `meaning` and `condition` fields (same ω and α for every point; v, a_t and a_c depend on r).
-- [ ] Reasoning box: the sentence(s) for the exam's "Reasoning:" line are assembled from the student's steps and are editable; never filled in before the student acts.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/choice-check.test.js`): the options are typed as numbers, ratios or statements; the student's derived result is matched to one; a wrong option is explained by the slip that produces it (√2 for 2, forgot to square, sign flipped); the app does not mark any option before the student has committed to a prediction.
+- [x] Option checker: type the choices, commit to a prediction, then see which option matches your derived result, and why each other option fails (slip handlers as data, each with its test).
+- [x] Facts card: for "must be true of a rotating rigid body" questions, build the card from each equation's `meaning` and `condition` fields (same ω and α for every point; v, a_t and a_c depend on r).
+- [x] Reasoning box: the sentence(s) for the exam's "Reasoning:" line are assembled from the student's steps and are editable; never filled in before the student acts.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+
+Done 2026-11-12: engines only, no screen yet (as Q1, Q2). `js/options.js`: `parseOption` (numbers, ratios, statements), `checkOptions` (nothing marked before a prediction; match by SI value; each wrong option explained by a data-table slip: root, square, inverse, sign, half, double, prefix), `factsCard` (from each equation's meaning/condition: same ω, α everywhere; v, a_t, a_c depend on r) and `reasoning` (empty until the student acts, editable). Gate in `tests/choice-check.test.js` (in `test:fast`). The existing app SLIPS (trig, sign) are a separate numeric 'What's wrong?' feature and are untouched. Still to build for Q1–Q3: one multiple-choice screen wiring the pickers, option checker, facts card and reasoning box into the UI.
 
 ---
 
