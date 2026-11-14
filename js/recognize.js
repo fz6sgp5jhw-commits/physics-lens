@@ -9,7 +9,9 @@ export const RULES = {
   minLen: 24,     // shorter strokes are taps or slips
   closed: 0.22,   // ends closer than this share of the length: a closed shape
   straight: 0.09, // furthest wobble from the chord, as a share of its length, still counted as straight
-  boxFill: 0.88,  // a closed shape filling this much of its bounding box is a box…
+  corners: 3,     // a closed shape with this many sharp bends is a box, however much of its bounding box it fills
+  cornerDeg: 50,  // a sharp bend: the direction swings more than this over a short stretch
+  boxFill: 0.88,  // without them: a closed shape filling this much of its bounding box is a box…
   loopFill: 0.82, // …and this little is a loop (a circle fills π/4 ≈ 0.785); in between, ask
   flatDeg: 6,     // lines flatter than this are flat surfaces; steeper than rampDeg are ramps; in between, ask
   rampDeg: 12,
@@ -52,6 +54,26 @@ function resample(P, n){
   while (out.length < n) out.push(P[P.length - 1]);
   return out;
 }
+// the sharp bends round a closed stroke (evenly resampled): where the direction swings more than cornerDeg between the
+// points 3 either side, each bend counted once. Hand-drawn boxes have soft corners and bowed sides, so they can fill
+// as little of their bounding box as a circle does; their corners still show.
+function corners(Q){
+  const n = Q.length, w = 3, at = (i) => Q[(i + n) % n];
+  const turn = (i) => {
+    const a = at(i - w), b = at(i), c = at(i + w);
+    let d = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x);
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return Math.abs(d);
+  };
+  const ang = Q.map((_, i) => turn(i)), min = RULES.cornerDeg * Math.PI / 180, out = [];
+  for (let i = 0; i < n; i++){
+    if (ang[i] < min || ang[i] < ang[(i + n - 1) % n] || ang[i] < ang[(i + 1) % n]) continue;
+    if (out.some(j => Math.min(Math.abs(i - j), n - Math.abs(i - j)) < 6)) continue;
+    out.push(i);
+  }
+  return out.length;
+}
 // the furthest any point strays from the straight line between the ends, as a share of that line's length
 function wobble(P){
   const a = P[0], b = P[P.length - 1], L = dist(a, b);
@@ -67,8 +89,8 @@ export function classify(raw){
   if (dist(a, b) < RULES.closed * L && Math.min(box.w, box.h) > 10){
     const rect = minRect(P), fill = Math.abs(area(P)) / (rect.w * rect.h), c = { x: box.x + box.w / 2, y: box.y + box.h / 2 };
     const Q = resample(P, 64), r = Q.reduce((s, p) => s + dist(p, c), 0) / Q.length;
-    const type = fill >= RULES.boxFill ? 'box' : fill <= RULES.loopFill ? 'loop' : 'closed';
-    return { type, fill, box, rect, c, r };
+    const k = corners(Q), type = k >= RULES.corners || fill >= RULES.boxFill ? 'box' : fill <= RULES.loopFill ? 'loop' : 'closed';
+    return { type, fill, corners: k, box, rect, c, r };
   }
   const Q = resample(P, 48);
   // an arrow: a straight shaft out to the point furthest from the start, then a short head drawn back from there

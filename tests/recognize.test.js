@@ -20,6 +20,19 @@ test('recorded strokes: what each one looks like, at any size and angle', () => 
   assert.equal(classify(at('line', { s: 10 })).type, 'unknown');
 });
 
+test('hand-drawn boxes: soft corners, bowed sides or a skew are still boxes, told by their corners; round shapes are not', () => {
+  // a box whose sides sag inward fills about as little of its bounding box as a circle does (≈ 0.78)
+  const side = (a, b, bow, n = 12) => Array.from({ length: n }, (_, k) => { const t = k / n, L = Math.hypot(b.x - a.x, b.y - a.y), s = Math.sin(Math.PI * t) * bow;
+    return { x: a.x + (b.x - a.x) * t - (b.y - a.y) / L * s, y: a.y + (b.y - a.y) * t + (b.x - a.x) / L * s }; });
+  const shape = (vs, bow = 0) => [...vs.slice(0, -1).flatMap((v, i) => side(v, vs[i + 1], bow)), vs.at(-1)];
+  const sag = classify(shape([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 60 }, { x: 0, y: 60 }, { x: 2, y: 2 }], 6));
+  assert.ok(sag.fill < 0.82, `fill ${sag.fill}`); assert.equal(sag.type, 'box');
+  assert.equal(classify(shape([{ x: 10, y: 0 }, { x: 90, y: 0 }, { x: 100, y: 60 }, { x: 0, y: 60 }, { x: 12, y: 4 }])).type, 'box', 'a trapezoid');
+  assert.equal(classify(at('loop', { s: 60 })).corners < 3, true);
+  const ellipse = Array.from({ length: 50 }, (_, i) => ({ x: 50 * Math.cos(i / 49 * 2 * Math.PI), y: 30 * Math.sin(i / 49 * 2 * Math.PI) }));
+  assert.equal(classify(ellipse).type, 'loop');
+});
+
 test('lines: flat → floor or table, steep → ramp at the drawn angle, in between → ask, too steep → explain', () => {
   const ramp = only(recognize(at('line', { x: 150, y: 466, s: 500, deg: 25 }), scene()));
   assert.equal(ramp.kind, 'ramp'); assert.ok(Math.abs(ramp.theta - 25) < 1.5, `θ = ${ramp.theta}`); assert.ok(Math.abs(ramp.w - 500 * Math.cos(25 * Math.PI / 180)) < 10);
