@@ -2,6 +2,8 @@
 // Only the open stage's panel sits beside the canvas. At 1440×900, after solving, the problem statement, the canvas,
 // the stage tracker and the latest solved card are on screen together without scrolling, and the Conditions panel is
 // never below the fold. The library is a drawer; the work opens under the sheet's cards.
+// Phase 10 (the open book, text on the left page and the sketch on the right): the Conditions panel sits under the
+// givens on the left page, so its heading and confirm button are on screen and the rest of it scrolls with the page.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { PRACTICE } from '../js/data.js';
@@ -42,9 +44,9 @@ test('statement, canvas, tracker and the latest solved card fit on one 1440×900
     // only the Solve stage's panels are open; nothing drawn, so Forces has no diagram to check
     assert.equal(await shown(page, '#condCard'), false, 'conditions are closed while solving');
     assert.equal(await stars(page), '★–★★');
-    // Conditions: one tap, beside the canvas, above the fold
+    // Conditions: one tap, on the text page, its heading and confirm button above the fold
     await openStage(page, 2);
-    assert.ok((await inView(page, '#condCard')).ok, 'conditions panel on screen');
+    assert.ok((await inView(page, '#condCard .titlebar')).ok && (await inView(page, '#condOk')).ok, 'conditions panel starts on screen');
     assert.equal(await shown(page, '#sheetWin'), false, 'the sheet is closed in Conditions');
     // the sheet is one tap from any stage
     await page.click('#sheetTab');

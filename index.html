@@ -697,6 +697,24 @@
   .dfassume{font-size:12.5px;margin:0 0 8px}
   .dfassume.off > b{text-decoration:line-through}
   .dfmini{padding:3px 7px;min-height:0;font-size:12px;margin-left:4px}
+  /* laptop, the open book: text on the left page (problem, givens, the open stage's panels), the sketch on the right page,
+     which stays in view while the left page scrolls. At Solve (guided) the pages trade: the sheet and the work take the
+     right page, and the sketch sits small under the givens with its drawing tools put away. */
+  @media (min-width:1101px){
+    main.ws{--side:540px;grid-template-columns:var(--side) minmax(0,1fr);grid-template-rows:auto auto 1fr}
+    main.ws::before{right:auto;left:calc(var(--side) + 20px)}
+    .ws-left{display:contents}
+    .ws-left > .prob{grid-column:1;grid-row:1} .ws-left > .strip{grid-column:1;grid-row:2}
+    .probtop,.striprow{flex-wrap:wrap} .topics{flex:1 1 100%} .strip .knowns{flex-basis:100%;min-width:0} .axisnote{margin-left:0;max-width:none}
+    body:not(.mode-draw):not([data-stage="0"]) #chPick{display:none}
+    .ws-right{grid-column:1;grid-row:3;position:static;max-height:none;overflow:visible}
+    body.mode-draw .ws-right{grid-row:1 / span 3}
+    #diagramCard{grid-column:2;grid-row:1 / span 3;align-self:start;position:sticky;top:var(--hdr,94px)}
+    body:not(.mode-draw)[data-stage="3"] .ws-right{grid-column:2;grid-row:1 / span 3}
+    body:not(.mode-draw)[data-stage="3"] #diagramCard{grid-column:1;grid-row:3;position:static}
+    body:not(.mode-draw)[data-stage="3"] #bpal{display:none}
+    body:not(.mode-draw)[data-stage="3"] .canvascard .bsvg{height:300px;max-height:300px}
+  }
   .dflist{margin:0;padding:0 0 0 2px;list-style:none;font-size:12.5px}
   .dflist li{margin:0 0 6px}
   .dflink{padding:3px 7px;min-height:0;font-size:12.5px;margin-right:4px}
