@@ -2,8 +2,7 @@
 // of a thumb, with the one that matters now highlighted. Each bar button presses a control that already exists on the
 // page (`sel`; of two, the first that can be pressed; `show` is what it opens), so the bar holds no logic of its own; a control that is hidden or
 // disabled greys its bar button out.
-// The assistant line lives in the header, which scrolls away on a phone, so a new message that lands off screen is also shown as a
-// note above the bar for a few seconds (tap it to put it away). CSS shows the bar only on narrow screens.
+// What the app says stays in view in the pinned note under the header (js/nowbar.js). CSS shows the bar only on narrow screens.
 const UNDO = { t: 'Undo', icon: '↶', sel: '#bpal [data-act="undo"]' };
 const GUIDED = [
   [{ t: 'Given', icon: '+', sel: '#addGivenBtn', show: '#addPanel' }, UNDO],
@@ -15,11 +14,10 @@ const DRAW = [
   { t: 'Select', icon: '⌖', sel: '[data-dftool="select"]' }, { t: 'Connect', icon: '⌇', sel: '[data-dftool="connect"]' },
   { t: 'Force', icon: '↗', sel: '[data-dftool="force"]' }, UNDO, { t: 'Done', icon: '✓', sel: '#doneDraw', now: true },
 ];
-const NOTE_MS = 7000;
 
-// bar, note: elements; bubble: the assistant line to echo;
+// bar: the element;
 // state() → { mode: 'draw' | 'guided', stage, passed, solved, names: [stage names] }; go(i) opens stage i.
-export function createThumbBar({ bar, note, bubble, state, go }){
+export function createThumbBar({ bar, state, go }){
   let sig = '', items = [], timer = 0;
   const usable = (el) => !!el && !el.disabled && el.getClientRects().length > 0;
   const pick = (sel) => { const els = sel.split(', ').map(q => document.querySelector(q)); return els.find(usable) ?? els[0]; };
@@ -62,15 +60,6 @@ export function createThumbBar({ bar, note, bubble, state, go }){
   });
   // any press can change which tools are usable or pressed: look again once the app has reacted
   document.addEventListener('click', () => setTimeout(render, 0));
-
-  const hide = () => { clearTimeout(timer); note.hidden = true; };
-  note.addEventListener('click', hide);
-  new MutationObserver(() => {
-    const r = bubble.getBoundingClientRect();
-    if (!bubble.textContent.trim() || (r.bottom > 0 && r.top < innerHeight)) return hide();
-    note.innerHTML = bubble.innerHTML; // the app's own message, already escaped where it carries typed text
-    note.hidden = false; clearTimeout(timer); timer = setTimeout(hide, NOTE_MS);
-  }).observe(bubble, { childList: true, characterData: true, subtree: true });
 
   return { render };
 }

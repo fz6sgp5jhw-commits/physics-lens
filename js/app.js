@@ -15,8 +15,9 @@ import { createNotebook } from './notebook.js';
 import { fromPath, createBoardView } from './board.js';
 import { createMC } from './mc.js';
 import { createCourse, sigMatch } from './course.js';
-import { createGuide } from './guide.js';
+import { createGuide, walkStatus } from './guide.js';
 import { createThumbBar } from './thumbbar.js';
+import { createNowBar } from './nowbar.js';
 import { stepCardHTML } from './concepts.js';
 import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms } from './pick.js';
 
@@ -765,11 +766,21 @@ function usesHTML(i){
 // Each stage earns a star when its check passes. You can open any stage up to one past the first stage that
 // hasn't passed (a peek ahead); stages further on stay locked. The sheet can always be read, but solving
 // waits until Solve is unlocked.
+// name and tip: the tracker and its messages. doing, why, next, go: the pinned note (js/nowbar.js): what this stage is in
+// plain words, why it matters, the first thing to do and the control that does it.
 const STAGES = [
-  { name: 'Setup', tip: 'Draw the setup (or load a template), and add each quantity the problem gives you.' },
-  { name: 'Forces', tip: 'Draw the forces on each body and write ΣF = ma onto your sheet, or draw its motion arrows (v, a, or ω, α round a wheel).' },
-  { name: 'Conditions', tip: 'Set what the picture can’t show: hidden givens like “starts from rest”, your axis, constant or changing acceleration.' },
-  { name: 'Solve', tip: 'Pick what the question asks for, gather equations, and solve the glowing ones one step at a time.' },
+  { name: 'Setup', tip: 'Draw the setup (or load a template), and add each quantity the problem gives you.',
+    doing: 'drawing the setup and writing down what the problem gives you', why: 'Every later step reads from this: a force, an axis or an equation can only use what is drawn and given here.',
+    next: 'Draw the setup with the tools beside the canvas, or add the first quantity the problem gives you.', go: '#addGivenBtn' },
+  { name: 'Forces', tip: 'Draw the forces on each body and write ΣF = ma onto your sheet, or draw its motion arrows (v, a, or ω, α round a wheel).',
+    doing: 'drawing what acts on each body', why: 'ΣF = ma is written for one body from the forces on it, so each body needs its own diagram before any equation.',
+    whyMotion: 'This unit describes the motion itself, so the arrows you draw for v, a, ω or α set the directions that give each quantity its sign.',
+    next: 'Draw each force on the body from where it acts, then write ΣF = ma onto your sheet.', go: '#bd' },
+  { name: 'Conditions', tip: 'Set what the picture can’t show: hidden givens like “starts from rest”, your axis, constant or changing acceleration.',
+    doing: 'setting what the picture can’t show', why: 'Each equation holds only under its condition (constant acceleration, no friction, from rest), so these choices decide which equations you may use.',
+    next: 'Check each choice against the problem’s words, then press <b>✓ These conditions are right</b>.', go: '#condOk' },
+  { name: 'Solve', tip: 'Pick what the question asks for, gather equations, and solve the glowing ones one step at a time.',
+    doing: 'choosing what to find and the equations that find it', why: 'Solving in symbols first shows what the answer depends on; the numbers go in last.' },
 ];
 S.stage = 0;
 const drawnBodies = () => S.build ? fbdBodies() : [];
@@ -798,8 +809,19 @@ function openStage(i, quiet = false){
   renderStage(); return true;
 }
 // on a phone the open stage's tools sit in the thumb bar (js/thumbbar.js); body[data-stage] lets the CSS show one stage's cards
-const TB = createThumbBar({ bar: $('thumbBar'), note: $('thumbNote'), bubble: $('bubble'), go: (i) => openStage(i),
+const TB = createThumbBar({ bar: $('thumbBar'), go: (i) => openStage(i),
   state: () => { const c = stageChecks(); return { mode: S.mode, stage: S.stage, passed: c[S.stage] !== false, solved: !!c[3], names: STAGES.map(st => st.name) }; } });
+// the pinned note's view of where the student is: names and counts only, never a value
+function nowState(){
+  if (S.mode === 'draw') return { mode: 'draw', df: { done: DF.done, closed: DF.closed, summary: DF.view === 'summary', count: $('dfCount').textContent, shapes: S.build.shapes.length, lines: WS.state().lines.length } };
+  const c = stageChecks(), cur = curTarget(), solving = S.stage === 3, locked = solving && !solveOpen();
+  const h = solving && !locked ? hintFor() : '', g = COURSE.active && COURSE.stop.guide, walk = g && g.walk && GUIDE.level === 'walk' ? walkStatus(g.walk, drawnSnap()).find(r => !r.done) : null;
+  const step = solving && cur ? curPlan().steps.find(x => !S.sheet.includes(x.eq)) : null;
+  return { mode: 'guided', stage: S.stage, stages: STAGES, checks: c, first: Math.min(firstOpen(c), STAGES.length - 1), locked, lockText: locked ? lockText() : '',
+    hasGivens: userGivens() > 0, drawn: drawnBodies().length > 0, condOk: S.condOk, targets: S.targets.length, cur: cur ? `<b>${symOf(cur)}</b>${VARS[baseOf(cur)] ? ` (${esc(nm(baseOf(cur)))})` : ''}` : '',
+    hint: typeof h === 'string' ? h : h.point, hintKey: h.key || '', principle: step ? step.principle : '', walk: walk ? walk.say : '', forcesOptional: !!chapter().forcesOptional };
+}
+const NOW = createNowBar({ el: $('nowBar'), state: nowState, open: (i) => openStage(i) });
 function renderStage(){
   const i = S.stage, locked = i === 3 && !solveOpen();
   document.querySelectorAll('.ws-right [data-stage]').forEach(el => el.classList.toggle('off', !(el.id === 'dfWork' && S.mode === 'draw') && !el.dataset.stage.split(' ').includes(String(i))));
@@ -817,7 +839,7 @@ function steps(){
     + `<button id="sheetTab" class="${S.stage === 3 ? 'now' : ''}" title="Your sheet, from any stage">Sheet · ${S.sheet.length}</button>`;
   $('steps').querySelectorAll('[data-stage]').forEach(b => b.onclick = () => openStage(+b.dataset.stage));
   $('sheetTab').onclick = () => openStage(3);
-  document.body.dataset.stage = S.stage; TB.render();
+  document.body.dataset.stage = S.stage; TB.render(); NOW.render();
   if (f !== S.lastStep){
     if (f < STAGES.length && S.lastStep !== -1 && f > S.lastStep) say(`${c[S.lastStep] ? `⭐ ${STAGES[S.lastStep].name} passed. ` : ''}Next: <b>${STAGES[f].name}</b>. ${STAGES[f].tip}`);
     S.lastStep = f;
@@ -1991,7 +2013,7 @@ function setMode(m, remember = true){
   // drawing-first covers the torque unit for now (a rod and point masses)
   if (m === 'draw'){ if (S.ch !== DRAW_UNIT){ switchChapter(DRAW_UNIT); renderAll(); } showTab('build'); }
   if (m !== 'draw') TOOLS.use('select');
-  DF.render(); KN.render(); S.build.render(); WS.render(); TB.render();
+  DF.render(); KN.render(); S.build.render(); WS.render(); TB.render(); NOW.render();
 }
 $('modeBtn').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
   if (b.dataset.mode === S.mode) return;
@@ -2908,15 +2930,17 @@ const DEMO_RUN = {
     return { text: e ? `Library → <b>+ Gather ${e.label}</b>: ${e.form} (${e.principle || e.cue}). Then <b>Solve for ${symOf(m.v)} ▶</b> on its card: the algebra appears in the Work panel, symbols first. Now ${symOf(m.v)} = ${showVal(m.v)}.` : `That step uses a system or the motion ladder: ${symOf(m.v)} = ${showVal(m.v)}.` };
   },
 };
+// what is drawn, for the lesson's walk list (kinds only)
+const drawnSnap = () => ({
+  shapes: S.build.shapes.map(x => ({ id: x.id, kind: x.kind })),
+  strings: S.build.shapes.filter(x => x.kind === 'string').map(x => (x.ends || []).map(id => S.build.shapes.find(y => y.id === id)?.kind)),
+  forces: Object.fromEntries(Object.entries(S.fbd.forces).map(([id, fs]) => [id, fs.map(f => f.kind)])),
+});
 const GUIDE = S.guide = createGuide({
   card: $('guideCard'),
   app: {
     say, highlight,
-    snapshot: () => ({
-      shapes: S.build.shapes.map(x => ({ id: x.id, kind: x.kind })),
-      strings: S.build.shapes.filter(x => x.kind === 'string').map(x => (x.ends || []).map(id => S.build.shapes.find(y => y.id === id)?.kind)),
-      forces: Object.fromEntries(Object.entries(S.fbd.forces).map(([id, fs]) => [id, fs.map(f => f.kind)])),
-    }),
+    snapshot: drawnSnap,
     stopGuide: () => (COURSE.active && COURSE.stop.guide) || null,
     stopKey: () => COURSE.active ? `${COURSE.lesson.id}/${COURSE.stop.kind}` : 'open',
     demo: {

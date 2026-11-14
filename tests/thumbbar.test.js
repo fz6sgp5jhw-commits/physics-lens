@@ -57,7 +57,7 @@ test('phone, guided: the bar holds the open stage’s tools at thumb size, and t
   } finally { await page.close(); }
 });
 
-test('phone, guided: one stage at a time, and a message that lands off screen shows above the bar', async () => {
+test('phone, guided: one stage at a time, and a bar tool’s message stays in view', async () => {
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await page.setViewportSize(PHONE);
@@ -70,16 +70,11 @@ test('phone, guided: one stage at a time, and a message that lands off screen sh
     assert.equal(await shown(page, '#bpal'), false, 'no drawing tools while solving');
     const order = await page.evaluate(() => document.getElementById('sheetWin').getBoundingClientRect().top < document.getElementById('diagramCard').getBoundingClientRect().top);
     assert.ok(order, 'the sheet comes before the sketch at Solve');
-    // header on screen: the assistant line is enough
-    await press(page, 'Hint');
-    assert.equal(await shown(page, '#thumbNote'), false);
-    // scrolled down: the same message shows above the bar, and a tap puts it away
+    // scrolled to the bottom, a bar tool's message is still in view: the assistant line is in the pinned note
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     await press(page, 'Hint');
-    assert.ok(await shown(page, '#thumbNote'));
-    assert.equal(await page.innerText('#thumbNote'), await page.innerText('#bubble'));
-    await page.click('#thumbNote');
-    assert.equal(await shown(page, '#thumbNote'), false);
+    const b = await page.evaluate(() => { const r = document.getElementById('bubble').getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight && r.height > 0; });
+    assert.ok(b, 'the message is on screen');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

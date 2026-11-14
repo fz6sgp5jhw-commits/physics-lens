@@ -35,7 +35,8 @@ test('statement, canvas, tracker and the latest solved card fit on one 1440×900
     await page.click('[data-dtab="motion"]'); // after solving, replay the motion
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(100);
-    for (const sel of ['#problem', '#dg', '#steps', '#sheet .eq.last']){
+    // past Setup the statement on screen is the pinned line in the header (the problem box is put away); the pinned note sits under it
+    for (const sel of ['#pinText', '#nowBar', '#dg', '#steps', '#sheet .eq.last']){
       const r = await inView(page, sel);
       assert.ok(r.ok, `${sel} is not fully on screen: ${JSON.stringify(r)}`);
     }
