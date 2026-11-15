@@ -16,12 +16,15 @@ export function loadGates(){
 const save = (g) => { try { localStorage.setItem(GATE_KEY, JSON.stringify(g)); } catch {} };
 const forget = () => { try { localStorage.removeItem(GATE_KEY); } catch {} };
 
-// the switches, in a box of their own (host): changing one saves it; "Forget" puts every gate back on and clears the key
-export function renderGates(host, gates){
+// the switches, in a box of their own (host): changing one saves it; "Forget" puts every gate back on and clears the key.
+// first: the gate that guards the most frequent pattern in My mistakes (phase M4) goes to the top, marked.
+export function renderGates(host, gates, first = null){
   const el = (tag, p = {}, kids = []) => { const e = document.createElement(tag); Object.assign(e, p); e.append(...kids); return e; };
-  const boxes = GATES.map(([k, t]) => { const c = el('input', { type: 'checkbox', checked: gates[k] }); c.dataset.gate = k; c.onchange = () => { gates[k] = c.checked; save(gates); }; return el('label', { className: 'rchoice' }, [c, ' ' + t]); });
+  const order = [...GATES].sort(([a], [b]) => (b === first) - (a === first));
+  const boxes = order.map(([k, t]) => { const c = el('input', { type: 'checkbox', checked: gates[k] }); c.dataset.gate = k; c.onchange = () => { gates[k] = c.checked; save(gates); };
+    return el('label', { className: 'rchoice' }, [c, ' ' + t + (k === first ? ' (guards your most frequent slip)' : '')]); });
   const reset = el('button', { id: 'gatesForget', textContent: 'Forget my gate switches' });
-  reset.onclick = () => { forget(); Object.assign(gates, loadGates()); renderGates(host, gates); };
+  reset.onclick = () => { forget(); Object.assign(gates, loadGates()); renderGates(host, gates, first); };
   host.replaceChildren(el('details', {}, [el('summary', { textContent: 'Setup gates' }),
     el('p', { className: 'small muted', textContent: 'Each gate stops you at a step that is easy to skip and says why it matters. Switch off any you no longer need.' }), ...boxes, reset]));
 }

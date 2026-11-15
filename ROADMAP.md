@@ -452,11 +452,12 @@ What changed: four switchable gates in `js/gates.js` (switches in `pl-gates` und
 
 ## Phase M4: exam sheet, find the mistake, my mistakes
 **Start with:** `Do phase M4 in ROADMAP.md.` Read `docs/mistake-plan.md` sections 3 and 4 (M4); open `private/exam3-makeup-study-guide.html` for the layout the user likes. New code in `js/sheet.js`.
-- [ ] Gate first (`tests/sheet.test.js`): an exam sheet for a lesson shows every problem with no answer visible; steps reveal one at a time, symbols first; a typed wrong answer gets its slip; a generated erroneous example has exactly one faulty line, and the app checks the line, the pattern and the fix.
-- [ ] Exam sheet (printable) and step-by-step reveal.
-- [ ] Find the mistake, built from the slip edits on a solved path.
-- [ ] My mistakes: tally by pattern in `pl-mistakes`, with a Clear button; the top pattern picks the first hint and gate; a one-minute exam-wrapper screen.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/sheet.test.js`): an exam sheet for a lesson shows every problem with no answer visible; steps reveal one at a time, symbols first; a typed wrong answer gets its slip; a generated erroneous example has exactly one faulty line, and the app checks the line, the pattern and the fix.
+- [x] Exam sheet (printable) and step-by-step reveal.
+- [x] Find the mistake, built from the slip edits on a solved path.
+- [x] My mistakes: tally by pattern in `pl-mistakes`, with a Clear button; the top pattern picks the first hint and gate; a one-minute exam-wrapper screen.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+What changed (M4): `js/sheet.js` and `#sheetPage`: each lesson in the Course map has **Exam sheet** (all three problems, ruled work space, answer boxes, Print; solutions open one block at a time from the app's own worked steps, solved behind the sheet by `solveStop` / `walkPath` with `S.quiet`). A wrong typed answer gets its slip sentence. **Find the mistake** plants one single-step slip edit in a solved stop; the student clicks the line, picks P1–P7 and types the fix, each checked. `SLIPS` carry a pattern; slips named in the lesson bar or the sheet count in `pl-mistakes` (`#mistakesBox`, Clear, **Sort a past test** wrapper); the top pattern opens the first hint on a problem and moves its gate to the top. Every lesson stop solves behind the sheet to its stored answers (gate test). Cache v47.
 
 ---
 

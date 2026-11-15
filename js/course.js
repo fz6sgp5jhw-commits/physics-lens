@@ -130,7 +130,9 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
         b.onclick = () => open(l.id, s.kind);
         return b;
       });
-      return el('div', { className: 'clesson' }, [el('b', { textContent: l.title }), el('div', { className: 'small muted', textContent: l.objectives.join(' · ') }), el('div', { className: 'cstops' }, stops)]);
+      const sheet = el('button', { className: 'csheet', textContent: 'Exam sheet', title: 'All this lesson’s problems as an exam: nothing shown until you ask' });
+      sheet.dataset.sheet = l.id; sheet.onclick = () => app.openSheet?.(l.id);
+      return el('div', { className: 'clesson' }, [el('b', { textContent: l.title }), el('div', { className: 'small muted', textContent: l.objectives.join(' · ') }), el('div', { className: 'cstops' }, [...stops, sheet])]);
     });
     const clear = el('button', { id: 'courseClear', className: 'warnbtn', textContent: 'Clear progress', title: 'Forget which stops are done and their stars' });
     clear.onclick = async () => {

@@ -22,6 +22,7 @@ import { renderKey, createFix } from './pen.js';
 import { createPencil } from './pencil.js';
 import { stepCardHTML } from './concepts.js';
 import { loadGates, renderGates } from './gates.js';
+import { createSheet, renderMistakes, addMistake, topPattern } from './sheet.js';
 import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms, swapVars, dropPowers, dropFactors, triangleOnly, mapVars, varsOf } from './pick.js';
 
 const $ = (id) => document.getElementById(id);
@@ -669,7 +670,7 @@ function pointTargets(){
 function addTarget(id){
   if (S.targets.includes(id) || known(id)) return;
   S.targets.push(id); renderAll(false);
-  say(`🎯 Target ${letter(S.targets.length - 1)}: <b>${symOf(id)}</b>, ${isRank(id) ? 'across your scenarios' : `the ${nm(isFn(id) ? id.slice(3) : id)}${isFn(id) ? ' as a function of time' : ''}`}. ${S.sheet.length ? 'Look for a glowing equation on your sheet.' : 'Now gather equations that contain it.'}`);
+  if (!S.quiet) say(`🎯 Target ${letter(S.targets.length - 1)}: <b>${symOf(id)}</b>, ${isRank(id) ? 'across your scenarios' : `the ${nm(isFn(id) ? id.slice(3) : id)}${isFn(id) ? ' as a function of time' : ''}`}. ${S.sheet.length ? 'Look for a glowing equation on your sheet.' : 'Now gather equations that contain it.'}`);
 }
 const MOVE_TXT = {
   deriv: (m) => `d/dt ↓ ${symOf(m.v)}`, integ: (m) => `∫dt ↑ ${symOf(m.v)}`, eval: (m) => `Put in t → ${symOf(m.v)}`,
@@ -799,7 +800,7 @@ const firstOpen = (c) => { const i = c.indexOf(false); return i < 0 ? STAGES.len
 const reach = (c = stageChecks()) => Math.min(STAGES.length - 1, firstOpen(c) + 1);
 const solveOpen = () => reach() >= 3;
 const lockText = () => { const f = firstOpen(stageChecks()); return `Solving unlocks when <b>${STAGES[f].name}</b> passes its check. ${STAGES[f].tip}`; };
-function solveLocked(){ if (solveOpen()) return false; say(lockText()); return true; }
+function solveLocked(){ if (S.quiet || solveOpen()) return false; say(lockText()); return true; }
 // open a stage's panels beside the canvas (Solve can always be opened to read the sheet)
 function openStage(i, quiet = false){
   const c = stageChecks();
@@ -857,7 +858,7 @@ document.addEventListener('mouseover', (e) => { const s = e.target.closest('.sym
 document.addEventListener('mouseout', (e) => { const s = e.target.closest('.sym'); if (s) setHover(null); });
 
 // ---------- solving ----------
-const sleep = (ms) => new Promise(r => setTimeout(r, calm() ? 0 : ms));
+const sleep = (ms) => new Promise(r => setTimeout(r, calm() || S.quiet ? 0 : ms));   // S.quiet: the exam sheet solving behind it
 const plug = (sub, v) => sub.replace(/\{(\w+)\}/g, (_, id) => id === 'inc' ? `<span class="num">${fmt(v[id])}°</span>` : `<span class="num">(${fmt(v[id])}${unitOf(id) ? ' ' + unitOf(id) : ''})</span>`);
 function extras(id, x){
   const dd = dr(id);
@@ -926,7 +927,7 @@ function finishStep(entry, cur){
   S.path.push({ ...entry, part, html: $('work').innerHTML, title: $('workTitle').textContent });
   beep(1200, 0.06); S.busy = false; renderAll(false); stepPulse();
   document.querySelector('#sheet .eq.last')?.scrollIntoView({ block: 'nearest' });
-  if (entry.v === cur && !curTarget()) celebrate();
+  if (entry.v === cur && !curTarget() && !S.quiet) celebrate();
 }
 // one step of the path, redone with plain numbers (v: scalars, fns: id → numeric coefficients)
 function routeStep(p, v, fns){
@@ -1303,32 +1304,37 @@ function sheetStructure(target){
 }
 let hintAt = { key: null, level: 0 };
 $('hintBtn').onclick = () => {
-  if (solveLocked()) return;
+  if (!S.quiet && !solveOpen()){ say(watchFirst() + lockText()); return; }
   if (!S.help.hints){ say('Hints are off in this stop: it checks what you can do on your own. You can still open the Map and redo the long stop.'); return; }
   const h = hintFor();
-  if (typeof h === 'string'){ hintAt = { key: null, level: 0 }; say(h); return; }
+  if (typeof h === 'string'){ hintAt = { key: null, level: 0 }; say(watchFirst() + h); return; }
   hintAt = { key: h.key, level: hintAt.key === h.key ? Math.min(3, hintAt.level + 1) : 1 };
   const lv = hintAt.level;
   if (lv >= 2 && h.glow) setSuggest(h.glow);   // the teaching hint lights the formula's card; it still doesn't gather it
   if (lv === 3){ h.act?.(); COURSE.bottomOut(); }
-  say(`<span class="hlv">${['', 'Hint', 'Teaching hint', 'Bottom-out hint'][lv]}</span> ${[0, h.point, h.teach, h.bottom][lv]}${lv < 3 ? ` <i>Press Hint again for more${COURSE.active && lv === 2 ? ' (the next one costs a star)' : ''}.</i>` : ''}`);
+  say(`<span class="hlv">${['', 'Hint', 'Teaching hint', 'Bottom-out hint'][lv]}</span> ${lv === 1 ? watchFirst() : ''}${[0, h.point, h.teach, h.bottom][lv]}${lv < 3 ? ` <i>Press Hint again for more${COURSE.active && lv === 2 ? ' (the next one costs a star)' : ''}.</i>` : ''}`);
 };
 $('showBtn').onclick = async () => {
   if (S.busy || solveLocked()) return;
   if (!S.help.showMe){ say('Show me is off in this stop of the lesson: choose the equations yourself. Hint still points the way.'); return; }
   if (!S.condOk || !S.targets.length){ say('Set the conditions and add a 🎯 target first, then I’ll walk the shortest path.'); return; }
   COURSE.bottomOut();   // Show me is always there in a lesson that allows it, and it costs a star
+  await walkPath();
+};
+// the shortest path to every target, one step at a time (Show me; the exam sheet runs it with S.quiet). True when all are found.
+async function walkPath(){
   while (curTarget()){
     const goal = baseOf(curTarget());
-    if (known(goal)){ say(isRank(curTarget()) ? 'To rank the cases, add at least two complete rows to the scenario table.' : ''); return; }
+    if (known(goal)){ if (!S.quiet) say(isRank(curTarget()) ? 'To rank the cases, add at least two complete rows to the scenario table.' : ''); return false; }
     const lp = shortest(appEqs(), knownSet(), goal);
-    if (!lp){ dialog('No route', '<b>TARGET UNREACHABLE</b>No chain of equations gets from your knowns to the target. Look for a hidden given or a condition you haven’t set.'); return; }
+    if (!lp){ if (!S.quiet) dialog('No route', '<b>TARGET UNREACHABLE</b>No chain of equations gets from your knowns to the target. Look for a hidden given or a condition you haven’t set.'); return false; }
     for (const s of lp) if (s.kind === 'eq' && !S.sheet.includes(s.eq)){ S.sheet.push(s.eq); renderAll(false); await sleep(350); }
-    say(`Path to ${symOf(goal)}: ${lp.map(s => `${s.kind === 'eq' ? EQS[s.eq].label : s.kind === 'sys' ? sysLabel(s) : MOVE_LABEL[s.kind]}→${symOf(s.v)}`).join(', then ')}.`);
+    if (!S.quiet) say(`Path to ${symOf(goal)}: ${lp.map(s => `${s.kind === 'eq' ? EQS[s.eq].label : s.kind === 'sys' ? sysLabel(s) : MOVE_LABEL[s.kind]}→${symOf(s.v)}`).join(', then ')}.`);
     for (const s of lp){ if (s.kind === 'eq') await solve(s.eq, s.v); else if (s.kind === 'sys') await sysOp(s); else await ladderOp(s); await sleep(450); }
-    if (lp.length && !known(lp[lp.length - 1].v)) return; // a step was refused (its dialog explains why)
+    if (lp.length && !known(lp[lp.length - 1].v)) return false; // a step was refused (its dialog explains why)
   }
-};
+  return true;
+}
 
 function renderPath(){
   const box = $('pathList');
@@ -2851,7 +2857,9 @@ $('mcX').onclick = () => $('mcWrap').classList.remove('show');
 
 // ---------- course (js/course.js): lessons, help switches, "What's wrong?" ----------
 S.help = { glow: true, showMe: true, hints: true };
-S.gates = loadGates(); renderGates($('gatesBox'), S.gates);
+S.gates = loadGates();
+const showGates = () => renderGates($('gatesBox'), S.gates, topPattern()?.gate);
+showGates();
 function setHelp(h){
   S.help = { ...h };
   document.body.classList.toggle('noglow', !h.glow);
@@ -2933,17 +2941,20 @@ const SLIP_EDITS = {
     ? triangleOnly(p.tree).map(d => one(i, d.tree, { eq }))
     : swapVars(p.tree, alt).map(d => one(i, d.tree, { eq, a: VARS[d.from].sym, b: VARS[d.to].sym }))); },
 };
-function whatsWrong(t, typed){
+const slipSays = (slip, c) => slip.says.replace(/\{(\w+)\}/g, (_, k) => c[k] || '');
+// the slip that turns the app's answer into the typed one: { says, pattern } or null
+function slipOf(t, typed){
   if (!S.path.length || !known(t)) return null;
   const right = S.found[t] ? S.found[t].val : val(t), us = unitSlip(right, typed, sigMatch);
-  if (us) return `Your number is the right one with a <b>unit slip</b>: it looks like ${us.says}. Check the unit each given is in before it goes into an equation.`;
+  if (us) return { pattern: 'P3', says: `Your number is the right one with a <b>unit slip</b>: it looks like ${us.says}. Check the unit each given is in before it goes into an equation.` };
   for (const slip of SLIPS) for (const c of SLIP_EDITS[slip.edit](t, slip)){
     let x; try { x = replay(c.edit, t)[t]; } catch { continue; }
     if (c.flipAnswer) x = -x;
-    if (Number.isFinite(x) && !sigMatch(x, String(right)) && sigMatch(x, typed)) return slip.says.replace(/\{(\w+)\}/g, (_, k) => c[k] || '');
+    if (Number.isFinite(x) && !sigMatch(x, String(right)) && sigMatch(x, typed)) return { pattern: slip.pattern, says: slipSays(slip, c) };
   }
   return null;
 }
+const whatsWrong = (t, typed) => slipOf(t, typed)?.says ?? null;
 S.whatsWrong = whatsWrong;
 function checkAnswer(t, typed){
   const n = Number(String(typed).replace('−', '-'));
@@ -2959,8 +2970,78 @@ const COURSE = S.course = createCourse({
     eqLabel: (e) => `${EQS[e].label} (${textOf(EQS[e].form)})`, eqKind: (e) => EQS[e].kind || 'law',
     targets: () => S.targets.filter(t => VARS[t]).map(t => [t, `${letter(S.targets.indexOf(t))} ${VARS[t].plain}`, unitOf(t)]),
     step: (ok) => S.guide?.[ok ? 'correct' : 'wrong'](),
-    check: (t, typed) => { const r = checkAnswer(t, typed); if (/^[✓✗]/.test(r)) S.guide?.[r[0] === '✓' ? 'correct' : 'wrong'](); return r; }, wrong: (t, typed) => whatsWrong(t, typed) || 'None of the usual slips (a unit mix-up, sin and cos swapped, a wrong length, a missing square, factor or mass, a sign flipped, a term left out) gives your number. Compare your steps with the app’s, one line at a time.' },
+    check: (t, typed) => { const r = checkAnswer(t, typed); if (/^[✓✗]/.test(r)) S.guide?.[r[0] === '✓' ? 'correct' : 'wrong'](); return r; }, wrong: (t, typed) => { const s = slipOf(t, typed); if (s) noteMistake(s.pattern); return s?.says || 'None of the usual slips (a unit mix-up, sin and cos swapped, a wrong length, a missing square, factor or mass, a sign flipped, a term left out) gives your number. Compare your steps with the app’s, one line at a time.'; },
+    openSheet: (l) => { setDrawer(false, 'courseDrawer'); SHEET.open(l); } },
 });
+
+// ---------- exam sheet, find the mistake, my mistakes (phase M4, js/sheet.js) ----------
+let watchedFor = null;
+// the first hint on a problem opens with what the most frequent pattern in My mistakes says to watch for
+function watchFirst(){
+  const top = topPattern(); if (!top || !S.bank || watchedFor === S.bank) return '';
+  watchedFor = S.bank; return `<i>Your most frequent slip is ${top.id}, ${esc(top.name.toLowerCase())}: ${esc(top.watch)}</i> `;
+}
+function noteMistake(id){ if (id) addMistake(id); showMistakes(); showGates(); }
+const showMistakes = () => renderMistakes($('mistakesBox'), { onWrapper: () => { setDrawer(false, 'courseDrawer'); SHEET.wrapper(); }, onChange: showGates });
+// a lesson stop opened and solved behind the sheet with the app's own path (Show me without the waits); null if it can't be
+let sheetDone = null;
+const sheetResult = () => ({ steps: S.path.map(p => ({ title: p.title, html: p.html })) });
+async function solveStop(l, kind){
+  const lesson = LESSONS.find(x => x.id === l), stop = lesson?.stops.find(s => s.kind === kind), key = stop?.problem.key;
+  if (sheetDone === `${l}/${kind}` && S.bank === stop?.problem && S.targets.length && !curTarget()) return sheetResult();
+  if (!key || S.busy || (key.fns && Object.keys(key.fns).length)) return null;   // functions of time: solve it in the workspace
+  if (!await COURSE.open(l, kind)) return null;
+  for (const [id, [mag, unit, dir]] of Object.entries(key.givens)) if (VARS[id])
+    S.givens[id] = mag === null ? { from: 'you', kind: 'symbol', mag: null, unit: VARS[id].unit, dir: 0, val: samplesNow()[id] }
+      : { from: 'you', mag, unit, dir: dir || 0, val: (dir ? -1 : 1) * sizeSI(id, mag, unit) };
+  Object.assign(S.cond, key.cond); S.condOk = true; applyHidden(); clearDerived();
+  let ok = false; S.quiet = true;
+  try { for (const t of key.targets) if (VARS[t]) addTarget(t); ok = await walkPath(); } finally { S.quiet = false; }
+  renderAll(false);
+  if (ok) say('This stop was solved behind the exam sheet: its steps are in the Path panel.');
+  sheetDone = ok ? `${l}/${kind}` : null;
+  return ok ? sheetResult() : null;
+}
+// find the mistake: one slip edit on one step of a solved stop (the top pattern's slips tried first). The edited step is the
+// one faulty line; every other line keeps its right formula and carries the numbers forward, so there is exactly one slip.
+const symText = (id) => VARS[id] ? textOf(VARS[id].sym) : id;   // plain text: the sheet sets it with textContent
+// for display only: a factor of 1 (a mass the slip took out) is dropped, so m₁v₁ becomes v₁, not 1v₁
+const one1 = (n) => n?.t === 'num' && n.v === 1;
+const noOnes = (n) => {
+  if (!n || typeof n !== 'object' || Array.isArray(n)) return n;
+  const m = Object.fromEntries(Object.entries(n).map(([k, x]) => [k, Array.isArray(x) ? x.map(noOnes) : noOnes(x)]));
+  if (m.t === 'mul'){ const a = m.a.filter(x => !one1(x)); return a.length === 0 ? { t: 'num', v: 1 } : a.length === 1 ? a[0] : { ...m, a }; }
+  return m.t === 'div' && one1(m.d) ? m.n : m;
+};
+const treeText = (p, tree) => `${symText(p.v)} = ${X.showTree(noOnes(tree), symText)}`;
+async function mistakeExample(l, prefer){
+  const lesson = LESSONS.find(x => x.id === l); if (!lesson) return null;
+  for (const stop of lesson.stops){
+    if (!await solveStop(l, stop.kind)) continue;
+    const t = S.targets[S.targets.length - 1], right = replay();
+    const slips = [...SLIPS].sort((a, b) => (b.pattern === prefer) - (a.pattern === prefer));
+    for (const slip of slips) for (const c of SLIP_EDITS[slip.edit](t, slip)){
+      const ks = Object.keys(c.edit.trees || {}); if (ks.length !== 1 || c.edit.given || c.flipAnswer) continue;
+      const bad = +ks[0], p = S.path[bad];
+      let wrong; try { wrong = replay(c.edit); } catch { continue; }
+      if (!S.targets.some(x => Number.isFinite(wrong[x]) && !sigMatch(wrong[x], String(right[x])))) continue;  // it must change an answer
+      const lines = S.path.map((q, i) => {
+        const plainStep = q.kind === 'eq' && q.tree && !q.fn && !q.gen && VARS[q.v];
+        const good = plainStep ? treeText(q, q.tree) : q.title.replace(/^Work · step \d+: /, '');
+        return { label: q.kind === 'eq' ? EQS[q.eq].label : MOVE_LABEL[q.kind] || q.kind, sym: symText(q.v), good,
+          formula: i === bad ? treeText(q, c.edit.trees[bad]) : good, value: VARS[q.v] && Number.isFinite(wrong[q.v]) ? withUnit(q.v, wrong[q.v]) : '' };
+      });
+      if (lines[bad].formula === lines[bad].good || !Number.isFinite(right[p.v])) continue;
+      return { title: stop.problem.title, text: stop.problem.text, lines, bad, pattern: slip.pattern, says: slipSays(slip, c),
+        fixVal: right[p.v], fixText: withUnit(p.v, right[p.v]), fixUnit: unitOf(p.v) || 'no unit' };
+    }
+  }
+  return null;
+}
+const SHEET = S.sheetView = createSheet({ host: $('sheetPage'), app: { lessons: LESSONS, solve: solveStop, example: mistakeExample, sigMatch,
+  sym: symText, unit: (id) => VARS[id] ? unitOf(id) : '', check: checkAnswer, wrong: slipOf, onMistake: noteMistake } });
+S.example = mistakeExample; S.sheetSolve = solveStop;
+showMistakes();
 
 // ---------- the fading guide (phase G2) ----------
 const DEMO_P = PRACTICE.find(p => p.title === 'Crate with friction');
