@@ -161,3 +161,21 @@ test('bugs: a short typed name is read as the problem’s; Enter adds the line; 
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
+
+test('walkthrough: after Setup the ball is sent to Forces, and writing ΣF = ma shows how each force counts', async () => {
+  const { page, errors } = await openApp(env.browser, env.url);
+  try {
+    await openStop(page, 'roll/long');
+    await page.evaluate(() => { const S = window.__rl; S.build.add('ramp'); S.build.add('ball'); });
+    await page.click('#bd');   // any action lets the app react to the drawing
+    assert.match(await page.evaluate(() => document.getElementById('bubble').textContent), /Next: Forces/, 'the drawn ball gets its forces next, even where they are optional');
+    await page.click('#steps [data-stage="1"]');
+    assert.match(await page.innerText('[data-now="next"]'), /forces show why/);
+    for (const k of ['gravity', 'normal', 'friction']) await page.click(`[data-addforce="${k}"]`);
+    await page.click('#fbdWrite');
+    const m = await page.innerText('#fbdMsg');
+    assert.match(m, /How your diagram became these equations/, m);
+    assert.match(m, /Along the motion[\s\S]*gravity[\s\S]*friction f(s|ₛ|_s)[\s\S]*Across the motion/, m);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});

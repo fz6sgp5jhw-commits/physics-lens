@@ -471,6 +471,7 @@ What changed (M4): `js/sheet.js` and `#sheetPage`: each lesson in the Course map
 - [x] Bugs: drawn mass symbol vs the unit's (m/M); "target unreachable" names the missing given or condition; Check my diagram verdict where the student looks; Enter adds a typed line; typed names accept common spellings (f → f_s) or offer them; modals don't stack.
 - [x] All tests pass. Cache bumped. One line here on what changed.
 Done (2026-11-15): each sheet equation offers Solve it for me ▶ or I’ll do the algebra (the typed workspace opens under it, started from its law, with only the sheet to substitute from); one Solution card (answers, every step, what matters) replaces Work / What matters / Path once solved; an unreachable target names the missing given or condition; Check my diagram's verdict also goes on the instruction line; typed short names are read as the problem's (f → f_s); a dialog closes the algebra pop-ups. Cache v50. Still open for a later phase: the old drawing-first code (pl-mode = 'draw') and its part cards.
+Walkthrough after S1 (2026-11-15), learning a concept as a new student: `docs/concept-walkthrough.md`. It holds the user's design for a new home screen (an index of topics; problem cards titled by concept, tagged by law and concept, with Watch / Guided / Free; a full-page problem with the givens written beside the drawing, as in an exam) and the findings. The Forces fixes are done (cache v51); Conditions and Solve are next.
 
 ---
 

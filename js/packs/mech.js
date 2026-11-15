@@ -1092,7 +1092,7 @@ const CHAPTERS = {
       { title: 'Beam geometry', note: 'A beam hinged at one end and hanging from a vertical cable: where the cable meets the beam, and the tilt.', eqs: ['GEO1', 'GEO2'] },
     ],
     conditions: [
-      { key: 'dyn', type: 'choice', label: 'The body', options: [[false, 'In equilibrium (α = 0)'], [true, 'Spinning up (Στ = Iα)']], ask: ['The body is:', [[false, 'in equilibrium (nothing turns or accelerates)'], [true, 'spinning up (Στ = Iα)']]] },
+      { key: 'dyn', type: 'choice', beforeForces: true, label: 'The body', options: [[false, 'In equilibrium (α = 0)'], [true, 'Spinning up (Στ = Iα)']], ask: ['The body is:', [[false, 'in equilibrium (nothing turns or accelerates)'], [true, 'spinning up (Στ = Iα)']]] },
       { key: 'shape', type: 'choice', label: 'Shape (for its moment of inertia)', options: [['rod', 'Thin rod'], ['disc', 'Solid disc or cylinder'], ['ring', 'Thin ring or hoop'], ['sphere', 'Solid sphere'], ['shell', 'Hollow sphere'], ['point', 'Point mass']] },
       { key: 'axis', type: 'choice', label: 'It turns about', options: [['centre', 'Its centre of mass'], ['other', 'Another point (an end, a hinge)']] },
       { key: 'earth', type: 'hidden', label: 'On Earth (g = 9.81 m/s²)', sets: { g: 9.81 }, default: true },

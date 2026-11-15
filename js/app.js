@@ -279,7 +279,9 @@ function beforeClearing(what){
 }
 
 // ---------- chapter / reset ----------
-function defaultsFor(ch){ return { ...hook('startCond', ch) }; }
+// a “This problem” question (c.ask) starts unanswered, so the student decides it (phase S1 walkthrough): no default for it
+function defaultsFor(ch){ const asked = new Set((CHAPTERS[ch]?.conditions || []).filter(c => c.ask).map(c => c.key)); return Object.fromEntries(Object.entries(hook('startCond', ch) || {}).filter(([k]) => !asked.has(k))); }
+const condKeys = () => new Set([...Object.keys(defaultsFor(S.ch)), ...(chapter().conditions || []).map(c => c.key)]);
 // a condition's value: most are yes/no, some name a choice (the torque unit's shape and axis)
 // a condition the student hasn't chosen yet (a lesson starts with none) is neither value
 const condIs = (key, v) => key in S.cond && (typeof v === 'boolean' ? !!S.cond[key] === v : S.cond[key] === v);
@@ -289,7 +291,7 @@ function resetAll(keepText = true){
   dropGenerated(() => true); S.custom = []; S.samples = {}; if (S.scen) S.scen = { cols: [], rows: [] };
   S.givens = {}; S.found = {}; S.funcs = {}; S.span = newSpan(); S.targets = []; S.sheet = []; S.path = []; S.focus = []; S.condOk = false; S.editing = null; S.inspectName = null; S.pointView = null;
   if (!keepText){ $('problem').value = ''; S.bank = null; }
-  S.cond = { ...defaultsFor(S.ch), ...Object.fromEntries(Object.entries(S.cond).filter(([k]) => k in defaultsFor(S.ch))) };
+  S.cond = { ...defaultsFor(S.ch), ...Object.fromEntries(Object.entries(S.cond).filter(([k]) => condKeys().has(k))) };
   applyHidden(); clearWork(); resetInspector();
 }
 function clearDerived(){ S.found = {}; S.path = []; for (const [id, f] of Object.entries(S.funcs)) if (f.from !== 'given') delete S.funcs[id]; clearWork(); }
@@ -834,7 +836,7 @@ function stageChecks(){
   const bs = drawnBodies();
   const fbd = bs.some(b => Object.values(S.gen).some(g => g.key === 'fbd:' + b.id));
   const motion = bs.some(b => { const sh = S.build.shapes.find(x => x.id === b.id); return !!(sh && (sh.v || sh.a || sh.omega || sh.alpha)); });
-  const forces = !bs.length ? null : chapter().forcesOptional ? (motion || null) : fbd || motion;
+  const forces = !bs.length ? null : chapter().forcesOptional ? (fbd || motion || null) : fbd || motion;
   return [bs.length > 0 || userGivens() > 0, forces, S.condOk, S.targets.length > 0 && !curTarget()];
 }
 const firstOpen = (c) => { const i = c.indexOf(false); return i < 0 ? STAGES.length : i; };
@@ -882,7 +884,9 @@ function steps(){
   $('sheetTab').onclick = () => openStage(3);
   document.body.dataset.stage = S.stage; TB.render(); NOW.render();
   if (f !== S.lastStep){
-    if (f < STAGES.length && S.lastStep !== -1 && f > S.lastStep) say(`${c[S.lastStep] ? `⭐ ${STAGES[S.lastStep].name} passed. ` : ''}Next: <b>${STAGES[f].name}</b>. ${STAGES[f].tip}`);
+    // a drawn body always gets its forces next, even where the diagram is optional: the forces are why it moves as it does
+    const nx = f === 2 && S.lastStep === 0 && c[1] === null && drawnBodies().length ? 1 : f;
+    if (f < STAGES.length && S.lastStep !== -1 && f > S.lastStep) say(`${c[S.lastStep] ? `⭐ ${STAGES[S.lastStep].name} passed. ` : ''}Next: <b>${STAGES[nx].name}</b>. ${STAGES[nx].tip}`);
     S.lastStep = f;
   }
 }
@@ -2416,7 +2420,8 @@ const FKINDS = {
   gravity: { label: 'Gravity', dir: () => 'down' },
   normal: { label: 'Normal', vars: ['N', 'N1', 'NA', 'NB'], dir: () => 'perp-out' },
   contact: { label: 'Contact (other block)', vars: ['P'], dir: (fr, b) => S.build.touching().some(t => t.left === b.id) ? 'backward' : 'forward' },
-  friction: { label: 'Friction', vars: ['f', 'fA', 'fB'], dir: (fr) => fr === 'slope' ? ((S.cond.up ? 'down-slope' : 'up-slope')) : 'backward' },
+  friction: { label: 'Friction', vars: ['f', 'fA', 'fB', 'fs'],   // fs: static friction on a rolling body (its unit's own name)
+ dir: (fr) => fr === 'slope' ? ((S.cond.up ? 'down-slope' : 'up-slope')) : 'backward' },
   push: { label: 'Push / pull', vars: ['Fp'], dir: (fr) => fr === 'slope' ? 'horiz-in' : fr === 'flat' ? 'forward' : 'up' },
   tension: { label: 'Tension', vars: ['Tn'], dir: (fr) => fr === 'slope' ? 'up-slope' : fr === 'flat' ? 'forward' : 'up' },
 };
@@ -2459,7 +2464,8 @@ function fbdCheck(b){
   if (normals.some(f => f.dir !== 'perp-out')) bad.push('A normal force points perpendicular to the surface, out of it: surfaces push, they never pull.');
   if (normals.length && !touches.length) bad.push(`Nothing touches the ${what} here, so there’s no normal force.`);
   const fr = fs.filter(f => f.kind === 'friction');
-  if (fr.length && !S.cond.friction) bad.push('There’s friction on the diagram, but your conditions say the surface is frictionless.');
+  // only where the unit asks about friction: a rolling body needs static friction to turn, and its unit has no such switch
+  if (fr.length && chapter().conditions.some(c => c.key === 'friction') && !S.cond.friction) bad.push('There’s friction on the diagram, but your conditions say the surface is frictionless.');
   if (!fr.length && S.cond.friction && touches.length) bad.push(`The surface has friction and the ${what} slides: add kinetic friction along the surface, against the motion.`);
   if (fr.some(f => !/slope|forward|backward/.test(f.dir))) bad.push('Kinetic friction acts along the surface, against the motion.');
   // touching blocks push on each other: a contact force on each, a Newton's third-law pair
@@ -2527,6 +2533,7 @@ function renderFBD(){
     <div class="fadd"><span class="small"><b>Add a force:</b></span>${Object.entries(FKINDS).map(([k, d]) => `<button data-addforce="${k}">${d.label}</button>`).join('')}</div>
     ${rows || '<div class="small muted">No forces yet. Which things touch or pull on this body?</div>'}
     ${table}
+    <div class="small fnext">When every force is drawn: <b>Check my diagram</b>, then <b>Write ΣF = ma</b> turns it into equations, one direction at a time, and shows how each force counts.</div>
     <div class="frow"><button id="fbdCheck">Check my diagram</button><button class="go" id="fbdWrite">Write ΣF = ma onto my sheet</button></div>
     <div id="fbdMsg"></div>`;
   $('fbdBody')?.addEventListener('change', (e) => { S.fbd.body = e.target.value; renderFBD(); });
@@ -2541,6 +2548,7 @@ function renderFBD(){
   const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; say(html); $('fbdMsg').scrollIntoView({ block: 'nearest' }); };
   $('fbdCheck').onclick = () => { const bad = problems(b); msg(bad.length ? bad.map(x => '✗ ' + x).join('<br>') : '✓ This free-body diagram looks right: every force has a source, and each one points the way it must.', !bad.length); };
   $('fbdWrite').onclick = async () => {
+    const ask = unanswered(); if (ask){ msg(ask, false); return; }
     const bad = problems(b);
     if (bad.length){ msg('Fix the diagram first:<br>' + bad.map(x => '✗ ' + x).join('<br>'), false); return; }
     const eqs = diagramOf(b).equations({ body: b });
@@ -2550,9 +2558,33 @@ function renderFBD(){
     dropGenerated(g => g.key === 'fbd:' + b.id);
     const ids = eqs.map(q => addGenerated({ ...q, vars: [...new Set([...q.zsub.matchAll(/\{(\w+)\}/g)].map(m => m[1]))], key: 'fbd:' + b.id, meaning: 'Written from your free-body diagram.' }));
     clearDerived(); renderAll(false);
-    msg(`✓ Wrote ${ids.map(id => `<b>${EQS[id].label}</b>`).join(' and ')} onto your sheet.`, true);
+    msg(`✓ Wrote ${ids.map(id => `<b>${EQS[id].label}</b>`).join(' and ')} onto your sheet.${explainFbd(b, eqs)}`, true);
     say(`Your free-body diagram gave ${ids.length} equation${ids.length > 1 ? 's' : ''}: ${ids.map(id => EQS[id].form).join(' and ')}. They’re on your sheet. ${fbdBodies().length > 1 ? 'Draw the next body, or go' : 'Go'} on to <b>3 · Conditions</b>.`);
   };
+}
+
+// a “This problem” question that decides which law the diagram writes (c.beforeForces) must be answered first
+function unanswered(){
+  const c = (chapter().conditions || []).find(c => c.beforeForces && c.ask && !(c.key in S.cond));
+  return c ? `First say what the body is doing, under <b>This problem</b>: ${c.ask[1].map(([, w]) => `<b>${w}</b>`).join(' or ')}. That choice decides which law your diagram writes.` : '';
+}
+// how the diagram became equations, one axis at a time: each force's part, and why it is + or − (shown when ΣF is written)
+const signOf = (r) => X.toText(r, S.printOpts).trim().startsWith('−') || X.toText(r, S.printOpts).trim().startsWith('-');
+function explainFbd(b, eqs){
+  const fs = forcesOf(b).map(f => ({ f, c: components(b, f) })).filter(x => x.c);
+  const name = (f) => `${FKINDS[f.kind].label.toLowerCase()} ${fLabelHTML(b, f)}`;
+  const axisWords = { s: eqs[0]?.condition.replace(/^Newton’s second law /, '') || '', n: 'perpendicular to the surface, + out of it' };
+  const block = (key, rkey, q, sum) => {
+    if (!q) return '';
+    const items = fs.filter(x => x.c[key]).map(x => `<li>${name(x.f)}: its part is <b>${ratHTML(x.c[rkey])}</b>, ${signOf(x.c[rkey]) ? '− because it points against the + way' : '+ because it points the + way'}.</li>`);
+    const none = fs.filter(x => !x.c[key]).map(x => name(x.f));
+    return `<div class="fexp"><b>${key === 's' ? 'Along the motion' : 'Across the motion'}</b> (${axisWords[key]}):<ul>${items.join('')}${none.length ? `<li class="muted">${none.join(', ')}: no part this way (${none.length > 1 ? 'they are' : 'it is'} at right angles to it).</li>` : ''}</ul>
+      Add them: ${q.lhs.html} ${sum}</div>`;
+  };
+  const ma = eqs[0] ? `= ${eqs[0].rhs.html}, because the total force along the motion is what speeds the body up (Newton’s second law).` : '';
+  return `<details class="fexplain" open><summary>How your diagram became these equations</summary>
+    <p class="small">ΣF = ma is used one direction at a time. Each force counts only by its part along that direction: the size times sin or cos of the angle it makes, + if it points the + way, − if against.</p>
+    ${block('s', 'sR', eqs[0], ma)}${block('n', 'nR', eqs[1], '= 0, because the body stays on the surface: no acceleration across it.')}</details>`;
 }
 
 // ---------- extended free-body diagrams: a beam or a disc (Phase 5, torque.js has the math) ----------
@@ -2697,6 +2729,7 @@ function renderExtFBD(b, box){
   const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; say(html); $('fbdMsg').scrollIntoView({ block: 'nearest' }); };
   $('fbdCheck').onclick = () => { const bad = problems(b); msg(bad.length ? bad.map(x => '✗ ' + x).join('<br>') : `✓ This diagram looks right: every force has a source and starts where it acts.`, !bad.length); };
   $('fbdWrite').onclick = async () => {
+    const ask = unanswered(); if (ask){ msg(ask, false); return; }
     const bad = problems(b);
     if (bad.length){ msg('Fix the diagram first:<br>' + bad.map(x => '✗ ' + x).join('<br>'), false); return; }
     const eqs = diagramOf(b).equations({ body: b });
@@ -2708,7 +2741,10 @@ function renderExtFBD(b, box){
     const ids = eqs.map(q => addGenerated({ label: q.label, zsub: q.zsub, lhs: side(q.lhs), rhs: side(q.rhs), condition: q.condition, unitText: q.unitText,
       vars: [...new Set([...q.zsub.matchAll(/\{(\w+)\}/g)].map(m => m[1]))], key: 'fbd:' + b.id, meaning: 'Written from your diagram: every force where it acts.' }));
     clearDerived(); renderAll(false);
-    msg(`✓ Wrote ${ids.map(id => `<b>${EQS[id].label}</b>`).join(', ')} onto your sheet.`, true);
+    const why = S.cond.dyn
+      ? 'You said it spins up, so the torques don’t cancel: their sum, each force times its lever arm (+ counterclockwise), equals Iα. That is Newton’s second law for turning.'
+      : 'You said it is in equilibrium: nothing speeds up or turns faster, so the forces cancel each way (ΣFx = 0, ΣFy = 0) and so do the torques about any axis (Στ = 0). Each term is in the cards above: a force’s part, or a force times its lever arm, + or − by its direction.';
+    msg(`✓ Wrote ${ids.map(id => `<b>${EQS[id].label}</b>`).join(', ')} onto your sheet.<p class="small">${why}</p>`, true);
     say(`Your diagram gave ${ids.map(id => EQS[id].form).join(' · ')}. ${fbdBodies().length > 1 ? 'Draw the next body, or go' : 'Go'} on to <b>3 · Conditions</b>.`);
   };
 }

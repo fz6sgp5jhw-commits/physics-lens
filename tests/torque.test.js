@@ -47,7 +47,8 @@ test('gate 1: a beam on a pivot with a slanted cord, from the drawing: T = 21.0 
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await torqueUnit(page);
-    assert.equal(await page.getAttribute('#kindRow [data-ck="dyn"][data-i="0"]', 'aria-pressed'), 'true', 'equilibrium by default');
+    // walkthrough fix: nothing is chosen for the student; ΣF waits until they say what the body is doing
+    assert.equal(await page.locator('#kindRow [data-ck="dyn"][aria-pressed="true"]').count(), 0, 'no body state chosen for the student');
     await page.click('[data-template="beam"]');
     const drawn = await page.evaluate(() => Object.entries(window.__rl.givens).filter(([, g]) => g.from === 'drawing').map(([id]) => id).sort());
     assert.deepEqual(drawn, ['L', 'M', 'm'], 'the beam names L and M, the hung block m');
@@ -74,6 +75,9 @@ test('gate 1: a beam on a pivot with a slanted cord, from the drawing: T = 21.0 
     const table = await page.innerText('#torqueTable');
     assert.match(table, /H[\s\S]*0/, 'the hinge forces have no lever arm about the pivot');
     assert.match(table, /↻/); assert.match(table, /↺/);
+    await page.click('#fbdWrite');   // not yet: the student hasn't said what the body is doing
+    assert.match(await page.innerText('#fbdMsg'), /First say what the body is doing/);
+    await page.click('#kindRow [data-ck="dyn"][data-i="0"]');
     await page.click('#fbdWrite');
     const labels = await page.evaluate(() => Object.values(window.__rl.gen).map(g => g.label));
     assert.deepEqual(labels, ['ΣFx', 'ΣFy', 'Στ (about the pivot)']);
@@ -94,6 +98,7 @@ test('gate 2: a beam hinged at one end, hanging by a vertical cable: β = 18.5°
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await torqueUnit(page);
+    await page.click('#kindRow [data-ck="dyn"][data-i="0"]');
     await page.click('[data-bshape="rod"]'); await page.click('[data-bshape="pivot"]');
     // pin the rod at its left end
     await page.evaluate(() => { const S = window.__rl, r = S.build.shapes.find(s => s.kind === 'rod'), p = S.build.shapes.find(s => s.kind === 'pivot'); p.x = r.x - r.w / 2 + 2; p.y = r.y + 22; S.build.snap(); });

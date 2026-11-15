@@ -39,10 +39,12 @@ export function tell(s){
     const kind = !s.hasGivens ? 'givens' : !s.condOk ? 'conds' : !s.targets ? 'target' : !s.cur ? 'done' : (s.hintKey.match(/^(miss|eq|sys|lad)/) || [])[0];
     return { doing, why, next: s.hint + (MORE[kind] || ''), go: GO[kind] || null };
   }
-  const doing = `<b>${st.name}</b>${of}: ${st.doing}.`, why = i === 1 && s.forcesOptional ? st.whyMotion : st.why, c = s.checks[i];
+  const doing = `<b>${st.name}</b>${of}: ${st.doing}.`, why = i === 1 && s.forcesOptional && !s.drawn ? st.whyMotion : st.why, c = s.checks[i];
   if (i <= 1 && s.walk) return { doing, why, next: esc(s.walk), go: { sel: '#bd' } };
   if (s.lesson && !c) return { doing, why, next: esc(s.lesson), go: { sel: st.go } };
   if (c) return { doing, why, ...onward(`${st.name} has its star.`) };
+  // optional in this unit (an energy route can do without it), but a drawn body is still invited to have its forces
+  if (c === null && s.drawn && i === 1) return { doing, why: st.why, next: `${st.next} It is optional here, but the forces show why the body moves the way it does.`, go: { sel: st.go } };
   if (c === null) return { doing, why, ...onward(s.drawn ? 'Motion arrows are optional in this unit.' : 'Nothing is drawn, so there is no diagram to check.') };
   return { doing, why, next: st.next, go: { sel: st.go } };
 }
