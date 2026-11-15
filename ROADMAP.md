@@ -447,8 +447,8 @@ From the user's graded Exam 3 make-up (32/50). Points were lost in the setup, no
 **Start with:** `Do phase M3 in ROADMAP.md.` Read `docs/mistake-plan.md` section 4 (M3); `js/pick.js` (`looking`), the route card in `js/course.js`, `js/mc.js`.
 - [x] Gate first (`tests/gates.test.js`): in a lesson the library stays closed until the target is named; picking a decoy reason is explained; two bodies' masses can't be entered without an owner; the multiple-choice read-back asks before it reveals.
 - [x] The four gates, each switchable, each explaining the physics when it stops the student.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
-Resume from: the last box. The four gates are built and `tests/gates.test.js` passes (4/4); cache is v46. Not yet run: the full suite (`openApp` now turns the gates off unless given `gates: true`; `tests/mc.test.js` picks the first select now that the options tab has a second one, `#mcBack`). Then tick the box and write the What changed line: gates in `js/gates.js` (switches in pl-gates under the Course drawer, `#gatesBox`, Forget button; `LAW_WHY` reasons and decoys), target gate `libGate` and owner gate `ownerOk` in `app.js`, why step `whyBox` in the route card (`course.js`), read-back in `mc.js`.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+What changed: four switchable gates in `js/gates.js` (switches in `pl-gates` under the Course drawer, `#gatesBox`, Forget button; `LAW_WHY` reasons and decoys): target gate `libGate` and owner gate `ownerOk` in `app.js`, why step `whyBox` in the route card (`course.js`), read-back before reveal in `mc.js`; `openApp` turns gates off unless given `gates: true`; cache v46.
 
 ## Phase M4: exam sheet, find the mistake, my mistakes
 **Start with:** `Do phase M4 in ROADMAP.md.` Read `docs/mistake-plan.md` sections 3 and 4 (M4); open `private/exam3-makeup-study-guide.html` for the layout the user likes. New code in `js/sheet.js`.
