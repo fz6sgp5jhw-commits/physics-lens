@@ -21,7 +21,7 @@ import { createNowBar } from './nowbar.js';
 import { renderKey, createFix } from './pen.js';
 import { createPencil } from './pencil.js';
 import { stepCardHTML } from './concepts.js';
-import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms } from './pick.js';
+import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms, swapVars, dropPowers, dropFactors, triangleOnly, mapVars, varsOf } from './pick.js';
 
 const $ = (id) => document.getElementById(id);
 // text the student typed or pasted is escaped before it goes into HTML
@@ -1384,6 +1384,8 @@ $('checkSetup').onclick = () => {
   for (const id of Object.keys(S.givens)) if (!(id in p.key.givens)){ lines.push(`? ${VARS[id].sym} isn’t stated in the problem. If you worked it out, it belongs in the path, not the givens.`); bad++; }
   for (const [k, want] of Object.entries(p.key.cond)){
     const c = chapter().conditions.find(x => x.key === k); if (!c) continue;
+    // an imported problem may name a choice this condition doesn't have: say so, and don't hold it against the student
+    if (c.type === 'choice' && !c.options.some(o => o[0] === want)){ lines.push(`? Condition “${c.label}”: the problem file asks for “${esc(String(want))}”, which isn’t one of its choices, so it isn’t checked.`); continue; }
     if ((c.type === 'choice' ? S.cond[k] : !!S.cond[k]) !== want){ const w = c.type === 'choice' ? c.options.find(o => o[0] === want)[1] : (want ? 'on' : 'off'); lines.push(`✗ Condition “${c.label}” should be: <b>${w}</b>.`); bad++; }
   }
   if (!S.condOk){ lines.push('✗ You haven’t confirmed the conditions yet.'); bad++; }
@@ -2857,37 +2859,75 @@ async function loadLesson(p, ch){
   return true;
 }
 // "What's wrong?": run the solved path again with one small edit at a time (pack error handlers, SLIPS);
-// the first edit that turns the app's answer into yours names your slip
-function replay(edit = {}){
+// the first edit that turns the app's answer into yours names your slip. edit.trees: step index → its changed template tree.
+function replay(edit = {}, upTo){
   const v = {}, fns = {};
   for (const [id, g] of Object.entries(S.givens)) v[id] = g.val;
   for (const [id, f] of Object.entries(S.funcs)) if (f.from === 'given') fns[id] = X.ratToPoly(X.polyToRat(f.poly)).map(c => X.numValue(c));
   if (edit.given) v[edit.given] = -v[edit.given];
-  S.path.forEach((p, i) => routeStep(i === edit.step ? { ...p, tree: edit.tree } : p, v, fns));
+  for (const [i, p] of S.path.entries()){   // stops at the quantity asked about: a later step the slip breaks doesn't matter
+    routeStep(edit.trees && i in edit.trees ? { ...p, tree: edit.trees[i] } : p, v, fns);
+    if (upTo && p.v === upTo) break;
+  }
   return v;
 }
 const swapTrig = (n) => !n || typeof n !== 'object' ? n : Array.isArray(n) ? n.map(swapTrig)
   : Object.fromEntries(Object.entries(n).map(([k, x]) => [k, k === 'f' && (x === 'sin' || x === 'cos') ? (x === 'sin' ? 'cos' : 'sin') : swapTrig(x)]));
 const hasTrig = (n) => !!n && typeof n === 'object' && (n.f === 'sin' || n.f === 'cos' || Object.values(n).some(hasTrig));
+// the steps a slip can be tried on: equations the app wrote out as a template (not a system, not a function of time)
+const eqSteps = (eqs) => S.path.map((p, i) => ({ p, i, eq: p.eq && EQS[p.eq]?.label })).filter(({ p }) => p.kind === 'eq' && !p.gen && !p.fn && p.tree && (!eqs || (Array.isArray(eqs) ? eqs.includes(p.eq) : p.eq in eqs)));
+const DIM = Object.fromEntries(['m', 's', 'kg', 'm/s'].map(u => [u, X.parseUnit(u)]));
+const isDim = (id, u) => !!DIMS[id] && X.dimEq(DIMS[id], DIM[u]) && Object.keys(DIMS[id]).length === Object.keys(DIM[u]).length;
+const unitText = (n) => { try { return X.dimStr(X.dimOf(n, DIMS)); } catch { return null; } };
+// the other givens of the same kind (lengths for a length, times for a time) that could be put in its place
+const sameKind = (kinds) => {
+  const ids = Object.keys(S.givens).filter(id => S.givens[id].val && kinds.some(u => isDim(id, u)));
+  return Object.fromEntries(ids.map(id => [id, ids.filter(w => w !== id && kinds.some(u => isDim(id, u) && isDim(w, u)))]));
+};
+const one = (i, tree, fill) => ({ edit: { trees: { [i]: tree } }, ...fill });
 const SLIP_EDITS = {
   // sin and cos swapped in one step
-  swapTrig: () => S.path.map((p, i) => p.kind === 'eq' && !p.gen && !p.fn && hasTrig(p.tree) ? { edit: { step: i, tree: swapTrig(p.tree) }, eq: EQS[p.eq].label } : null).filter(Boolean),
-  // one given, or the answer itself, the other way round
+  swapTrig: () => eqSteps().filter(({ p }) => hasTrig(p.tree)).map(({ p, i, eq }) => one(i, swapTrig(p.tree), { eq })),
   // one term of a sum left out of one step's equation
-  dropTerm: () => S.path.flatMap((p, i) => p.kind === 'eq' && !p.gen && !p.fn && p.tree ? dropTerms(p.tree).map(d => ({ edit: { step: i, tree: d.tree }, eq: EQS[p.eq].label })) : []),
+  dropTerm: () => eqSteps().flatMap(({ p, i, eq }) => dropTerms(p.tree).map(d => one(i, d.tree, { eq }))),
+  // one given, or the answer itself, the other way round
   flipSign: (t) => [...Object.entries(S.givens).filter(([, g]) => g.val).map(([id]) => ({ edit: { given: id }, q: VARS[id].sym })), { edit: {}, flipAnswer: true, q: VARS[t].sym }],
+  // another given length in place of a length (the slide distance for the compression)
+  wrongLength: () => { const alt = sameKind(['m']); return eqSteps().flatMap(({ p, i, eq }) => swapVars(p.tree, alt).map(d => one(i, d.tree, { eq, a: VARS[d.from].sym, b: VARS[d.to].sym }))); },
+  // a squared given left unsquared; the term's units say why it can't be right
+  dropPower: () => eqSteps().flatMap(({ p, i, eq }) => dropPowers(p.tree).map(d => one(i, d.tree, { eq, q: VARS[d.id].sym, u: unitText(d.tree), w: X.dimStr(DIMS[p.v]) }))),
+  // one factor left out of a product (friction work without the distance)
+  dropFactor: () => eqSteps().flatMap(({ p, i, eq }) => dropFactors(p.tree).map(d => one(i, d.tree, { eq, q: VARS[d.id].sym, u: unitText(d.node), w: X.dimStr(DIMS[p.v]) })))
+    .filter(c => c.u && c.u !== c.w),
+  // momentum without the masses: every step with a mass times a velocity, the masses taken out of all of them at once
+  noMass: () => {
+    const steps = eqSteps().filter(({ p }) => { const ids = varsOf(p.tree); return ids.some(id => isDim(id, 'kg')) && ids.some(id => isDim(id, 'm/s')); });
+    if (!steps.length) return [];
+    const trees = Object.fromEntries(steps.map(({ p, i }) => [i, mapVars(p.tree, id => isDim(id, 'kg') ? { t: 'num', v: 1 } : null)]));
+    return [{ edit: { trees }, eq: steps.map(s => s.eq).join(', ') }];
+  },
+  // energy used where ΣF = 0 holds: the pack names, per equation, the weight's symbols; doubling one gives ½kx² = mgx
+  energyNotForce: (t, slip) => eqSteps(slip.eqs).flatMap(({ p, i, eq }) => {
+    const id = slip.eqs[p.eq].find(w => varsOf(p.tree).includes(w));
+    return id ? [one(i, mapVars(p.tree, w => w === id ? { t: 'mul', a: [{ t: 'num', v: 2 }, { t: 'var', id }] } : null), { eq })] : [];
+  }),
+  // a graph area over the wrong interval (another stretch's width), or only the triangle under a sloped stretch
+  wrongInterval: (t, slip) => { const alt = sameKind(['m', 's']); return eqSteps(slip.eqs).flatMap(({ p, i, eq }) => slip.part === 'slope'
+    ? triangleOnly(p.tree).map(d => one(i, d.tree, { eq }))
+    : swapVars(p.tree, alt).map(d => one(i, d.tree, { eq, a: VARS[d.from].sym, b: VARS[d.to].sym }))); },
 };
 function whatsWrong(t, typed){
   if (!S.path.length || !known(t)) return null;
   const right = S.found[t] ? S.found[t].val : val(t), us = unitSlip(right, typed, sigMatch);
   if (us) return `Your number is the right one with a <b>unit slip</b>: it looks like ${us.says}. Check the unit each given is in before it goes into an equation.`;
-  for (const slip of SLIPS) for (const c of SLIP_EDITS[slip.edit](t)){
-    let x; try { x = replay(c.edit)[t]; } catch { continue; }
+  for (const slip of SLIPS) for (const c of SLIP_EDITS[slip.edit](t, slip)){
+    let x; try { x = replay(c.edit, t)[t]; } catch { continue; }
     if (c.flipAnswer) x = -x;
-    if (Number.isFinite(x) && sigMatch(x, typed)) return slip.says.replace('{eq}', c.eq || '').replace('{q}', c.q || '');
+    if (Number.isFinite(x) && !sigMatch(x, String(right)) && sigMatch(x, typed)) return slip.says.replace(/\{(\w+)\}/g, (_, k) => c[k] || '');
   }
   return null;
 }
+S.whatsWrong = whatsWrong;
 function checkAnswer(t, typed){
   const n = Number(String(typed).replace('−', '-'));
   if (!typed || !Number.isFinite(n)) return 'Type the number you got (in the unit shown).';
@@ -2902,7 +2942,7 @@ const COURSE = S.course = createCourse({
     eqLabel: (e) => `${EQS[e].label} (${textOf(EQS[e].form)})`, eqKind: (e) => EQS[e].kind || 'law',
     targets: () => S.targets.filter(t => VARS[t]).map(t => [t, `${letter(S.targets.indexOf(t))} ${VARS[t].plain}`, unitOf(t)]),
     step: (ok) => S.guide?.[ok ? 'correct' : 'wrong'](),
-    check: (t, typed) => { const r = checkAnswer(t, typed); if (/^[✓✗]/.test(r)) S.guide?.[r[0] === '✓' ? 'correct' : 'wrong'](); return r; }, wrong: (t, typed) => whatsWrong(t, typed) || 'None of the usual slips (a unit mix-up, sin and cos swapped, a sign flipped, a term left out) gives your number. Compare your steps with the app’s, one line at a time.' },
+    check: (t, typed) => { const r = checkAnswer(t, typed); if (/^[✓✗]/.test(r)) S.guide?.[r[0] === '✓' ? 'correct' : 'wrong'](); return r; }, wrong: (t, typed) => whatsWrong(t, typed) || 'None of the usual slips (a unit mix-up, sin and cos swapped, a wrong length, a missing square, factor or mass, a sign flipped, a term left out) gives your number. Compare your steps with the app’s, one line at a time.' },
 });
 
 // ---------- the fading guide (phase G2) ----------

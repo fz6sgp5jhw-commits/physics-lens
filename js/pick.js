@@ -101,16 +101,33 @@ export function unitSlip(correct, typed, match){
   return UNIT_SLIPS.find(s => match(correct * s.f, typed)) || null;
 }
 
-// a term of a sum left out: every way to delete one summand of one step's template tree (for the "What's wrong?" replay)
-export function dropTerms(tree){
+// every way to change one node of a template tree: f(node) gives the replacements for that node ({ node, ...why }), and each
+// comes back as the whole tree with that one node replaced (for the "What's wrong?" replay)
+export function editsOf(tree, f){
   const out = [];
   const walk = (n, rebuild) => {
     if (!n || typeof n !== 'object') return;
     if (Array.isArray(n)) { n.forEach((c, i) => walk(c, (v) => rebuild(n.map((x, j) => j === i ? v : x)))); return; }
-    if (n.t === 'add' && n.a.length > 1)
-      n.a.forEach((_, i) => { const rest = n.a.filter((__, j) => j !== i); out.push({ tree: rebuild(rest.length === 1 ? rest[0] : { ...n, a: rest }), dropped: i }); });
+    for (const r of f(n) || []) out.push({ ...r, tree: rebuild(r.node) });
     for (const key of Object.keys(n)) if (key !== 't' && typeof n[key] === 'object') walk(n[key], (v) => rebuild({ ...n, [key]: v }));
   };
   walk(tree, (v) => v);
   return out;
 }
+// every symbol of a tree replaced by f(id) (a node), or kept when f gives nothing
+export const mapVars = (n, f) => !n || typeof n !== 'object' ? n : Array.isArray(n) ? n.map(x => mapVars(x, f))
+  : n.t === 'var' ? f(n.id) || n : Object.fromEntries(Object.entries(n).map(([k, x]) => [k, mapVars(x, f)]));
+export const varsOf = (n) => !n || typeof n !== 'object' ? [] : n.t === 'var' ? [n.id] : Object.values(n).flatMap(varsOf);
+const rest = (n, i) => { const r = n.a.filter((_, j) => j !== i); return r.length === 1 ? r[0] : { ...n, a: r }; };
+// a term of a sum left out
+export const dropTerms = (tree) => editsOf(tree, (n) => n.t === 'add' && n.a.length > 1 ? n.a.map((_, i) => ({ node: rest(n, i), dropped: i })) : []);
+// one symbol put where another belongs: alt maps an id to the ids that could be mistaken for it
+export const swapVars = (tree, alt) => editsOf(tree, (n) => n.t === 'var' ? (alt[n.id] || []).map(to => ({ node: { t: 'var', id: to }, from: n.id, to })) : []);
+// a squared symbol left unsquared (½kx for ½kx²)
+export const dropPowers = (tree) => editsOf(tree, (n) => n.t === 'pow' && n.b.t === 'var' && n.e === 2 ? [{ node: n.b, id: n.b.id }] : []);
+// one symbol left out of a product that has another symbol in it (μmg for μmg·d)
+export const dropFactors = (tree) => editsOf(tree, (n) => n.t === 'mul' && n.a.filter(x => x.t !== 'num').length > 1
+  ? n.a.map((x, i) => x.t === 'var' ? { node: rest(n, i), id: x.id } : null).filter(Boolean) : []);
+// the area under one straight stretch of a graph, ½(F₁ + F₂)Δ, with only the triangle on top: the rectangle under it left out
+export const triangleOnly = (tree) => editsOf(tree, (n) => n.t === 'add' && n.a.length === 2 && n.a.every(x => x.t === 'var')
+  ? [{ node: { t: 'add', a: [n.a[1], { t: 'neg', a: n.a[0] }] } }, { node: { t: 'add', a: [n.a[0], { t: 'neg', a: n.a[1] }] } }] : []);

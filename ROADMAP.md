@@ -427,11 +427,12 @@ From the user's graded Exam 3 make-up (32/50). Points were lost in the setup, no
 
 ## Phase M1: handlers from the student's mistakes
 **Start with:** `Do phase M1 in ROADMAP.md.` Read `docs/mistake-plan.md` sections 1, 2 and 4 (M1); `SLIPS` in `js/packs/mech.js`, the edits near `swapTrig` in `js/app.js`, `unitSlip`/`dropTerms` in `js/pick.js`.
-- [ ] Gate first (`tests/slips-more.test.js`): on lesson problems with answers from outside the app, a typed answer made with the compression/slide lengths swapped, ½kx not squared, friction work without d, momentum without masses, the spring stretch from energy instead of ΣF = 0, and a graph area over the wrong interval is each named by its handler.
-- [ ] Handlers `wrongLength`, `dropPower`, `dropFactor`, `noMass`, `energyNotForce`, `wrongInterval` as data plus edits, each with a sentence that explains the physics.
-- [ ] Term units check: a typed term whose units differ from the rest of its equation is named, with its units.
-- [ ] Fix: an imported stop with an unknown choice-condition word no longer throws in Check my setup.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] Gate first (`tests/slips-more.test.js`): on lesson problems with answers from outside the app, a typed answer made with the compression/slide lengths swapped, ½kx not squared, friction work without d, momentum without masses, the spring stretch from energy instead of ΣF = 0, and a graph area over the wrong interval is each named by its handler.
+- [x] Handlers `wrongLength`, `dropPower`, `dropFactor`, `noMass`, `energyNotForce`, `wrongInterval` as data plus edits, each with a sentence that explains the physics.
+- [x] Term units check: a typed term whose units differ from the rest of its equation is named, with its units.
+- [x] Fix: an imported stop with an unknown choice-condition word no longer throws in Check my setup.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+- What changed (M1): seven new `SLIPS` (interval, slope, energy, length, power, mass, factor before drop and sign), each a sentence with the physics; edits in `app.js` `SLIP_EDITS` built on pure tree helpers in `pick.js`; the replay stops at the asked quantity. `termUnits` in `checks.js` names the odd-unit term in a typed line (the algebra checks, kind `units`). Check my setup reports an unknown choice word from a problem file as a ? line instead of throwing. Gate `tests/slips-more.test.js`; cache v45.
 
 ## Phase M2: the missing lessons
 **Start with:** `Do phase M2 in ROADMAP.md.` Read `docs/mistake-plan.md` section 4 (M2) and `docs/core-plan.md` section 8; lessons in `js/packs/mech.js` (`LESSONS`), the energy chapter's `vars` and `conditions`.

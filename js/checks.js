@@ -207,6 +207,8 @@ export function runCheck(lines, ctx, { final = false, tk = null } = {}){
   let unjudged = null;
   for (let i = 0; i < lines.length; i++){
     try {
+      const u = termUnits(lines[i], ctx);
+      if (u){ issues.push({ line: i + 1, kind: 'units', why: u }); break; }
       const h = holds(lines[i], envsFor(lines[i]));
       if (!h.ok){ issues.push({ line: i + 1, kind: 'line', why: whyNot(lines[i], lines[i - 1], envsFor(lines[i]), h.diffs) }); break; }
     } catch (e) {
@@ -232,7 +234,7 @@ export function runCheck(lines, ctx, { final = false, tk = null } = {}){
       else if (!tgt.ref.tree && !tgt.ref.fn) issues.push({ line: null, kind: 'final', why: tgt.ref.why });
     }
   }
-  const look = issues.some(i => i.kind === 'line' || i.kind === 'final' || i.kind === 'unjudged') && tgt ? [tgt.id] : [];
+  const look = issues.some(i => i.kind === 'line' || i.kind === 'units' || i.kind === 'final' || i.kind === 'unjudged') && tgt ? [tgt.id] : [];
   return { status: issues.length ? 'look' : 'pass', issues, notes, look };
 }
 
@@ -291,6 +293,24 @@ export function putValues(line, ctx){
   const unit = targetUnit(iso.id), dimU = unit ? parseUnit(unit) : null;
   const out = dimU ? fromSI(si, unit) : si;
   return { id: iso.id, withValues, value: fmtNum(out), unit, si, tree: { t: 'sym', id: iso.id } };
+}
+// every term of a line (each side split at + and −) must have the same units; the odd one out is named with its units.
+// Terms written as zero, or with a symbol that has no kind of quantity, are left out. Returns the sentence, or null when the rest agree.
+// a term that is written as zero (m·0², 0) has no units to judge
+const isZero = (n) => n.t === 'num' ? n.v === 0 : n.t === 'mul' ? n.a.some(isZero) : n.t === 'pow' ? isZero(n.b) : n.t === 'neg' ? isZero(n.a) : n.t === 'div' ? isZero(n.n) : false;
+export function termUnits(line, ctx){
+  const terms = [line.l, line.r].flatMap(side => side.t === 'add' ? side.a : [side]).map(x => x.t === 'neg' ? x.a : x)
+    .filter(x => !isZero(x))
+    .map(x => ({ x, d: dimOfTree(x, ctx) || (x.t === 'sym' && targetDim(x.id)) || null })).filter(k => k.d)
+    .map(k => ({ ...k, u: dimStr(k.d) }));
+  if (terms.length < 2) return null;
+  const count = (u) => terms.filter(k => k.u === u).length;
+  const most = terms.reduce((a, k) => count(k.u) > count(a) ? k.u : a, terms[0].u), odd = terms.filter(k => k.u !== most);
+  if (!odd.length) return null;
+  const fix = 'Every term of an equation has the same units: look for a missing or extra factor (a length, a mass, a square).';
+  if (terms.length === 2) return `One side is in ${terms[0].u} and the other in ${terms[1].u}: two things in different units can’t be equal. ${fix}`;
+  if (odd.length === 1) return `The term ${print(odd[0].x)} is in ${odd[0].u}, but the other terms are in ${most}. ${fix}`;
+  return `The terms of this line are in different units (${[...new Set(terms.map(k => k.u))].join(', ')}). ${fix}`;
 }
 // the dimension of a piece of a line, or null when a symbol in it has no kind of quantity
 export function dimOfTree(tree, ctx){
