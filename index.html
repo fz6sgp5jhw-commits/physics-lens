@@ -293,20 +293,20 @@
   #sheet > #workWin{grid-column:1 / -1;margin-top:2px}
   #workWin{padding:0}
   #workWin .sunk{margin:0 10px 10px}
-  #work .line{font:16px/1.5 var(--mono);padding:2px 0;opacity:0;transform:translateX(-6px);transition:opacity .25s,transform .25s}
-  #work .line.show{opacity:1;transform:none}
-  #work .why{font:12.5px var(--body);color:var(--faint);margin-left:12px}
-  #work .why::before{content:'↳ ';color:var(--found)}
-  #work .section{font:800 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--wine);margin:12px 0 4px}
-  #work .num{color:var(--given-ink)}
-  #work .result{display:inline-block;font:600 20px/1.3 var(--mono);color:var(--found-ink);padding:8px 12px;margin-top:8px;
+  :is(#work,#pathList) .line{font:16px/1.5 var(--mono);padding:2px 0;opacity:0;transform:translateX(-6px);transition:opacity .25s,transform .25s}
+  :is(#work,#pathList) .line.show{opacity:1;transform:none}
+  :is(#work,#pathList) .why{font:12.5px var(--body);color:var(--faint);margin-left:12px}
+  :is(#work,#pathList) .why::before{content:'↳ ';color:var(--found)}
+  :is(#work,#pathList) .section{font:800 11px var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--wine);margin:12px 0 4px}
+  :is(#work,#pathList) .num{color:var(--given-ink)}
+  :is(#work,#pathList) .result{display:inline-block;font:600 20px/1.3 var(--mono);color:var(--found-ink);padding:8px 12px;margin-top:8px;
     background:var(--tint-found);border:1.5px solid var(--found);border-radius:var(--wobble);box-shadow:0 0 0 3px var(--tint-found),0 0 18px rgba(224,138,0,.45)}
-  #work .result .sym{color:inherit}
-  #work .note{font-size:12.5px;margin-top:6px;color:var(--sepia)}
-  #work .units{margin-top:6px;color:var(--good-ink)}
-  #work .check{margin-top:4px;padding:7px 10px;background:var(--tint-good);border:1.5px solid var(--good);border-radius:var(--wobble)}
-  #work .feedback{margin-top:10px;padding:7px 10px;font-size:13px;border:1.5px solid var(--ink)}
-  #work .empty{color:var(--faint);font-size:13px}
+  :is(#work,#pathList) .result .sym{color:inherit}
+  :is(#work,#pathList) .note{font-size:12.5px;margin-top:6px;color:var(--sepia)}
+  :is(#work,#pathList) .units{margin-top:6px;color:var(--good-ink)}
+  :is(#work,#pathList) .check{margin-top:4px;padding:7px 10px;background:var(--tint-good);border:1.5px solid var(--good);border-radius:var(--wobble)}
+  :is(#work,#pathList) .feedback{margin-top:10px;padding:7px 10px;font-size:13px;border:1.5px solid var(--ink)}
+  :is(#work,#pathList) .empty{color:var(--faint);font-size:13px}
 
   /* stage panels: only the open stage's panels show beside the canvas */
   .ws-right [data-stage].off{display:none}
@@ -333,11 +333,9 @@
   #sheet .eq .uses{font-size:11.5px;color:var(--faint);margin-top:3px}
 
   /* path */
-  #path ol{margin:0;padding-left:22px;font:13.5px/1.6 var(--mono)}
-  #path li{cursor:pointer;padding:1px 4px}
-  #path li:hover{background:rgba(122,190,255,.1)}
-  #path .empty{color:var(--faint);font-size:13px}
-  #pathList{font-size:13px}
+  #solWin .solans{font:16px/1.7 var(--mono);margin-bottom:6px}
+  #pathList{font-size:13px} #pathList .sstep{margin:4px 0 10px} #pathList .stitle{font-weight:600;margin-bottom:2px}
+  #solWin .subhead{margin-top:10px} #pathList .feedback{display:none}
 
   /* canvas card: folder tabs over the drawing, a two-column tool palette */
   .canvascard{padding:6px 8px 8px}
@@ -1000,7 +998,7 @@
       <div class="locknote" id="sheetLock" hidden></div>
       <div class="sheethead">
         <div class="targets" id="targets"></div>
-        <div class="modes"><button id="lookBtn" title="Say what you are looking for, and how to gather the formulas">What am I looking for?</button><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="A last resort: the app gathers and solves it for you (costs a star in a lesson). Do the algebra yourself in the Algebra card.">Show me (last resort)</button></div>
+        <div class="modes"><button id="lookBtn" title="Say what you are looking for, and how to gather the formulas">What am I looking for?</button><button id="hintBtn" title="A nudge toward the next step, without solving it">Hint</button><button id="showBtn" title="A last resort: the app gathers and solves it for you (costs a star in a lesson). To do the algebra yourself, press I’ll do the algebra on an equation.">Show me (last resort)</button></div>
       </div>
       <div class="eq spancard" id="spanCard" hidden></div>
       <div class="sheet-status" id="sheetStatus"></div>
@@ -1011,13 +1009,13 @@
       <div class="titlebar"><h2 id="workTitle">Work</h2></div>
       <div class="sunk" id="work"></div>
     </section>
-    <section class="card" id="mattersWin" data-stage="3">
-      <div class="titlebar"><h2>What matters</h2></div>
-      <div class="body"><div id="matters"></div></div>
-    </section>
-    <section class="card" id="path" data-stage="3">
-      <div class="titlebar"><h2>Path so far</h2></div>
-      <div class="body"><div id="pathList"></div></div>
+    <section class="card" id="solWin" data-stage="3">
+      <div class="titlebar"><h2>Solution</h2></div>
+      <div class="body">
+        <div class="solans" id="solAnswers"></div>
+        <div class="subhead">Steps, line by line</div><div id="pathList"></div>
+        <div class="subhead">What matters</div><div id="matters"></div>
+      </div>
     </section>
     <section class="card guidecard" id="guideCard" data-stage="0 1 2 3" hidden aria-live="polite"></section>
     <section class="card" id="dfWork" data-stage="3"></section>

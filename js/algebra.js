@@ -161,6 +161,10 @@ export const eqText = (eq, o) => `${print(eq.l, o)} = ${print(eq.r, o)}`;
 export const termsOf = (side) => side.t === 'add' ? side.a : [side];
 const fromTerms = (ts) => ts.length === 1 ? ts[0] : { t: 'add', a: ts };
 const clone = (n) => JSON.parse(JSON.stringify(n));
+function rename(n, from, to){
+  if (n.t === 'sym'){ if (n.id === from) n.id = to; return; }
+  for (const k of ['a', 'b', 'e', 'n', 'd']) if (n[k]) (Array.isArray(n[k]) ? n[k] : [n[k]]).forEach(x => rename(x, from, to));
+}
 export function symsOf(n, out = []){
   if (n.t === 'sym'){ if (!out.includes(n.id)) out.push(n.id); }
   else for (const k of ['a', 'b', 'e', 'n', 'd']) if (n[k]) (Array.isArray(n[k]) ? n[k] : [n[k]]).forEach(x => symsOf(x, out));
@@ -348,7 +352,9 @@ export function sheet(query = '', nMasses = 1){
 }
 
 // ---------------------------------------------------------------- the workspace (UI)
-export function createWorkspace({ panel, knowns, masses, say, tk = () => null, example = () => null, onCheck = () => {} }){
+// pool (guided mode): the student's own sheet, [{ key, label, text, name }], replaces the whole-library formula sheet;
+// onClose: the panel can be put away (it opens again from an equation's “I’ll do the algebra”)
+export function createWorkspace({ panel, knowns, masses, say, tk = () => null, example = () => null, onCheck = () => {}, pool = () => null, onClose = null }){
   const st = { lines: [], cur: -1, sel: null, n: null, msg: '', ac: [], names: {}, look: [], drag: null };
   const $ = (id) => document.getElementById(id);
   const pop = (id) => { let p = $(id); if (!p){ p = document.createElement('div'); p.id = id; p.className = 'pop algpop'; p.hidden = true; document.body.appendChild(p); } return p; };
@@ -380,14 +386,21 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null, e
     if (knowns().targets.some(t => toId(t) === id)) return 's-target';
     return known().some(k => k.id === id && k.value) ? 's-given' : '';
   }
-  // a typo can't make a new symbol: every name must already be defined
+  // a typo can't make a new symbol: every name must already be defined. A short spelling with one match is read as that
+  // name (f → f_s, when f_s is the only f here), and the trees are renamed in place; several matches are offered.
+  // Returns the readings made, like “f read as f_s”.
   function checkNames(trees){
-    const def = defined();
+    const def = defined(), read = [];
+    const base = (id) => id.split('_')[0];
     for (const id of trees.flatMap(t => symsOf(t))){
       if (def.has(id)) continue;
+      const like = [...def].filter(x => base(x) === base(id) && x !== id);
+      if (like.length === 1){ trees.forEach(t => rename(t, id, like[0])); read.push(`${display(id).text} read as ${display(like[0]).text}`); continue; }
+      if (like.length) throw new InputError(`${display(id).text} isn’t a name here. Did you mean ${like.map(x => display(x).text).join(' or ')}? Type the one you mean.`);
       const split = [...id].every(c => def.has(c)) ? ` Did you mean ${[...id].join('*')}?` : '';
       throw new InputError(`${display(id).text} isn’t defined in this problem.${split} Defined: ${[...def].map(x => display(x).text).join(', ') || 'nothing yet'}.`);
     }
+    return read;
   }
 
   // ---- lines
@@ -413,13 +426,16 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null, e
       return `<li class="algline${i <= st.cur ? '' : ' grey'}${i === st.cur ? ' cur' : ''}" data-line="${i}"><span class="algeq"><span class="algside" data-side="l">${sideHTML('l', i, live)}</span> <span class="algsign" data-drop="${i}" title="Drop a term here to move it across">=</span> <span class="algside" data-side="r">${sideHTML('r', i, live)}</span></span>
         <span class="small muted alghow">${esc(L.how)}</span>${L.why ? `<span class="small alghow alhwhy${L.one ? ' warn' : ' muted'}">${esc(L.why)}</span>` : ''}${i !== st.cur ? `<button class="dfmini" data-back="${i}" title="${i <= st.cur ? 'Continue from this line; the lines after it are greyed until you do' : 'Bring the lines back up to here'}">Back to here</button>` : ''}</li>`;
     }).join('');
-    panel.innerHTML = `<div class="titlebar"><h2>Algebra</h2><button id="algSheetBtn" title="Every relationship in the library, by idea (or press / in the line box)">Formula sheet</button><button id="algUndo" title="Step back one line; later lines stay greyed until you continue">Undo</button></div>
-      <div class="body"><ol class="alglines" id="algLines">${rows || `<li class="small muted">Pick a relationship from the <b>Formula sheet</b>, or type a line below.${example(true) ? ' <button class="dfmini" id="algExample" title="The app writes the first line as a worked example, then it is your turn">Show me the first line</button>' : ''}</li>`}</ol>
+    const own = !!pool(), sheetName = own ? 'Your sheet' : 'Formula sheet';
+    const ex = example(true) && !st.lines.some(L => L.ex) && st.lines.every(L => L.sheet);   // a worked line only before the student writes one
+    panel.innerHTML = `<div class="titlebar"><h2>Algebra</h2><button id="algSheetBtn" title="${own ? 'The equations on your sheet, to bring in as a new line' : 'Every relationship in the library, by idea'} (or press / in the line box)">${sheetName}</button><button id="algUndo" title="Step back one line; later lines stay greyed until you continue">Undo</button>${onClose ? '<button class="x" id="algClose" title="Put the algebra away (your lines stay)">×</button>' : ''}</div>
+      <div class="body"><ol class="alglines" id="algLines">${rows || `<li class="small muted">Pick a relationship from the <b>${sheetName}</b>, or type a line below.</li>`}</ol>
+      ${ex ? `<div class="row"><button class="dfmini" id="algExample" title="The app writes one line as a worked example, then it is your turn">Show me the ${st.lines.length ? 'next' : 'first'} line</button></div>` : ''}
       <div class="row algrow"><input id="algIn" type="text" autocomplete="off" spellcheck="false" placeholder="Type a line (I = m_1*r_1**2) · / for the sheet" aria-label="Type a line or an operation"><button id="algGo">Add</button></div>
       <div class="algac" id="algAc"></div>
       <p class="small" id="algMsg" aria-live="polite">${esc(st.msg)}</p>
       ${review.html()}
-      <p class="small muted">Tap a term for what you can do with it; hold <b>Shift</b> to do it to both sides. Enter applies a typed operation (/ 2, * m, ^2, sqrt, simplify) to the term you picked; Shift+Enter to both sides, and Shift+Enter on r_1 = L/2 swaps r₁ for L/2 everywhere. You can also drag a term across the =, or a known from the Knowns card onto a symbol.</p></div>`;
+      <p class="small muted"><b>Enter</b> adds a line you type (with an =). Tap a term to divide, move or substitute it; hold <b>Shift</b> to do it to both sides. Shift+Enter on r_1 = L/2 swaps r₁ for L/2 everywhere.</p></div>`;
   }
 
   // ---- autocomplete: only defined symbols
@@ -557,24 +573,34 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null, e
   });
 
   // ---- the formula sheet popup
+  // guided mode: only the student's sheet, each law as taught (one group, searched by its words)
+  function ownSheet(q){
+    const words = q.trim().toLowerCase().split(/\s+/).filter(Boolean), items = [];
+    for (const p of pool()){
+      if (!words.every(w => `${p.label} ${p.name} ${p.text}`.toLowerCase().includes(w))) continue;
+      try { items.push({ key: p.key, line: parseEq(p.text), name: `${p.label} · ${p.name}`, vars: [], label: p.label }); } catch (e) { if (!(e instanceof InputError)) throw e; }
+    }
+    return items.length ? [{ title: 'Your sheet', chapter: '', items }] : [];
+  }
+  const groups = (q) => pool() ? ownSheet(q) : sheet(q, st.n);
   function openSheet(){
     if (st.n === null) st.n = Math.max(1, masses());
-    sh.innerHTML = `<div class="row"><input id="algSheetQ" type="search" autocomplete="off" placeholder="Search: moment of inertia, I, point mass" aria-label="Search the formula sheet"><button class="dfmini" data-close title="Close (Esc)">×</button></div><div class="algsheet" id="algSheetList"></div>`;
+    sh.innerHTML = `<div class="row"><input id="algSheetQ" type="search" autocomplete="off" placeholder="${pool() ? 'Search your sheet' : 'Search: moment of inertia, I, point mass'}" aria-label="Search the formula sheet"><button class="dfmini" data-close title="Close (Esc)">×</button></div><div class="algsheet" id="algSheetList"></div>`;
     sh.hidden = false; listSheet(); $('algSheetQ').focus();
   }
   function listSheet(){
     const q = $('algSheetQ').value;
-    st.sheet = sheet(q, st.n).flatMap(g => g.items);
+    const gs = groups(q); st.sheet = gs.flatMap(g => g.items);
     const looks = (g) => st.look.length && g.items.some(it => it.vars.some(v => st.look.includes(v)));
-    $('algSheetList').innerHTML = sheet(q, st.n).map(g => `<div class="algsg${looks(g) ? ' look' : ''}"><div class="subhead">${esc(g.title)} <span class="muted small">${esc(g.chapter)}</span>${looks(g) ? ' <span class="small algwarn">look here</span>' : ''}</div>${g.items.map(it => `<div class="algse">
+    $('algSheetList').innerHTML = gs.map(g => `<div class="algsg${looks(g) ? ' look' : ''}"><div class="subhead">${esc(g.title)} <span class="muted small">${esc(g.chapter)}</span>${looks(g) ? ' <span class="small algwarn">look here</span>' : ''}</div>${g.items.map(it => `<div class="algse">
       <button class="algpick" data-pick="${esc(it.key)}">${eqText(it.line, { html: true })}</button><span class="small muted">${esc(it.name)}</span>
-      ${it.key === 'Isum' ? `<span class="small algsn"><button class="dfmini" data-sheetn="-1" aria-label="One mass fewer">−</button> <span id="algSheetN">${st.n}</span> mass${st.n === 1 ? '' : 'es'} <button class="dfmini" data-sheetn="1" aria-label="One more mass">+</button></span>` : ''}</div>`).join('')}</div>`).join('') || '<p class="small muted">Nothing matches. Try a word like “inertia”, “torque” or a symbol like I.</p>';
+      ${it.key === 'Isum' ? `<span class="small algsn"><button class="dfmini" data-sheetn="-1" aria-label="One mass fewer">−</button> <span id="algSheetN">${st.n}</span> mass${st.n === 1 ? '' : 'es'} <button class="dfmini" data-sheetn="1" aria-label="One more mass">+</button></span>` : ''}</div>`).join('')}</div>`).join('') || `<p class="small muted">${pool() ? (pool().length ? 'Nothing on your sheet matches.' : 'Your sheet is empty: gather equations from the Equation library first.') : 'Nothing matches. Try a word like “inertia”, “torque” or a symbol like I.'}</p>`;
     st.pick = q.trim() ? 0 : -1; markPick();   // neutral: nothing is marked until the student searches or uses the arrows
   }
   const markPick = () => sh.querySelectorAll('.algpick').forEach((b, j) => b.classList.toggle('on', j === st.pick));
   function choose(key){
     const it = st.sheet.find(x => x.key === key); if (!it) return;
-    sh.hidden = true; add(clone(it.line), 'from the formula sheet'); $('algIn')?.focus();
+    sh.hidden = true; add(clone(it.line), it.label ? `from your sheet: ${it.label}` : 'from the formula sheet', it.label ? { sheet: key } : {}); $('algIn')?.focus();
   }
   sh.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
@@ -597,7 +623,7 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null, e
     const lineIx = st.sel ? st.sel.line : st.cur;
     try {
       if (t.includes('=') && !(shift && st.cur >= 0)){
-        const eq = parseEq(t); checkNames([eq.l, eq.r]); add(eq, 'typed'); return true;
+        const eq = parseEq(t), read = checkNames([eq.l, eq.r]); add(eq, read.length ? `typed (${read.join(', ')})` : 'typed'); return true;
       }
       const op = parseOp(t); checkNames([op.x].filter(Boolean));
       if (lineIx < 0) throw new InputError('There is no line yet: type one with an = sign, or press / for the formula sheet.');
@@ -608,7 +634,8 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null, e
   panel.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (review.click(b)) return;
-    if (b.id === 'algExample'){ const ex = example(); if (ex){ try { const eq = parseEq(ex.text); add(eq, `worked example: ${ex.how}`, { why: ex.why, ex: true }); say('That line was a worked example. Now it is your turn: the next relationship, or an operation on this one.'); } catch (e) { if (!(e instanceof InputError)) throw e; } } return; }
+    if (b.id === 'algClose'){ closeMenu(); sh.hidden = true; onClose?.(); return; }
+    if (b.id === 'algExample'){ const ex = example(false, st.lines.map(L => L.sheet).filter(Boolean)); if (ex){ try { const eq = parseEq(ex.text); add(eq, `worked example: ${ex.how}`, { why: ex.why, ex: true }); say('That line was a worked example. Now it is your turn: the next relationship, or an operation on this one.'); } catch (e) { if (!(e instanceof InputError)) throw e; } } return; }
     if (b.id === 'algSheetBtn') return openSheet();
     if (b.id === 'algUndo'){ if (st.cur >= 0){ st.cur--; st.sel = null; closeMenu(); render(); } return; }
     if (b.id === 'algGo'){ if (enter($('algIn').value, e.shiftKey)) $('algIn').focus(); return; }
@@ -625,5 +652,12 @@ export function createWorkspace({ panel, knowns, masses, say, tk = () => null, e
   });
 
   function clear(){ st.lines = []; st.cur = -1; st.sel = null; st.n = null; st.msg = ''; st.names = {}; st.look = []; review.clear(); closeMenu(); sh.hidden = true; render(); }
-  return { render, clear, state: () => ({ lines: st.lines.map(L => eqText(L)), cur: st.cur, how: st.lines.map(L => L.how), names: Object.fromEntries(Object.entries(st.names).map(([k, v]) => [k, print(v)])), review: review.state() }) };
+  // “I’ll do the algebra” on an equation of the sheet: that law becomes a line (once), and the line box is ready
+  function start({ key, label, text }){
+    const at = st.lines.findIndex((L, i) => i <= st.cur && L.sheet === key);
+    if (at < 0) add(parseEq(text), `from your sheet: ${label}`, { sheet: key });
+    else render();
+    $('algIn')?.focus({ preventScroll: true });
+  }
+  return { render, clear, start, state: () => ({ lines: st.lines.map(L => eqText(L)), cur: st.cur, how: st.lines.map(L => L.how), names: Object.fromEntries(Object.entries(st.names).map(([k, v]) => [k, print(v)])), review: review.state() }) };
 }

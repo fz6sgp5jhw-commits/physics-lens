@@ -84,7 +84,7 @@ test('fan blade: α(t), average α and revolutions from t = 0 to ω = 0 (gate)',
     near(await found(page, 'aavg'), -6);
     near(await found(page, 'nrev'), 16 / (2 * Math.PI));
     near(await found(page, 'wavg'), 8);
-    const work = await page.innerText('#sheetWin');
+    const work = await page.innerText('#solWin');   // phase S1: once solved, the Solution card holds every step
     assert.match(work, /−2 s.*reject/is, 'the negative root is listed as rejected');
     // the sheet's span card names both moments
     assert.match(await page.innerText('#spanCard'), /t = 0 s/); assert.match(await page.innerText('#spanCard'), /ω = 0/);
@@ -106,7 +106,7 @@ test('fan blade: from t = 1 s to t = 3 s it turns back, so Δθ and the angle tr
     await solved(page);
     near(await found(page, 'dth'), -2);
     near(await found(page, 'dtrav'), 12);
-    assert.match(await page.innerText('#sheetWin'), /changes direction/i);
+    assert.match(await page.innerText('#solWin'), /changes direction/i);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -125,7 +125,7 @@ test('θ(t) given: revolutions between "ω = 0" and "θ = 0" (gate)', async () =
     await solved(page);
     near(await found(page, 'nrev'), -4 * Math.SQRT2 / (2 * Math.PI));
     near(await found(page, 'dtrav'), 4 * Math.SQRT2);
-    const work = await page.innerText('#sheetWin');
+    const work = await page.innerText('#solWin');   // phase S1: once solved, the Solution card holds every step
     assert.match(work, /t = 0 s is where it starts/);
     // the path used the ladder (ω from θ) for the "ω = 0" moment
     const kinds = await page.evaluate(() => window.__rl.path.map(p => p.kind));

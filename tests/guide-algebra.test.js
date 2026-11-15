@@ -15,7 +15,11 @@ async function open(page, level){
   await page.evaluate(() => window.__rl.course.open('disc', 'long'));
 
   await applyKey(page, { ch: 'rolling', key });
-  await page.click(`[data-glevel="${level}"]`);
+  // phase S1: the typed algebra starts from an equation on the sheet (“I’ll do the algebra”), whose law is line 1
+  await page.click('#libBtn'); await page.click('[data-gather="D5"]');
+  await page.click('#kindWrap [data-kind="law"]'); await page.click('#kindCheck'); await page.click('#kindDone'); await page.click('#libClose');
+  await page.click(`[data-glevel="${level}"]`);   // after the kind tap, which earns a step of fading
+  await page.click('#sheet .eq[data-eq="D5"] [data-alg]');
 }
 const ws = (page) => page.evaluate(() => window.__rl.ws.state());
 const line = async (page, text) => { await page.fill('#algIn', text); await page.press('#algIn', 'Enter'); };
@@ -28,8 +32,8 @@ test('On my own: the disc and block solved by typed and tapped algebra; checks p
     await open(page, 'own');
     assert.ok(await page.isVisible('#dfWork'), 'the algebra workspace is in guided mode');
     assert.match(await page.textContent('#showBtn'), /last resort/);
-    // typed: the three relationships for the block, the disc and the string, and I for a solid disc
-    await line(page, 'm*g - T = m*a');
+    // line 1 is the block's law from the sheet; typed: the disc, the string, and I for a solid disc
+    assert.equal((await ws(page)).lines[0], 'mg − T = ma');
     await line(page, 'T*R = I*alpha');
     await line(page, 'alpha = a/R');
     await line(page, 'I = M*R**2/2');
@@ -72,7 +76,6 @@ test('a planted slip (the disc’s equation without the lever arm) is found with
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await open(page, 'own');
-    await line(page, 'm*g - T = m*a');
     await line(page, 'T = I*alpha');            // line 2: the lever arm R is missing
     await line(page, 'a = R*alpha');
     await page.click('#algCheck');
@@ -94,11 +97,11 @@ test('Walk me through: the app writes the first line as a worked example, then i
     await open(page, 'walk');
     await page.click('#algExample');
     const s = await ws(page);
-    assert.equal(s.lines.length, 1); assert.match(s.how[0], /^worked example: /);
+    assert.equal(s.lines.length, 2); assert.match(s.how[1], /^worked example: /);
     assert.match(await page.textContent('#dfWork .alhwhy'), /law|relationship/);
     assert.equal(await page.locator('#algExample').count(), 0, 'one line only: the next is the student’s');
     await line(page, 'a = R*alpha');
-    assert.equal((await ws(page)).lines.length, 2);
+    assert.equal((await ws(page)).lines.length, 3);
     // at "On my own" the button isn't offered
     await page.click('[data-glevel="own"]'); await page.click('#clearBtn').catch(() => {});
     assert.deepEqual(errors, []);

@@ -329,7 +329,7 @@ Asked for by the user after the pilot, to study from PHYS 2210 Sample Exam 3A.
 **Start with:** `Do phase C6 in ROADMAP.md.` Read plan section 8 (hints).
 - [ ] "Next step": what is sought → which principle → the route with the most steps already done (Andes's rule).
 - [ ] More "What's wrong?" handlers, mined from the slips seen in the pilot (dropped term, wrong component, unit slip, …), each with its test.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] All tests pass. Cache bumped. One line here on what changed.
 
 ---
 
@@ -394,7 +394,7 @@ The student can play a solved problem as a story: the scene animates, a narratio
 - [ ] Energy graph along the motion: K (moving), K (turning), U, friction losses and the total, with a marker that follows the scene.
 - [ ] A "density" cue: the bodies are shaded by how much of the energy is in them right now (kinetic share), with force and torque arrows sized to their values, so the student sees where the action is.
 - [ ] Narration written for the four lessons' problems first, then the practice bank; calm mode shows the final frame and a step list with no motion.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
+- [x] All tests pass. Cache bumped. One line here on what changed.
 
 ## Phase 10: the new look (design approved 2026-11-13: the pen-and-ink journal)
 **Start with:** `Do phase 10 in ROADMAP.md.` Read `docs/redesign-plan.md` (the whole file) and open `mockups/redesign-ink.html`: that prototype is the approved look. The earlier brief (pastels, a lemur, cel animation) is replaced by it.
@@ -466,11 +466,11 @@ What changed (M4): `js/sheet.js` and `#sheetPage`: each lesson in the Course map
 - [x] Header: Course & exams as a main button; Practice problems folded into the Course; the rest under one "More".
 - [x] One instruction line (doing/why/next); drop the duplicate tip line, Inspect list and canvas footnote text; problem text once.
 - [x] Route card merged into Conditions: asked once, answers set the conditions.
-- [ ] Equation sheet: each equation offers "Solve it for me" or "I'll do the algebra" (typed workspace started from it, the sheet's equations available to substitute); the separate Algebra panel and its own formula sheet go.
-- [ ] One Solution panel when solved (answers, steps line by line, what matters) in place of Work / What matters / Path so far.
-- [ ] Bugs: drawn mass symbol vs the unit's (m/M); "target unreachable" names the missing given or condition; Check my diagram verdict where the student looks; Enter adds a typed line; typed names accept common spellings (f → f_s) or offer them; modals don't stack.
-- [ ] All tests pass. Cache bumped. One line here on what changed.
-Resume from: S1, box 6 (equation sheet: “Solve it for me” / “I’ll do the algebra” per equation; the Algebra panel `#dfWork` and its formula sheet go). Done so far: boxes 1–5 and, from the Bugs box, m/M and the menu (closes on a pick, Escape closes only it). Still to do in Bugs: “target unreachable” names the missing given or condition; Check my diagram verdict where the student looks; Enter adds a typed line; typed names accept common spellings; modals don’t stack. Note: the old drawing-first code has no switch now but still runs from `pl-mode = 'draw'` (its tests); decide in a later phase whether its part cards fold into Setup or go. The walkthrough findings are numbered 1–19 in `docs/simplify-audit.md`.
+- [x] Equation sheet: each equation offers "Solve it for me" or "I'll do the algebra" (typed workspace started from it, the sheet's equations available to substitute); the separate Algebra panel and its own formula sheet go.
+- [x] One Solution panel when solved (answers, steps line by line, what matters) in place of Work / What matters / Path so far.
+- [x] Bugs: drawn mass symbol vs the unit's (m/M); "target unreachable" names the missing given or condition; Check my diagram verdict where the student looks; Enter adds a typed line; typed names accept common spellings (f → f_s) or offer them; modals don't stack.
+- [x] All tests pass. Cache bumped. One line here on what changed.
+Done (2026-11-15): each sheet equation offers Solve it for me ▶ or I’ll do the algebra (the typed workspace opens under it, started from its law, with only the sheet to substitute from); one Solution card (answers, every step, what matters) replaces Work / What matters / Path once solved; an unreachable target names the missing given or condition; Check my diagram's verdict also goes on the instruction line; typed short names are read as the problem's (f → f_s); a dialog closes the algebra pop-ups. Cache v50. Still open for a later phase: the old drawing-first code (pl-mode = 'draw') and its part cards.
 
 ---
 

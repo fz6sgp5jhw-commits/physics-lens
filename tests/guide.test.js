@@ -112,7 +112,7 @@ test('the demo solves an example while naming each control, then hands back an e
       await page.click('#demoNext');
     }
     assert.match(steps[0], /The problem/); assert.match(steps[1], /Givens/); assert.match(steps[2], /Conditions/); assert.match(steps[3], /Target/);
-    const solvedText = steps.filter(t => /Gather/.test(t) && /Solve for/.test(t));
+    const solvedText = steps.filter(t => /Gather/.test(t) && /Solve it for me/.test(t));
     assert.ok(solvedText.length >= 1, `a gather-and-solve step names the library and the Solve button: ${steps.join(' | ')}`);
     assert.ok(steps.some(t => /Hint/.test(t)));
     assert.equal(await page.evaluate(() => 'a' in window.__rl.found), true, 'the app really solved it');

@@ -248,6 +248,7 @@ function say(html){
 
 // ---------- dialog ----------
 function dialog(title, msg, good = false){
+  document.querySelectorAll('.algpop').forEach(p => { p.hidden = true; });   // one window at a time
   $('dlgTitle').textContent = title;
   $('dlgMsg').innerHTML = msg;
   $('dlg').classList.toggle('good', good);
@@ -700,8 +701,8 @@ function ladderCard(L, ks){
   return card;
 }
 function renderSheet(){
-  const box = $('sheet'), ww = $('workWin');
-  if (ww.parentElement === box) box.after(ww); // take the work panel out before rebuilding the cards
+  const box = $('sheet'), ww = $('workWin'), aw = $('dfWork');
+  for (const w of [aw, ww]) if (w.parentElement === box) box.after(w); // take the work panels out before rebuilding the cards
   box.innerHTML = '';
   const ks = knownSet();
   const L = ladder();
@@ -717,11 +718,12 @@ function renderSheet(){
     card.dataset.eq = e;
     if (suggested(e)) card.classList.add('suggest');
     let act;
+    const algBtn = !eq.eq ? '' : `<button data-alg="1" title="Write this law as the first line and do the algebra yourself; the other equations on your sheet can be brought in to substitute">I’ll do the algebra</button>`;
     if (!ok) act = `<span class="small warn">Doesn’t apply now (needs ${naReason(e)})</span>`;
-    else if (s) act = `<button class="go" data-solve="${s}">Solve for ${VARS[s].sym} ▶</button>${s === curTarget() ? '<span class="small hot">← target!</span>' : ''}`;
-    else if (fu) act = `<button class="go" data-solve="fn:${fu}">Solve for ${symOf('fn:' + fu)} ▶</button>${'fn:' + fu === curTarget() ? '<span class="small hot">← target!</span>' : ''}`;
+    else if (s || fu){ const v = s || 'fn:' + fu;
+      act = `<span class="small">Finds <b>${symOf(v)}</b>${v === curTarget() ? ' <span class="hot">← target!</span>' : ''}:</span><button class="go" data-solve="${v}" title="The app solves it, symbols first, and shows each step">Solve it for me ▶</button>${algBtn}`; }
     else if (u.length === 0) act = `<button data-check="1">Check ✓</button><span class="small muted">All known.</span>`;
-    else act = `<span class="small muted">Still missing: ${u.filter(x => !ks.has('fn:' + x)).map(x => VARS[x].sym).join(', ')}</span>`;
+    else act = `<span class="small muted">Still missing: ${u.filter(x => !ks.has('fn:' + x)).map(x => VARS[x].sym).join(', ')}</span>${algBtn}`;
     const got = S.path.filter(p => p.kind === 'eq' && p.eq === e).map(p => `→ ${symOf(p.v)} = ${isFn(p.v) ? polyHTML(p.poly) : p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`}`);
     const lastP = S.path[S.path.length - 1];
     if (lastP && lastP.kind === 'eq' && lastP.eq === e) card.classList.add('last');
@@ -734,6 +736,7 @@ function renderSheet(){
       if (ev.target.closest('[data-rm]')){ S.sheet = S.sheet.filter(x => x !== e); renderAll(false); return; }
       const sb = ev.target.closest('[data-solve]'); if (sb){ const n = S.path.length; solve(e, sb.dataset.solve).then(() => { if (S.path.length > n) S.guide?.correct(); }); return; }
       if (ev.target.closest('[data-check]')){ check(e); return; }
+      if (ev.target.closest('[data-alg]')){ startAlgebra(e); return; }
       if (ev.target.closest('.sym, .concept')) return;
       if (ok && u.length > 1){ S.guide?.wrong(); dialog('Illegal operation', `<b>TOO MANY UNKNOWNS</b>${eq.label} still has <b>${u.length}</b> unknowns: ${u.map(x => VARS[x].sym).join(' and ')}. One equation can only pin down one unknown. Find one of them first and this one will light up.`); }
     });
@@ -741,16 +744,19 @@ function renderSheet(){
   }
   // the work opens under the card that was solved last
   const last = box.querySelector('.eq.last'); if (last) last.after(ww);
+  // the typed algebra sits under the equation it was started from
+  const from = S.mode !== 'draw' && S.algOn && box.querySelector(`.eq[data-eq="${S.algOn}"]`); if (from) from.after(aw);
   // status line
   const st = $('sheetStatus'), cur = curTarget();
   if (!S.targets.length) st.innerHTML = 'Pick what the question asks for with <b>🎯 add a target</b>.';
   else if (!cur) st.innerHTML = 'Every target is found.' + (K() ? ' Press <b>Replay motion</b> to watch it.' : '');
   else {
-    const sp = shortest(S.sheet.filter(applies), ks, baseOf(cur)), lp = shortest(appEqs(), ks, baseOf(cur));
+    const g = baseOf(cur), mine = S.sheet.filter(applies);   // a path search with no route is costly: check reachability first
+    const sp = reaches(mine, ks, g) ? shortest(mine, ks, g) : null, lp = sp || reaches(appEqs(), ks, g);
     const tl = `${letter(S.targets.indexOf(cur))} ${symOf(cur)}`;
     if (sp) st.innerHTML = `Your sheet can reach ${tl} in <b>${sp.length}</b> step${sp.length > 1 ? 's' : ''}.`;
     else if (lp) st.innerHTML = `Your sheet can’t reach ${tl} yet. Gather more from the library, or press <b>Hint</b>.`;
-    else st.innerHTML = `Even the whole library can’t reach ${tl} yet. Is there a hidden given or a condition to set?`;
+    else st.innerHTML = `Even the whole library can’t reach ${tl} yet. ${missingText(baseOf(cur))}`;
     const sys = findSystem(ks);
     if (sys){
       const U = sys.pair.map(x => VARS[x].sym), la = EQS[sys.a].label, lb = EQS[sys.b].label;
@@ -762,6 +768,36 @@ function renderSheet(){
       $('sysBtn').onclick = () => combine(sys);
     }
   }
+}
+
+// when no route reaches a target: which one given, hidden-given condition or condition would open one (phase S1)
+// can the goal be reached at all? Knowing more never hurts, so the closure of every move answers it without a path search
+function reaches(eqs, from, goal){
+  const ks = new Set(from);
+  for (let grew = true; grew && !ks.has(goal);){
+    grew = false;
+    for (const m of moves(eqs, ks)) if (!ks.has(m.v)){ ks.add(m.v); if (m.moment) ks.add('m:' + m.v); grew = true; }
+  }
+  return ks.has(goal);
+}
+function missingFor(goal){
+  const ks = knownSet(), eqs = appEqs(), conds = chapter().conditions || [], out = [];
+  for (const v of chVars()){
+    if (ks.has(v) || v === goal || !VARS[v]) continue;
+    const more = new Set(ks); more.add(v);
+    if (!reaches(eqs, more, goal)) continue;
+    const c = conds.find(c => c.type === 'hidden' && c.sets && v in c.sets && !S.cond[c.key]);
+    out.push(c ? `the condition <b>${c.label}</b> (it gives ${VARS[v].sym} = ${c.sets[v]})` : `a value or symbol for <b>${VARS[v].sym}</b> (${nm(v)})`);
+  }
+  for (const c of conds.filter(c => c.type === 'toggle' && !c.ask)){
+    const was = S.cond[c.key]; S.cond[c.key] = !was;
+    try { if (reaches(appEqs(), ks, goal)) out.push(`the condition <b>${c.label}</b> turned ${was ? 'off' : 'on'}`); } finally { S.cond[c.key] = was; }
+  }
+  return out;
+}
+function missingText(goal){
+  const m = missingFor(goal);
+  return m.length ? `It would with ${m.slice(0, 3).join(', or ')}. Does the problem give it, or say it in words?` : 'One given is not enough: check the problem for two quantities you haven’t added, and the conditions for anything it says in words.';
 }
 
 // which earlier steps a solved step used: the inputs of its equation that were found, not given
@@ -831,7 +867,7 @@ function nowState(){
 const NOW = createNowBar({ el: $('nowBar'), state: nowState, open: (i) => openStage(i) });
 function renderStage(){
   const i = S.stage, locked = i === 3 && !solveOpen();
-  document.querySelectorAll('.ws-right [data-stage]').forEach(el => el.classList.toggle('off', !(el.id === 'dfWork' && S.mode === 'draw') && !el.dataset.stage.split(' ').includes(String(i))));
+  document.querySelectorAll('.ws-right [data-stage]').forEach(el => el.classList.toggle('off', el.id === 'dfWork' ? !(S.mode === 'draw' || (i === 3 && S.algOn)) : !el.dataset.stage.split(' ').includes(String(i)) || (el.id === 'solWin' && !solvedAll()) || (el.id === 'workWin' && solvedAll())));
   $('paneForces').hidden = i !== 1; $('paneSide').hidden = i === 1;
   $('sheetWin').classList.toggle('locked', locked);
   $('sheetLock').hidden = !locked; if (locked) $('sheetLock').innerHTML = `🔒 You can read your sheet. ${lockText()}`;
@@ -1327,8 +1363,8 @@ async function walkPath(){
   while (curTarget()){
     const goal = baseOf(curTarget());
     if (known(goal)){ if (!S.quiet) say(isRank(curTarget()) ? 'To rank the cases, add at least two complete rows to the scenario table.' : ''); return false; }
-    const lp = shortest(appEqs(), knownSet(), goal);
-    if (!lp){ if (!S.quiet) dialog('No route', '<b>TARGET UNREACHABLE</b>No chain of equations gets from your knowns to the target. Look for a hidden given or a condition you haven’t set.'); return false; }
+    const lp = reaches(appEqs(), knownSet(), goal) ? shortest(appEqs(), knownSet(), goal) : null;
+    if (!lp){ if (!S.quiet) dialog('No route', `<b>TARGET UNREACHABLE</b>No chain of equations gets from your knowns to ${symOf(goal)}. ${missingText(goal)}`); return false; }
     for (const s of lp) if (s.kind === 'eq' && !S.sheet.includes(s.eq)){ S.sheet.push(s.eq); renderAll(false); await sleep(350); }
     if (!S.quiet) say(`Path to ${symOf(goal)}: ${lp.map(s => `${s.kind === 'eq' ? EQS[s.eq].label : s.kind === 'sys' ? sysLabel(s) : MOVE_LABEL[s.kind]}→${symOf(s.v)}`).join(', then ')}.`);
     for (const s of lp){ if (s.kind === 'eq') await solve(s.eq, s.v); else if (s.kind === 'sys') await sysOp(s); else await ladderOp(s); await sleep(450); }
@@ -1337,12 +1373,20 @@ async function walkPath(){
   return true;
 }
 
+// the Solution card (phase S1), shown once every target is found in place of the Work panel: the answers, every step
+// line by line (the app's own worked steps, as the Work panel showed them), then what matters
+const pathVal = (p) => isFn(p.v) ? polyHTML(p.poly) : p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`;
 function renderPath(){
   const box = $('pathList');
-  if (!S.path.length){ box.innerHTML = '<div class="empty">Your steps will stack up here: which equation, what it found.</div>'; return; }
-  box.innerHTML = '<ol>' + S.path.map((p, i) => `<li data-i="${i}">${p.kind === 'eq' ? EQS[p.eq].label : MOVE_LABEL[p.kind]} → ${symOf(p.v)} = ${isFn(p.v) ? polyHTML(p.poly) : p.expr && !X.isNumeric(p.expr) ? X.toHTML(p.expr, S.printOpts) : `${fmt(p.val)} ${unitOf(p.v)}`}</li>`).join('') + '</ol>';
-  box.querySelectorAll('li').forEach(li => li.onclick = () => { const p = S.path[+li.dataset.i]; $('work').innerHTML = p.html; $('work').querySelectorAll('.line').forEach(l => l.classList.add('show')); $('workTitle').textContent = p.title; paintSyms(); });
+  $('solAnswers').innerHTML = S.targets.filter(t => known(t)).map(t => {
+    if (isRank(t)) return `<div>Ranking by ${VARS[t.slice(5)].sym}: ${rankText(t.slice(5)).order}</div>`;
+    const p = S.path.find(q => q.v === t);
+    return `<div>${symOf(t)} = ${p ? pathVal(p) : isFn(t) ? '' : `${fmt(val(t))} ${unitOf(t)}`}</div>`;
+  }).join('');
+  box.innerHTML = S.path.map((p, i) => `<div class="sstep"><div class="stitle">Step ${i + 1}: ${p.kind === 'eq' ? EQS[p.eq].label : MOVE_LABEL[p.kind]} → ${symOf(p.v)} = ${pathVal(p)}</div>${p.html}</div>`).join('');
+  box.querySelectorAll('.line').forEach(l => l.classList.add('show'));
 }
+function solvedAll(){ return S.targets.length > 0 && !curTarget(); }
 
 // ---------- practice bank + setup check ----------
 $('bankBtn').onclick = () => {
@@ -1823,7 +1867,7 @@ function stepPulse(){ if (calm()) return; const r = $('workWin').getBoundingClie
 // ---------- toggles ----------
 $('calmBtn').onclick = () => { const on = !calm(); document.body.classList.toggle('calm', on); $('calmBtn').setAttribute('aria-pressed', String(on)); field.setCalm(on); try { localStorage.setItem('rl-calm', on ? '1' : '0'); } catch {} draw(); };
 $('soundBtn').onclick = () => { S.sound = !S.sound; $('soundBtn').setAttribute('aria-pressed', String(S.sound)); beep(660, 0.08); };
-$('clearBtn').onclick = async () => { if (S.busy || !await beforeClearing('Clear all')) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); WS.clear(); S.fbd = { body: null, forces: {} }; S.board = null; NB.forget(); renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
+$('clearBtn').onclick = async () => { if (S.busy || !await beforeClearing('Clear all')) return; beep(120, 0.3, 'sine'); S.cond = defaultsFor(S.ch); resetAll(true); S.build.clear(); clearAlgebra(); S.fbd = { body: null, forces: {} }; S.board = null; NB.forget(); renderAll(); say('Cleared: the drawing and every known, target and equation are gone. The conditions are back to their defaults.'); };
 
 // ---------- systems: equations that must be solved together (js/systems.js finds them; combine eliminates) ----------
 // Any equation can be written as Z = 0: generated ones carry Z; for library ones it comes from a solver's template.
@@ -2008,17 +2052,29 @@ const GK = {
   },
 };
 // the first line of the worked example: the first law on the route, in the workspace's names
-function workedLine(cheap){
+function workedLine(cheap, have = []){
   if (S.mode === 'draw' || !S.targets.length || !S.condOk || !['demo', 'walk'].includes(S.guide?.level)) return null;
   if (cheap) return true;   // drawing the button must not search for a route on every redraw
   const targets = S.targets.filter(t => VARS[t] && !isFn(t) && !isRank(t)), pl = pickPlan({ targets, known: new Set(Object.keys(S.givens)), eqs: appEqs(), EQS, VARS });
-  const st = pl.steps && pl.steps[0]; if (!st) return null;
-  const text = EQS[st.eq].eq.replace(/\{(\w+)\}/g, (_, q) => VARS[q] ? `{${algId(q)}}` : q);
+  const st = pl.steps && pl.steps.find(x => !have.includes(x.eq)); if (!st) return null;
+  const text = lawText(st.eq);
   return { text, how: `${EQS[st.eq].label}, ${st.principle}`, why: `This is the ${EQS[st.eq].kind === 'law' ? 'law' : 'relationship'} for ${EQS[st.eq].cue}. ${EQS[st.eq].meaning}` };
 }
+// an equation's law as taught, in the workspace's names
+const lawText = (e) => EQS[e].eq.replace(/\{(\w+)\}/g, (_, q) => VARS[q] ? `{${algId(q)}}` : q);
 const WS = S.ws = createWorkspace({ panel: $('dfWork'), knowns: () => S.mode === 'draw' ? KN : GK, masses: () => S.build.shapes.filter(s => s.kind === 'block' || s.kind === 'particle').length, say,
-  tk: () => S.mode === 'draw' ? S.tk.state() : null, example: workedLine, onCheck: (ok) => S.guide?.[ok ? 'correct' : 'wrong']() });
+  tk: () => S.mode === 'draw' ? S.tk.state() : null, example: workedLine, onCheck: (ok) => S.guide?.[ok ? 'correct' : 'wrong'](),
+  pool: () => S.mode === 'draw' ? null : S.sheet.filter(e => applies(e) && EQS[e].eq).map(e => ({ key: e, label: EQS[e].label, text: lawText(e), name: EQS[e].principle || EQS[e].meaning || EQS[e].cue })),
+  onClose: () => { S.algOn = null; renderStage(); } });
 WS.render();
+// “I’ll do the algebra” on a sheet card (phase S1): the typed workspace opens under that card, started from its law
+function startAlgebra(e){
+  if (solveLocked()) return;
+  S.algOn = e; renderSheet(); renderStage();
+  WS.start({ key: e, label: EQS[e].label, text: lawText(e) });
+  $('dfWork').scrollIntoView({ block: 'nearest' });
+}
+function clearAlgebra(){ S.algOn = null; WS.clear(); }
 
 // choosing whether to draw is part of the skill: Setup offers to work without a picture (phase S1)
 $('noPicBtn').onclick = () => {
@@ -2482,7 +2538,7 @@ function renderFBD(){
   box.querySelectorAll('[data-fvar]').forEach(sel => sel.onchange = () => { fs[+sel.dataset.fvar].var = sel.value; afterForces(); });
   box.querySelectorAll('[data-fdir]').forEach(sel => sel.onchange = () => { S.build.checkpoint(); const f = fs[+sel.dataset.fdir]; f.dir = sel.value; if (sel.value !== 'custom') delete f.ang; afterForces(); });
   box.querySelectorAll('[data-fdel]').forEach(btn => btn.onclick = () => { S.build.checkpoint(); fs.splice(+btn.dataset.fdel, 1); afterForces(); });
-  const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; };
+  const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; say(html); $('fbdMsg').scrollIntoView({ block: 'nearest' }); };
   $('fbdCheck').onclick = () => { const bad = problems(b); msg(bad.length ? bad.map(x => '✗ ' + x).join('<br>') : '✓ This free-body diagram looks right: every force has a source, and each one points the way it must.', !bad.length); };
   $('fbdWrite').onclick = async () => {
     const bad = problems(b);
@@ -2638,7 +2694,7 @@ function renderExtFBD(b, box){
   box.querySelectorAll('[data-tilt]').forEach(btn => btn.onclick = () => { o.tilt = btn.dataset.tilt; afterForces(); });
   box.querySelectorAll('[data-why]').forEach(btn => btn.onclick = () => { o.why = +btn.dataset.why; renderFBD(); });
   $('fbdAxis')?.addEventListener('change', (e) => { o.axis = e.target.value; o.why = null; afterForces(); });
-  const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; };
+  const msg = (html, ok) => { $('fbdMsg').className = 'fmsg ' + (ok ? 'ok' : 'bad'); $('fbdMsg').innerHTML = html; say(html); $('fbdMsg').scrollIntoView({ block: 'nearest' }); };
   $('fbdCheck').onclick = () => { const bad = problems(b); msg(bad.length ? bad.map(x => '✗ ' + x).join('<br>') : `✓ This diagram looks right: every force has a source and starts where it acts.`, !bad.length); };
   $('fbdWrite').onclick = async () => {
     const bad = problems(b);
@@ -2803,7 +2859,7 @@ async function openRecord(r){
   if (S.path.length && !await ask('Open a saved problem?', `<b>THIS REPLACES YOUR WORKSPACE</b>Your ${S.path.length} solved step${S.path.length > 1 ? 's' : ''} will be cleared. Save the problem first if you want to keep them.`, 'Open it')) return false;
   r = structuredClone(r); // the workspace changes its drawing and board; the saved record stays as it was
   switchChapter(r.chapter);
-  S.fbd = { body: null, forces: {} }; WS.clear();
+  S.fbd = { body: null, forces: {} }; clearAlgebra();
   if (r.drawing) S.build.load(r.drawing); else if (S.build.shapes.length) S.build.clear();
   DF.load(r.drawing && r.drawing.setup);
   $('problem').value = r.text;
@@ -2881,7 +2937,7 @@ async function loadLesson(p, ch){
   if (S.busy) return false;
   if (S.path.length && curTarget() && !await ask('Start this stop?', `<b>THIS REPLACES UNFINISHED WORK</b>Your ${S.path.length} solved step${S.path.length > 1 ? 's' : ''} will be cleared, and a target is still open.`, 'Start it')) return false;
   if (S.mode !== 'guided') setMode('guided');
-  switchChapter(ch); S.fbd = { body: null, forces: {} }; if (S.build.shapes.length) S.build.clear(); WS.clear(); S.board = null; NB.forget();
+  switchChapter(ch); S.fbd = { body: null, forces: {} }; if (S.build.shapes.length) S.build.clear(); clearAlgebra(); S.board = null; NB.forget();
   // a lesson chooses no condition for the student (phase S1): every box starts unticked and no choice is picked;
   // only the problem-type questions (asked with the givens) keep their defaults
   S.cond = Object.fromEntries(chapter().conditions.filter(c => c.ask || c.type === 'toggle' || c.type === 'hidden').map(c => [c.key, c.ask ? S.cond[c.key] : false]));
@@ -3072,7 +3128,7 @@ const DEMO_RUN = {
     showStage(3); addTarget(DEMO_P.key.targets[0]);
     const lp = shortest(appEqs(), knownSet(), curTarget()) || [], pl = curPlan();
     const more = lp.map((m, i) => ({ target: '#sheet', stage: 3, run: 'step', move: m, text: '' }));
-    return { text: `Target: <b>${symOf(curTarget())}</b>, what the question asks for. Naming it first tells you what to look for. ${pl.lines.slice(0, 2).join(' ')} Next, the <b>Equation library</b> (Gather) and the <b>sheet</b> (Solve ▶), once per equation.`,
+    return { text: `Target: <b>${symOf(curTarget())}</b>, what the question asks for. Naming it first tells you what to look for. ${pl.lines.slice(0, 2).join(' ')} Next, the <b>Equation library</b> (Gather) and the <b>sheet</b>: on each equation, Solve it for me ▶ or I’ll do the algebra.`,
       more: [...more, { target: '#hintBtn', stage: 3, text: 'Stuck? <b>Hint</b> nudges without solving, and <b>What am I looking for?</b> names the principle. <b>Show me the path</b> does it for you, and costs a star in a lesson.' }] };
   },
   async step(s){
@@ -3080,7 +3136,7 @@ const DEMO_RUN = {
     if (m.kind === 'eq'){ if (!S.sheet.includes(m.eq)) gather(m.eq); await solve(m.eq, m.v); }
     else if (m.kind === 'sys') await sysOp(m); else await ladderOp(m);
     const e = m.kind === 'eq' ? EQS[m.eq] : null;
-    return { text: e ? `Library → <b>+ Gather ${e.label}</b>: ${e.form} (${e.principle || e.cue}). Then <b>Solve for ${symOf(m.v)} ▶</b> on its card: the algebra appears in the Work panel, symbols first. Now ${symOf(m.v)} = ${showVal(m.v)}.` : `That step uses a system or the motion ladder: ${symOf(m.v)} = ${showVal(m.v)}.` };
+    return { text: e ? `Library → <b>+ Gather ${e.label}</b>: ${e.form} (${e.principle || e.cue}). Then on its card, <b>Solve it for me ▶</b> finds ${symOf(m.v)} and shows the algebra, symbols first (or <b>I’ll do the algebra</b> to write it yourself). Now ${symOf(m.v)} = ${showVal(m.v)}.` : `That step uses a system or the motion ladder: ${symOf(m.v)} = ${showVal(m.v)}.` };
   },
 };
 // what is drawn, for the lesson's walk list (kinds only)
