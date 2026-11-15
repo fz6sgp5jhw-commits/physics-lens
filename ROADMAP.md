@@ -415,6 +415,49 @@ Resume from: stage 3 (pen-and-ink shapes in `js/build.js` and the Motion canvas)
 
 ---
 
+## Mistake-driven phases (M1–M4), added 2026-11-14
+From the user's graded Exam 3 make-up (32/50). Points were lost in the setup, not the algebra: law chosen without its condition, target not named, a given in the wrong term, vectors as scalars. Design: `docs/mistake-plan.md` (patterns P1–P7 in section 1). The user wants an exam-style sheet with step-by-step solutions; the private study guide `private/exam3-makeup-study-guide.html` is the model for M4. Order not decided against the sessions table above: ask the user.
+
+| Session | Phase | Start with | Model | Effort |
+|---|---|---|---|---|
+| 1 | M1 (new "What's wrong?" handlers, term units check) | `Do phase M1 in ROADMAP.md.` | Opus | Medium |
+| 2 | M2 (four missing lessons) | `Do phase M2 in ROADMAP.md.` | Opus | High |
+| 3 | M3 (setup gates) | `Do phase M3 in ROADMAP.md.` | Opus | Medium |
+| 4 | M4 (exam sheet, find the mistake, my mistakes) | `Do phase M4 in ROADMAP.md.` | Opus | High |
+
+## Phase M1: handlers from the student's mistakes
+**Start with:** `Do phase M1 in ROADMAP.md.` Read `docs/mistake-plan.md` sections 1, 2 and 4 (M1); `SLIPS` in `js/packs/mech.js`, the edits near `swapTrig` in `js/app.js`, `unitSlip`/`dropTerms` in `js/pick.js`.
+- [ ] Gate first (`tests/slips-more.test.js`): on lesson problems with answers from outside the app, a typed answer made with the compression/slide lengths swapped, ½kx not squared, friction work without d, momentum without masses, the spring stretch from energy instead of ΣF = 0, and a graph area over the wrong interval is each named by its handler.
+- [ ] Handlers `wrongLength`, `dropPower`, `dropFactor`, `noMass`, `energyNotForce`, `wrongInterval` as data plus edits, each with a sentence that explains the physics.
+- [ ] Term units check: a typed term whose units differ from the rest of its equation is named, with its units.
+- [ ] Fix: an imported stop with an unknown choice-condition word no longer throws in Check my setup.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+## Phase M2: the missing lessons
+**Start with:** `Do phase M2 in ROADMAP.md.` Read `docs/mistake-plan.md` section 4 (M2) and `docs/core-plan.md` section 8; lessons in `js/packs/mech.js` (`LESSONS`), the energy chapter's `vars` and `conditions`.
+- [x] Gate first (`tests/course-m2.test.js`): every new stop solves to its stored answer (worked outside the app) and passes Check my setup.
+- [x] "Hanging and dropping a spring": lowered slowly (ΣF = 0) and released (energy, 2× the stretch) side by side; Hooke's law equation and condition.
+- [x] "Impulse": J = area under F–t over a marked interval, J = Δp on a named body, direction and Newton 3 questions.
+- [x] "Elastic collision on a line" (uses `collide: 'elastic'`) and "Explosion in two dimensions" (three pieces, unequal masses, angle quadrant).
+- [x] All tests pass. Cache bumped. One line here on what changed.
+- What changed (M2): four lessons in the energy unit, 12 original problems, answers worked by script outside the app. `spring`: kx = mg when lowered slowly (H1) against energy when let go (H2: h = x_s); the let-go twin gives the drop and asks for k, because mgx = ½kx² has a root at 0 that stalls Show me. `impulse`: J₁ = m₁v₁f − m₁v₁i (J1), J = F_av t (J2), F–t graph areas (J3–J5, condition `tgraph`), J₂ = −J₁ and body 2's Δp (J6, J7); new route law `impulse`. `elastic`: the existing `collide: 'elastic'` (P1 + P3), plus a slide-then-hit transfer joined by P9 (v₁ᵢ = v, condition `slide2`). `explode`: `collide: 'explode'`, X1–X11 (mass, parts, Σm·u per axis, speed, tan⁻¹ and the quadrant choice `xneg`). New quantities Jp, Jq, Fav, ta, tb, Ja, Jb, Mt, m3, u1–u3, ph1–ph3, al3, u1x–u3y; notes for H1, J1, J6, X6, X9 and the energy guide. Fix: P4 (body 2 rises after the hit) no longer applies when a slide comes first (it turned h = 0 into all-zero answers). Gate `tests/course-m2.test.js`; cache v44.
+
+## Phase M3: setup gates
+**Start with:** `Do phase M3 in ROADMAP.md.` Read `docs/mistake-plan.md` section 4 (M3); `js/pick.js` (`looking`), the route card in `js/course.js`, `js/mc.js`.
+- [ ] Gate first (`tests/gates.test.js`): in a lesson the library stays closed until the target is named; picking a decoy reason is explained; two bodies' masses can't be entered without an owner; the multiple-choice read-back asks before it reveals.
+- [ ] The four gates, each switchable, each explaining the physics when it stops the student.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+## Phase M4: exam sheet, find the mistake, my mistakes
+**Start with:** `Do phase M4 in ROADMAP.md.` Read `docs/mistake-plan.md` sections 3 and 4 (M4); open `private/exam3-makeup-study-guide.html` for the layout the user likes. New code in `js/sheet.js`.
+- [ ] Gate first (`tests/sheet.test.js`): an exam sheet for a lesson shows every problem with no answer visible; steps reveal one at a time, symbols first; a typed wrong answer gets its slip; a generated erroneous example has exactly one faulty line, and the app checks the line, the pattern and the fix.
+- [ ] Exam sheet (printable) and step-by-step reveal.
+- [ ] Find the mistake, built from the slip edits on a solved path.
+- [ ] My mistakes: tally by pattern in `pl-mistakes`, with a Clear button; the top pattern picks the first hint and gate; a one-minute exam-wrapper screen.
+- [ ] All tests pass. Cache bumped. One line here on what changed.
+
+---
+
 ## Done
 - Pixel night skin and glowing vector field (2026-11-05).
 - Draw toolbar, folder tabs, turnable force/v/a arrows, centre of mass, ramp and shape resizing, undo (2026-11-05).

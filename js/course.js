@@ -13,6 +13,7 @@ export const LAWS = {
   momentum: 'Conservation of angular momentum: L₁ = L₂',
   pmomentum: 'Conservation of momentum: m₁v₁ + m₂v₂ before = after',
   work: 'Work and power: W = F Δx cos φ, P = W / t',
+  impulse: 'Impulse and momentum: J = F Δt = Δp',
   kinematics: 'Kinematics alone (constant acceleration)',
 };
 export const KIND_NAMES = { law: 'a law', rel: 'a relationship', def: 'a definition' };

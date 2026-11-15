@@ -71,8 +71,8 @@ test('the map, route card, kind tap, help switches, stars and progress', async (
   try {
     // the map is always open: every stop of both lessons can be opened, in any order
     await page.click('#courseBtn');
-    assert.equal(await page.locator('#courseBody .clesson').count(), 6);
-    assert.equal(await page.locator('#courseBody [data-stop]:not([disabled])').count(), 18);
+    assert.equal(await page.locator('#courseBody .clesson').count(), 10);
+    assert.equal(await page.locator('#courseBody [data-stop]:not([disabled])').count(), 30);
     await page.click('[data-stop="roll/transfer"]');
     assert.equal(await page.evaluate(() => window.__rl.mode), 'guided', 'lessons run in guided mode');
     assert.match(await page.inputValue('#problem'), /swing/);
