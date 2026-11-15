@@ -151,18 +151,18 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
   async function open(lessonId, kind){
     const lesson = lessons.find(l => l.id === lessonId), stop = lesson && lesson.stops.find(s => s.kind === kind);
     if (!stop || !await app.load(stop.problem, lesson.chapter)) return false;
-    cur = { lesson, stop, key: stopKey(lesson, stop), routeDone: false, stars: STARS, prompted: new Set() };
+    cur = { lesson, stop, key: stopKey(lesson, stop), routeDone: false, stars: STARS };
     app.setHelp(stop.help);
-    renderBar(); renderMap();
+    renderBar(); renderMap(); app.changed?.();
     event('start');
     return true;
   }
   // the targets changed (the student added one): the answer box offers them
   let lastTargets = '';
   function syncTargets(){ if (!cur) return; const k = app.targets().map(t => t[0]).join(); if (k !== lastTargets){ lastTargets = k; renderBar(); } }
-  function leave(){ cur = null; app.setHelp({ glow: true, showMe: true, hints: true }); renderBar(); renderMap(); }
+  function leave(){ cur = null; app.setHelp({ glow: true, showMe: true, hints: true }); renderBar(); renderMap(); app.changed?.(); }
   function renderBar(){
-    bar.hidden = !cur;
+    bar.hidden = !cur; document.body.classList.toggle('in-lesson', !!cur);
     if (!cur) { bar.replaceChildren(); return; }
     const i = cur.lesson.stops.indexOf(cur.stop), off = Object.entries(cur.stop.help).filter(([, on]) => !on).map(([k]) => ({ glow: 'glow', showMe: 'Show me', hints: 'hints' })[k]);
     const map = el('button', { textContent: 'Map', title: 'All lessons and stops' }); map.onclick = () => app.openMap();
@@ -184,13 +184,13 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
       ...(ts.length ? [el('div', { className: 'lrow' }, [el('span', { className: 'small', textContent: 'Worked it on paper?' }), pick, num, unit, chk, why])] : []));
   }
 
-  // ---- prompts on the hint line, once each per stop; the route card the first time Setup is left
+  // ---- the stop's own words for a stage: the Next line shows them (phase S1: one instruction line, no separate tip)
+  const STAGE_WHEN = ['start', 'forces', 'conditions', 'solve'];
+  function prompt(stage){ return cur?.stop.prompts.find(x => x.when === STAGE_WHEN[stage])?.text || ''; }
   function event(name){
     if (!cur) return;
     if (name === 'leftSetup' && !cur.routeDone){ routeCard(); return; }
-    if (name === 'solved'){ finish(); return; }
-    const p = cur.stop.prompts.find(x => x.when === name);
-    if (p && !cur.prompted.has(name)){ cur.prompted.add(name); app.say(`<b>Lesson:</b> ${app.esc(p.text)}`); }
+    if (name === 'solved') finish();
   }
 
   // ---- "What's the route?" — the laws and the picture cues; a wrong choice is explained, never blocked
@@ -285,7 +285,7 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
 
   renderMap();
   return {
-    open, leave, event, kindTap, bottomOut, renderMap, renderBar, syncTargets,
+    open, leave, event, prompt, kindTap, bottomOut, renderMap, renderBar, syncTargets,
     get active(){ return !!cur; }, get stop(){ return cur && cur.stop; }, get lesson(){ return cur && cur.lesson; }, get lessons(){ return lessons; }, get progress(){ return progress; },
     get stars(){ return cur ? cur.stars : null; },
   };

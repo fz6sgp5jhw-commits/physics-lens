@@ -312,8 +312,6 @@
   .ws-right [data-stage].off{display:none}
   .locknote{font-size:12.5px;margin:0 0 6px;padding:5px 9px;color:var(--found-ink);background:var(--tint-found);border:1.5px dashed var(--edge);border-radius:var(--wobble)}
   #sheetWin.locked .act button,#sheetWin.locked .modes button,#sheetWin.locked #addTarget{opacity:.4;pointer-events:none}
-  .sguide{list-style:none;margin:0 0 6px;padding:0;font-size:13px}
-  .sguide li{margin:2px 0;color:var(--faint)} .sguide li.ok{color:var(--good-ink)}
   .settled{font-size:12.5px;margin:0 0 6px;padding:5px 8px;color:var(--sepia);border:1.5px dashed var(--edge);border-radius:var(--wobble)}
   .settled b{color:var(--wine)}
   /* the calculus ladder: how a quantity that varies with time links to its rates */
@@ -735,6 +733,13 @@
   .dfmini{padding:3px 7px;min-height:0;font-size:12px;margin-left:4px}
   /* past Setup the problem is the pinned line in the header, so the topic buttons and the problem box are put away */
   body:not(.mode-draw):not([data-stage="0"]) :is(#chPick,#problem){display:none}
+  /* phase S1: one copy of each thing. A loaded problem shows only in the pinned bar; a lesson has no unit tabs; the
+     Inspect card and the canvas note appear only when there is something to say */
+  body.has-problem #problem, body.in-lesson #chPick{display:none}
+  #sideCard:has(#paneSide:not([hidden]) #inspector:empty):has(#sliders:empty){display:none}
+  #bprops:empty{display:none}
+  body:not([data-stage="0"]) #noPicBtn, .assistant:has(#bubble:empty), .assistant:has(#bubble.hide){display:none}
+  body.nopic :is(#paneBuild,#paneMotion,.dtabs,#replayBtn,#dgNote){display:none}
   /* laptop, the open book: text on the left page (problem, givens, the open stage's panels), the sketch on the right page,
      which stays in view while the left page scrolls. At Solve (guided) the pages trade: the sheet and the work take the
      right page, and the sketch sits small under the givens with its drawing tools put away. */
@@ -874,12 +879,9 @@
       <div><h1>Physics <span>Lens</span></h1><small>mechanics workbench · you cast the physics, it keeps the books</small></div>
     </div>
     <div class="tools" style="grid-column:3;grid-row:1">
-      <div id="modeBtn" class="seg" role="group" aria-label="Mode" title="Remembered on this device; choosing Drawing first again forgets it"><button data-mode="draw" aria-pressed="true" title="Draw the problem, then set each part">Drawing first</button><button data-mode="guided" aria-pressed="false" title="Step by step: stages, sheet, Hint and Show me">Guided</button></div>
-      <details class="menu" id="toolsMenu"><summary title="Practice, course, references, board, notebook">Tools ▾</summary>
+      <button id="courseBtn" class="go" aria-expanded="false" title="Lessons, their exam sheets, and the practice problems">Course &amp; exams</button>
+      <details class="menu" id="toolsMenu"><summary title="Notes, libraries, board, notebook, multiple choice">More ▾</summary>
         <div class="menubox" role="menu">
-          <b>Learn</b>
-          <button id="bankBtn" class="guided-only" title="Practice bank: problems as text only, you set them up">Practice problems</button>
-          <button id="courseBtn" aria-expanded="false" title="Lessons: long → twin → transfer, any stop in any order">Course</button>
           <b>Reference</b>
           <a id="notesLink" class="menulink" href="concepts.html" target="_blank" rel="noopener" title="Notes for this section: ideas, definitions and every equation, written out. Opens a page you can print">Notes: concepts and definitions ↗</a>
           <button id="libBtn" class="guided-only" aria-expanded="false" title="Open the equation library">Equation library</button>
@@ -942,6 +944,7 @@
         <span class="small draw-only" id="dfCount" aria-live="polite"></span>
         <button class="go" id="replayBtn">▶ Replay</button>
         <span class="small muted guided-only" id="dgNote"></span>
+        <button class="guided-only" id="noPicBtn" aria-pressed="false" title="Some problems are quicker without a drawing: work from the givens alone">No picture needed</button>
       </div>
       <div class="ctool draw-only" id="dfTools" role="toolbar" aria-label="Drawing-first tools">
         <button data-dftool="select" aria-pressed="true" title="Move and select parts">Select</button>
@@ -981,7 +984,7 @@
       <div class="dpane" id="paneForces" hidden><div class="titlebar"><h2>Free-body diagram</h2></div><div class="body"><div id="fbd"></div></div></div>
       <div class="dpane" id="paneSide">
         <div class="titlebar"><h2>Inspect</h2></div>
-        <div class="body"><div id="setupGuide"></div><div id="sliders"></div><div id="inspector"></div>
+        <div class="body"><div id="sliders"></div><div id="inspector"></div>
           <details class="graphs"><summary>Graphs vs time</summary>
             <div class="canvas-wrap"><canvas id="gTheta" width="880" height="200"></canvas></div>
             <div class="canvas-wrap"><canvas id="gOmega" width="880" height="200"></canvas></div>
@@ -1047,6 +1050,7 @@
 
 <aside id="courseDrawer" class="drawer" aria-label="Course map">
   <div class="dhead"><h2>Course</h2><span class="small muted">Lessons and their stops</span><button class="x" id="courseClose" title="Close">×</button></div>
+  <div class="dbodyl"><button id="bankBtn" title="Practice bank: problems as text only, you set them up">Practice problems</button> <span class="small muted">any unit, text only: you set them up</span></div>
   <div class="dbodyl" id="courseBody"></div>
   <div class="dbodyl" id="gatesBox"></div>
   <div class="dbodyl" id="mistakesBox"></div>

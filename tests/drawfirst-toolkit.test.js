@@ -123,7 +123,7 @@ test('splitting a force needs the axes first; guided mode shows none of the tool
     await tool(page, 'force'); await drag(page, b, { x: b.x, y: b.y + 100 }); await answer(page, 'W');
     await tool(page, 'split'); await click(page, { x: b.x, y: b.y + 50 });
     assert.equal((await tk(page)).forces[0].split, null);
-    await page.click('#modeBtn [data-mode="guided"]');
+    await page.evaluate(() => window.__rl.setMode('guided'));
     assert.equal(await page.locator('.dftk, .dfconns').count(), 0);
     assert.equal(await page.isVisible('#dfTools'), false);
     assert.deepEqual(errors, []);

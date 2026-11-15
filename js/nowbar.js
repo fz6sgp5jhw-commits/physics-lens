@@ -11,7 +11,7 @@ const GO = {
   givens: { stage: 0, sel: '#addGivenBtn' }, conds: { stage: 2, sel: '#condOk' }, target: { sel: '#targets' }, done: { sel: REPLAY },
   miss: { sel: '#toolsMenu' }, eq: { sel: '#sheet' }, sys: { sel: '#sheet' }, lad: { sel: '#sheet' },
 };
-const MORE = { miss: ' Find it in the <b>Equation library</b> (Tools menu).', eq: ' Find it on your sheet and solve it.', sys: ' Combine them on your sheet.' };
+const MORE = { miss: ' Find it in the <b>Equation library</b> (More menu).', eq: ' Find it on your sheet and solve it.', sys: ' Combine them on your sheet.' };
 const DRAW_WHY = {
   draw: 'The drawing is the model: every force, lever arm and equation that follows is read from it.',
   parts: 'A picture can’t show everything: what a part is made of, whether it is fixed, what is known about it. Those choices decide which forces and equations apply.',
@@ -34,13 +34,14 @@ export function tell(s){
   const onward = (lead) => ({ next: `${lead} Go on to <b>${s.stages[i + 1].name}</b>.`, go: { stage: i + 1, sel: `#steps [data-stage="${i + 1}"]` } });
   if (last){
     const doing = `<b>${st.name}</b>${of}: ${s.cur ? `finding ${s.cur}` : s.targets ? 'every target is found' : st.doing}.`;
-    const why = s.cur && s.principle ? `The principle to look for: <i>${s.principle}</i>. ${st.why}` : st.why;
+    const why = s.lesson ? esc(s.lesson) : s.cur && s.principle ? `The principle to look for: <i>${s.principle}</i>. ${st.why}` : st.why;
     if (s.locked) return { doing, why, next: s.lockText, go: { stage: s.first, sel: `#steps [data-stage="${s.first}"]` } };
     const kind = !s.hasGivens ? 'givens' : !s.condOk ? 'conds' : !s.targets ? 'target' : !s.cur ? 'done' : (s.hintKey.match(/^(miss|eq|sys|lad)/) || [])[0];
     return { doing, why, next: s.hint + (MORE[kind] || ''), go: GO[kind] || null };
   }
   const doing = `<b>${st.name}</b>${of}: ${st.doing}.`, why = i === 1 && s.forcesOptional ? st.whyMotion : st.why, c = s.checks[i];
   if (i <= 1 && s.walk) return { doing, why, next: esc(s.walk), go: { sel: '#bd' } };
+  if (s.lesson && !c) return { doing, why, next: esc(s.lesson), go: { sel: st.go } };
   if (c) return { doing, why, ...onward(`${st.name} has its star.`) };
   if (c === null) return { doing, why, ...onward(s.drawn ? 'Motion arrows are optional in this unit.' : 'Nothing is drawn, so there is no diagram to check.') };
   return { doing, why, next: st.next, go: { sel: st.go } };

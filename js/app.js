@@ -78,6 +78,7 @@ const chapter = () => CHAPTERS[S.ch];
 // Unit hooks: what differs between units lives in the unit's data (packs), each with its default here.
 const HOOKS = {
   startCond: {},          // the conditions a unit starts with
+  bodySyms: {},           // a drawn body's quantities in this unit's own symbols, by kind: { ball: { mass: 'M', radius: 'R' } }
   slopeAxis: false,       // + can be flipped to up the slope (signs, directions, the axis note, drawn slope arrows)
   extended: false,        // beams and discs: torque tools, axis, force kinds, hung loads, signs of force parts
   points: false,          // a wheel can show a tracked point
@@ -266,6 +267,8 @@ function closeDialog(ok){
 }
 $('dlgOk').onclick = () => closeDialog(true);
 $('dlgCancel').onclick = () => closeDialog(false);
+// Escape closes the open menu first, and only the menu
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('toolsMenu').open){ $('toolsMenu').open = false; e.stopImmediatePropagation(); } }, true);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); $('boardWrap').classList.remove('show'); $('mcWrap').classList.remove('show'); $('routeWrap').classList.remove('show'); } });
 // changing an input makes every answer found so far wrong: ask before clearing them
 function beforeClearing(what){
@@ -277,7 +280,8 @@ function beforeClearing(what){
 // ---------- chapter / reset ----------
 function defaultsFor(ch){ return { ...hook('startCond', ch) }; }
 // a condition's value: most are yes/no, some name a choice (the torque unit's shape and axis)
-const condIs = (key, v) => typeof v === 'boolean' ? !!S.cond[key] === v : S.cond[key] === v;
+// a condition the student hasn't chosen yet (a lesson starts with none) is neither value
+const condIs = (key, v) => key in S.cond && (typeof v === 'boolean' ? !!S.cond[key] === v : S.cond[key] === v);
 // the drawing stays when the unit changes; its quantities come back as givens if the new unit uses them
 function switchChapter(ch){ S.ch = ch; S.cond = defaultsFor(ch); resetAll(false); if (S.build) syncDrawingGivens(); }
 function resetAll(keepText = true){
@@ -447,7 +451,8 @@ function renderConds(){
   const box = $('conds'); box.innerHTML = '';
   const drawn = drawnConds();
   for (const c of chapter().conditions){
-    const el = document.createElement('div'); el.className = 'cgroup';
+    if (c.ask) continue;   // asked once, in the givens strip (This problem)
+    const el = document.createElement('div'); el.className = 'cgroup'; el.dataset.cond = c.key;
     if (c.key in drawn){
       el.innerHTML = `<div class="clabel">${c.label}</div><div class="settled"><b>${c.options.find(o => o[0] === drawn[c.key])[1]}</b>: settled by your drawing. ${DRAWN_WHY[c.key]}</div>`;
     } else if (c.type === 'choice'){
@@ -823,7 +828,7 @@ function nowState(){
   const step = solving && cur ? curPlan().steps.find(x => !S.sheet.includes(x.eq)) : null;
   return { mode: 'guided', stage: S.stage, stages: STAGES, checks: c, first: Math.min(firstOpen(c), STAGES.length - 1), locked, lockText: locked ? lockText() : '',
     hasGivens: userGivens() > 0, drawn: drawnBodies().length > 0, condOk: S.condOk, targets: S.targets.length, cur: cur ? `<b>${symOf(cur)}</b>${VARS[baseOf(cur)] ? ` (${esc(nm(baseOf(cur)))})` : ''}` : '',
-    hint: typeof h === 'string' ? h : h.point, hintKey: h.key || '', principle: step ? step.principle : '', walk: walk ? walk.say : '', forcesOptional: !!chapter().forcesOptional };
+    hint: typeof h === 'string' ? h : h.point, hintKey: h.key || '', principle: step ? step.principle : '', walk: walk ? walk.say : '', lesson: COURSE.active ? COURSE.prompt(S.stage) : '', forcesOptional: !!chapter().forcesOptional };
 }
 const NOW = createNowBar({ el: $('nowBar'), state: nowState, open: (i) => openStage(i) });
 function renderStage(){
@@ -832,8 +837,6 @@ function renderStage(){
   $('paneForces').hidden = i !== 1; $('paneSide').hidden = i === 1;
   $('sheetWin').classList.toggle('locked', locked);
   $('sheetLock').hidden = !locked; if (locked) $('sheetLock').innerHTML = `🔒 You can read your sheet. ${lockText()}`;
-  const bs = drawnBodies().length, g = Object.values(S.givens).some(x => x.from !== 'condition') || Object.keys(S.funcs).length;
-  $('setupGuide').innerHTML = `<ul class="sguide"><li class="${bs ? 'ok' : ''}">${bs ? '✓' : '○'} Draw the setup with the tools beside the canvas, or load a template.</li><li class="${g ? 'ok' : ''}">${g ? '✓' : '○'} Give each quantity a value, or keep it as a symbol: click its label on the drawing, or + Add a given.</li></ul>`;
   steps();
 }
 function steps(){
@@ -1345,6 +1348,7 @@ function renderPath(){
 
 // ---------- practice bank + setup check ----------
 $('bankBtn').onclick = () => {
+  setDrawer(false); // one window at a time
   const list = $('bankList');
   list.innerHTML = Object.entries(CHAPTERS).map(([cid, ch]) => `<div class="subhead">${ch.title}</div>` + PRACTICE.map((p, i) => p.ch !== cid ? '' : `<div class="bitem"><div><b>${p.title}</b><div class="btxt">${p.text}</div></div><button class="go" data-load="${i}">Load</button></div>`).join('')).join('');
   list.querySelectorAll('[data-load]').forEach(b => b.onclick = () => {
@@ -1778,7 +1782,8 @@ function wireInspector(){
   box.querySelectorAll('[data-cond]').forEach(b => b.onclick = () => { setCond(b.dataset.cond, true); say(b.dataset.say); });
 }
 let inspectRefresh = () => {};
-function resetInspector(){ S.inspectName = null; $('inspector').innerHTML = '<h3>CLICK THE DIAGRAM</h3><p>Click a point on the path, a force arrow in the free-body diagram, or any label. You’ll see what it means, add it as a known or a 🎯 target, and the library outlines the equations that use it.</p>'; }
+// the inspector stays empty (and its card hidden) until the student clicks something on the drawing
+function resetInspector(){ S.inspectName = null; $('inspector').innerHTML = ''; }
 function inspectVar(id){
   S.inspectName = null; inspectRefresh = () => inspectVar(id);
   const eqs = chEqs().map(x => x.e).filter(e => EQS[e].vars.includes(id));
@@ -1952,7 +1957,7 @@ S.build = createBuild($('bd'), {
   snapshot: () => JSON.parse(JSON.stringify(S.fbd.forces)),
   restore: (x) => { if (x) S.fbd.forces = x; if (S.dtab === 'forces'){ renderFBD(); renderForceChips(); } },
   onPropClick: (shapeId, prop) => { const sh = S.build.shapes.find(x => x.id === shapeId), id = sh && sh.props[prop]; if (id && VARS[id]) openEditor(id); },
-  unit: () => S.ch,
+  unit: () => S.ch, propsFor: (kind) => hook('bodySyms')[kind] || {},
   // torque: the axis marker and its lever arms on a beam or disc, and clicks with the axis tool
   axisFor: (b) => S.dtab === 'forces' && isExt(b) && (b.frame === 'disc' || b.id === fbdBody()?.id) ? (b.frame === 'disc' ? { centre: true } : { u: pointU(b, axisKey(b)) }) : null,
   onAxisClick: (bodyId, u) => setAxisAt(bodyId, u),
@@ -2017,24 +2022,24 @@ const WS = S.ws = createWorkspace({ panel: $('dfWork'), knowns: () => S.mode ===
   tk: () => S.mode === 'draw' ? S.tk.state() : null, example: workedLine, onCheck: (ok) => S.guide?.[ok ? 'correct' : 'wrong']() });
 WS.render();
 
-// ---------- modes: drawing-first (the default) or guided (today's stages, sheet, Hint and Show me) ----------
-// Guided is remembered as pl-mode on this device; choosing drawing-first again forgets it.
-const savedMode = () => { try { return localStorage.getItem('pl-mode') === 'guided' ? 'guided' : 'draw'; } catch { return 'draw'; } };
-function setMode(m, remember = true){
+// choosing whether to draw is part of the skill: Setup offers to work without a picture (phase S1)
+$('noPicBtn').onclick = () => {
+  const on = document.body.classList.toggle('nopic');
+  $('noPicBtn').setAttribute('aria-pressed', String(on)); $('noPicBtn').textContent = on ? 'Draw a picture' : 'No picture needed';
+  say(on ? 'No picture: add what the problem gives with <b>+ Add a given</b>. A drawing helps most when forces or directions matter; turn it back on any time.' : 'The drawing is back.');
+};
+// ---------- one mode (phase S1): the guided stages. The older drawing-first mode has no switch any more; it is kept,
+// unreachable from the page, only while its part cards wait to be folded into Setup (pl-mode = 'draw', set by tests).
+const savedMode = () => { try { return localStorage.getItem('pl-mode') === 'draw' ? 'draw' : 'guided'; } catch { return 'guided'; } };
+S.setMode = setMode; // tests only: the older mode has no switch on the page
+function setMode(m){
   S.mode = m;
   document.body.classList.toggle('mode-draw', m === 'draw');
-  $('modeBtn').querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
-  if (remember) try { if (m === 'guided') localStorage.setItem('pl-mode', 'guided'); else localStorage.removeItem('pl-mode'); } catch {}
   // drawing-first covers the torque unit for now (a rod and point masses)
   if (m === 'draw'){ if (S.ch !== DRAW_UNIT){ switchChapter(DRAW_UNIT); renderAll(); } showTab('build'); }
   if (m !== 'draw') TOOLS.use('select');
   DF.render(); KN.render(); S.build.render(); WS.render(); TB.render(); NOW.render();
 }
-$('modeBtn').querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
-  if (b.dataset.mode === S.mode) return;
-  setMode(b.dataset.mode);
-  say(S.mode === 'draw' ? 'Drawing first: draw the problem, press <b>Done drawing</b>, then set each part from its dot.' : 'Guided mode: the four stages, the sheet, <b>Hint</b> and <b>Show me</b>.');
-});
 
 // which library card a recognised stroke or a shape belongs to
 const compOf = (o) => o.kind === 'vec' ? o.vec : o.kind === 'floor' || o.kind === 'table' ? 'surface' : o.kind;
@@ -2326,8 +2331,8 @@ function renderBuildUI(){
   const s = S.build.selected();
   const idle = { vel: 'Drag out from a body to draw its <b>velocity</b>.', acc: 'Drag out from a body to draw its <b>acceleration</b>.', pen: '<b>Pen</b>: sketch a line (ramp or surface), a closed loop (ball or wheel), a box (block), or an arrow out of a body. It snaps to the standard drawing; the <b>Diagrams</b> drawer shows them all.',
     omega: 'Click a wheel or ball to show which way it <b>spins</b> (ω); click again to turn it.', alpha: 'Click a wheel or ball to show which way its spin <b>changes</b> (α); click again to turn it.' };
-  if (!s){ box.innerHTML = `<span class="small muted">${idle[tool] || 'Pick a shape from the toolbar, or sketch it with the pen. Bodies land on the newest surface. Click a shape for its handles; click a label to name it.'}</span>`; return; }
-  const massOpts = ['m', 'm1', 'm2', 'mA', 'mB'].map(id => `<option value="${id}" ${s.props.mass === id ? 'selected' : ''}>${VARS[id].plain}</option>`).join('');
+  if (!s){ box.innerHTML = idle[tool] ? `<span class="small muted">${idle[tool]}</span>` : ''; return; }   // the Next line says what to draw
+  const massOpts = ['m', 'M', 'm1', 'm2', 'mA', 'mB'].filter(id => id === s.props.mass || chVars().includes(id)).map(id => `<option value="${id}" ${s.props.mass === id ? 'selected' : ''}>${VARS[id].plain}</option>`).join('');
   let html = `<b>${S.build.KINDS[s.kind].label}</b>`;
   if ('mass' in s.props) html += `<label>mass <select data-bprop="mass">${massOpts}</select></label>`;
   if ('angle' in s.props) html += `<span>angle ${VARS.inc.plain}: ${Math.round(S.build.theta)}° in the picture · drag ● to tilt, ■ to stretch</span>`;
@@ -2879,6 +2884,10 @@ async function loadLesson(p, ch){
   if (S.path.length && curTarget() && !await ask('Start this stop?', `<b>THIS REPLACES UNFINISHED WORK</b>Your ${S.path.length} solved step${S.path.length > 1 ? 's' : ''} will be cleared, and a target is still open.`, 'Start it')) return false;
   if (S.mode !== 'guided') setMode('guided');
   switchChapter(ch); S.fbd = { body: null, forces: {} }; if (S.build.shapes.length) S.build.clear(); WS.clear(); S.board = null; NB.forget();
+  // a lesson chooses no condition for the student (phase S1): every box starts unticked and no choice is picked;
+  // only the problem-type questions (asked with the givens) keep their defaults
+  S.cond = Object.fromEntries(chapter().conditions.filter(c => c.ask || c.type === 'toggle' || c.type === 'hidden').map(c => [c.key, c.ask ? S.cond[c.key] : false]));
+  applyHidden();
   S.bank = { ...p, ch }; $('problem').value = p.text; S.lastStep = -1; S.stage = 0;
   setDrawer(false); renderAll();
   return true;
@@ -2966,7 +2975,7 @@ function checkAnswer(t, typed){
 }
 const COURSE = S.course = createCourse({
   lessons: LESSONS, vars: VARS, drawer: $('courseBody'), bar: $('lessonBar'), routeWrap: $('routeWrap'), kindWrap: $('kindWrap'),
-  app: { load: loadLesson, setHelp, say, ask, dialog, esc, gates: () => S.gates, openMap: () => setDrawer(true, 'courseDrawer'),
+  app: { load: loadLesson, changed: () => NOW.render(), setHelp, say, ask, dialog, esc, gates: () => S.gates, openMap: () => setDrawer(true, 'courseDrawer'),
     eqLabel: (e) => `${EQS[e].label} (${textOf(EQS[e].form)})`, eqKind: (e) => EQS[e].kind || 'law',
     targets: () => S.targets.filter(t => VARS[t]).map(t => [t, `${letter(S.targets.indexOf(t))} ${VARS[t].plain}`, unitOf(t)]),
     step: (ok) => S.guide?.[ok ? 'correct' : 'wrong'](),
@@ -3052,13 +3061,14 @@ function highlight(sel){
 }
 const showStage = (n) => { S.stage = n; renderStage(); };
 // each demo step does what it says with the app's own functions, then the caption names the control and why
+// (its conditions start from the unit's defaults, Earth too: loadLesson leaves them all unchosen)
 const DEMO_RUN = {
   async load(){ await loadLesson(DEMO_P, DEMO_P.ch); showStage(0); },
   async givens(){
     for (const [id, [mag, unit, dir]] of Object.entries(DEMO_P.key.givens)) if (id !== 'g') S.givens[id] = { from: 'you', mag, unit, dir: dir || 0, val: (dir ? -1 : 1) * sizeSI(id, mag, unit) };
     renderAll(false); showStage(0);
   },
-  async conds(){ showStage(2); Object.assign(S.cond, DEMO_P.key.cond); S.condOk = true; applyHidden(); clearDerived(); renderAll(false); showStage(2); },
+  async conds(){ showStage(2); S.cond = { ...defaultsFor(DEMO_P.ch), ...DEMO_P.key.cond }; S.condOk = true; applyHidden(); clearDerived(); renderAll(false); showStage(2); },
   async target(s){
     showStage(3); addTarget(DEMO_P.key.targets[0]);
     const lp = shortest(appEqs(), knownSet(), curTarget()) || [], pl = curPlan();
@@ -3158,6 +3168,7 @@ function renderAll(full = true){
   if (full) renderUnit();
   $('checkRow').style.display = S.bank ? 'flex' : 'none';
   if (S.givens.inc && S.givens.inc.kind !== 'symbol' && S.givens.inc.val >= 5 && S.givens.inc.val <= 75 && Math.abs(S.build.theta - S.givens.inc.val) > 1e-9) S.build.theta = S.givens.inc.val;
+  document.body.classList.toggle('has-problem', !!S.bank);
   renderKind(); renderKnowns(); renderForceChips(); renderScen(); renderConds(); renderLibrary(); renderTargets(); renderSpan(); renderSheet(); renderPath(); renderMatters(); renderStage(); paintSyms(); renderSliders();
   $('calcCond').innerHTML = $('calcSolve').innerHTML = calcHTML();
   S.course?.syncTargets();
@@ -3177,9 +3188,7 @@ async function boot(){
   S.cond = defaultsFor(S.ch); applyHidden(); clearWork(); resetInspector();
   S.lastStep = -1; renderAll();
   showTab('build');
-  setMode(mode, false);
-  if (mode === 'draw') say('Draw the problem with the tools beside the canvas, or sketch it with the pen. Press <b>Done drawing</b> when it’s all there; each part then gets a dot to set it. (Guided mode, top right, has the step-by-step stages.)');
-  else say('Work through four stages: <b>1 Setup</b> (draw it, add the givens), <b>2 Forces</b> (the free-body or motion diagram), <b>3 Conditions</b>, <b>4 Solve</b>. Each passed check earns a ⭐. Or open the <b>Practice bank</b>. (The background is a live electric field: your cursor is a small test charge.)');
+  setMode(mode);
   if ('serviceWorker' in navigator && location.protocol === 'https:'){ try { navigator.serviceWorker.register('./sw.js').catch(() => {}); } catch {} }
 }
 boot();

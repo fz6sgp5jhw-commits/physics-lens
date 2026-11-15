@@ -461,16 +461,16 @@ What changed (M4): `js/sheet.js` and `#sheetPage`: each lesson in the Course map
 
 ## Phase S1: simplify (remove and merge, don't add), added 2026-11-15
 **Start with:** `Do phase S1 in ROADMAP.md.` Read `docs/simplify-audit.md` (all of it, it is short) and `docs/teaching-research.md` sections 1–2. Goal: fewer things on screen, using what the app already has. Keep element ids the tests use; hide or move rather than delete when a test needs an id, and list changed ids in the commit.
-- [ ] Gate first (`tests/simplify.test.js`): a new student reaches a lesson's exam sheet in at most 2 clicks from the start screen; one instruction line and one copy of the problem text are visible; no unit tabs inside a lesson; drawing a ball in the rolling unit gives the unit's mass symbol (M); nothing in Conditions is pre-chosen in a lesson; the Tools menu closes when an item is picked.
-- [ ] One mode: remove the Drawing first / Guided switch (guided stages stay; Setup offers "no picture needed").
-- [ ] Header: Course & exams as a main button; Practice problems folded into the Course; the rest under one "More".
-- [ ] One instruction line (doing/why/next); drop the duplicate tip line, Inspect list and canvas footnote text; problem text once.
+- [x] Gate first (`tests/simplify.test.js`): a new student reaches a lesson's exam sheet in at most 2 clicks from the start screen; one instruction line and one copy of the problem text are visible; no unit tabs inside a lesson; drawing a ball in the rolling unit gives the unit's mass symbol (M); nothing in Conditions is pre-chosen in a lesson; the Tools menu closes when an item is picked.
+- [x] One mode: remove the Drawing first / Guided switch (guided stages stay; Setup offers "no picture needed").
+- [x] Header: Course & exams as a main button; Practice problems folded into the Course; the rest under one "More".
+- [x] One instruction line (doing/why/next); drop the duplicate tip line, Inspect list and canvas footnote text; problem text once.
 - [ ] Route card merged into Conditions: asked once, answers set the conditions.
 - [ ] Equation sheet: each equation offers "Solve it for me" or "I'll do the algebra" (typed workspace started from it, the sheet's equations available to substitute); the separate Algebra panel and its own formula sheet go.
 - [ ] One Solution panel when solved (answers, steps line by line, what matters) in place of Work / What matters / Path so far.
 - [ ] Bugs: drawn mass symbol vs the unit's (m/M); "target unreachable" names the missing given or condition; Check my diagram verdict where the student looks; Enter adds a typed line; typed names accept common spellings (f → f_s) or offer them; modals don't stack.
 - [ ] All tests pass. Cache bumped. One line here on what changed.
-Resume from: S1 not started. First box: the gate test. The walkthrough findings are numbered 1–19 in `docs/simplify-audit.md`.
+Resume from: S1, box 5 (route card into Conditions). Boxes 1–4 and the m/M bug are done (commit “Phase S1 (part)”). The walkthrough findings are numbered 1–19 in `docs/simplify-audit.md`.
 
 ---
 

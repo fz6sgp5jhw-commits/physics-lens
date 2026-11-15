@@ -26,7 +26,7 @@ const pick = async (page, part, group, choice) => {
 };
 const counter = (page) => page.textContent('#dfCount');
 
-test('guided mode still opens today’s flow; drawing-first is the default and the choice is remembered', async () => {
+test('guided is the one mode (phase S1); the older drawing-first mode still opens from storage, with no switch on the page', async () => {
   const guided = await openApp(env.browser, env.url);
   try {
     const p = guided.page;
@@ -45,13 +45,8 @@ test('guided mode still opens today’s flow; drawing-first is the default and t
     assert.equal(await page.isVisible('#steps'), false);
     assert.equal(await page.isVisible('#problem'), false, 'no problem text box in drawing-first mode');
     assert.ok(await page.isVisible('#doneDraw'));
-    // switching to guided is remembered; switching back to the default forgets it
-    await page.click('#modeBtn [data-mode="guided"]');
-    assert.equal(await page.evaluate(() => localStorage.getItem('pl-mode')), 'guided');
-    assert.ok(await page.isVisible('#steps'));
-    await page.click('#modeBtn [data-mode="draw"]');
-    assert.equal(await page.evaluate(() => localStorage.getItem('pl-mode')), null);
-    assert.ok(await page.isVisible('#doneDraw'));
+    // phase S1 removed the Drawing first / Guided switch on purpose: the page has no way to change mode
+    assert.equal(await page.locator('#modeBtn').count(), 0);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -104,9 +99,9 @@ test('rod and three blocks: Done drawing gives each part a dot; every card answe
     await page.click('#dfClose');
     assert.equal(await page.evaluate(() => window.__rl.df.closed), true);
     // guided mode keeps the drawing but shows no dots
-    await page.click('#modeBtn [data-mode="guided"]');
+    await page.evaluate(() => window.__rl.setMode('guided'));
     assert.equal(await page.locator('[data-dot]').count(), 0);
-    await page.click('#modeBtn [data-mode="draw"]');
+    await page.evaluate(() => window.__rl.setMode('draw'));
     assert.equal(await page.locator('[data-dot]').count(), 5);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }

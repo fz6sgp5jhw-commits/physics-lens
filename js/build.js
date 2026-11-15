@@ -58,13 +58,13 @@ const spins = (s) => KINDS[s.kind].spins || s.kind === 'ball';
 // onAxisClick(bodyId, u | null) reports a click with the axis tool. A rod pinned at a pivot records pinAt
 // ('left' | 'right' | 'centre' | 'point') and pinU; setTilt(id, degrees) turns it about the pin (+ counterclockwise).
 export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dirsFor = () => [], forcesFor = () => [], onArrow = () => {}, onArrowClick = () => {}, onArrowTurn = () => {}, onArrowErase = () => {}, onVector = () => {}, onPropClick = () => {}, snapshot = () => null, restore = () => {},
-  unit = () => '', onStroke = () => {}, wheelButton = () => null, pointVectors = () => null, onWheelButton = () => {}, axisFor = () => null, onAxisClick = () => {}, afterRender = () => {} } = {}){
+  unit = () => '', propsFor = () => ({}), onStroke = () => {}, wheelButton = () => null, pointVectors = () => null, onWheelButton = () => {}, axisFor = () => null, onAxisClick = () => {}, afterRender = () => {} } = {}){
   const st = { shapes: [], sel: null, seq: 0, theta: 30, mode: 'setup', tool: 'select', preview: null, turn: null, hover: null, stroke: null };
   const hist = [];
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
 
   const torque = () => unit() === 'torque';
-  const make = (kind, o = {}) => ({ id: kind + (++st.seq), kind, x: 200, y: 200, w: 70, h: 46, r: 30, props: { ...KINDS[kind].props, ...(torque() && kind === 'wheel' ? { radius: 'R', mass: 'M' } : {}) }, ...o });
+  const make = (kind, o = {}) => ({ id: kind + (++st.seq), kind, x: 200, y: 200, w: 70, h: 46, r: 30, props: { ...KINDS[kind].props, ...propsFor(kind) }, ...o });
   const add = (kind, o = {}) => { const s = make(kind, o); st.shapes.push(s); snapAll(); render(); onChange(); return s; };
   const byKind = (k) => st.shapes.filter(s => s.kind === k);
   const isBody = (s) => KINDS[s.kind].body || (s.kind === 'rod' && torque());

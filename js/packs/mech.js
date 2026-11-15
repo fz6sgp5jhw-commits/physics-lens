@@ -1074,7 +1074,7 @@ const CHAPTERS = {
     defaults: { w0: 1.5, alpha: 1.2, r: 0.5 },
   },
   torque: {
-    startCond: { dyn: false, shape: 'rod', axis: 'centre', earth: true }, extended: true, drawFirst: true,
+    startCond: { dyn: false, shape: 'rod', axis: 'centre', earth: true }, extended: true, drawFirst: true, bodySyms: { wheel: { radius: 'R', mass: 'M' } },
     presets: [['beam', 'tbeam'], ['disc', 'tdisc']],
     title: 'Torque & equilibrium', short: 'Torque',
     kin: { p: 'theta', u0: 'w0', u: 'w', a: 'alpha', t: 't' }, diagram: 'beam',
@@ -1102,6 +1102,7 @@ const CHAPTERS = {
   // phase C3: energy with rotation, rolling and angular momentum (docs/core-plan.md section 9). No motion picture yet.
   rolling: {
     startCond: { body: 'roll', shape: 'sphere', axis: 'centre', ground: true, smooth: true, earth: true },
+    bodySyms: { ball: { mass: 'M', radius: 'R' }, wheel: { mass: 'M', radius: 'R' } },   // the rolling body is M, R; a hanging block stays m
     title: 'Energy, rolling & L', short: 'Rolling', forcesOptional: true,
     vars: ['M', 'm', 'R', 'D', 'g', 'h', 'inc', 'a', 'alpha', 'v', 'w', 'fs', 'Tn', 'K0', 'K', 'U0', 'U', 'Wnc', 'Wnet', 'Ktr', 'Krot',
       'I', 'Icm', 'L', 'dpa', 'tnet', 't', 'Li', 'Lf', 'Ii', 'If', 'wi', 'wf', 'rt', 'phi', 'v0', 'w0', 'dx'],

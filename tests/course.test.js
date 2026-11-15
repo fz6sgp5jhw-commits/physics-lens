@@ -78,7 +78,7 @@ test('the map, route card, kind tap, help switches, stars and progress', async (
     assert.match(await page.inputValue('#problem'), /swing/);
     await page.click('#courseBtn');
     await page.click('[data-stop="disc/long"]');
-    assert.match(await bubble(page), /Lesson:.*Draw it first/s, 'the stop’s first prompt is on the hint line');
+    assert.match(await page.innerText('[data-now="next"]'), /Draw it first/, 'the stop’s first prompt is the Next line (phase S1: no separate tip line)');
 
     // the route card: a wrong choice is explained, not blocked; the right one is confirmed
     await page.click('#lessonBar button:has-text("Route")');
@@ -198,7 +198,7 @@ test('your own problems: imported from a file, checked, kept on the device, remo
     assert.equal(await page.locator('#pwn').count(), 0, 'titles are text');
     assert.match(await bubble(page), /Added 1 of your own problem.*skipped/s);
     await page.click('[data-stop="disc/transfer"]');
-    assert.match(await bubble(page), /<img id=pwn2> my own prompt/, 'a prompt from a file is shown as text');
+    assert.match(await page.innerText('[data-now="next"]'), /<img id=pwn2> my own prompt/, 'a prompt from a file is shown as text');
     assert.equal(await page.locator('#pwn2').count(), 0);
     await page.reload();
     await page.waitForFunction(() => window.__rl && document.getElementById('steps').children.length > 0);

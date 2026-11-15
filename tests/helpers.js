@@ -30,7 +30,7 @@ export async function launch(){
 }
 
 // Open the app at 1440×900 and collect console errors / page errors.
-// Guided mode (today's stages and sheet) unless { mode: 'draw' }: drawing-first, the app's default.
+// Guided mode (the app's one mode since phase S1) unless { mode: 'draw' }: the older drawing-first mode, kept without a switch.
 // { before(page) } runs before the first load (a test can route a file there).
 export async function openApp(browser, url, { calm = true, mode = 'guided', before, gates = false } = {}){
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -41,10 +41,15 @@ export async function openApp(browser, url, { calm = true, mode = 'guided', befo
   // the setup gates (phase M3) are off unless a test asks for them, so older tests keep their flow
   if (!gates) await page.addInitScript(() => { try { localStorage.setItem('pl-gates', JSON.stringify({ target: false, why: false, owner: false, readback: false })); } catch {} });
   // only on the first load: a test that switches mode and reloads keeps what it chose
-  await page.addInitScript((m) => { try { if (!sessionStorage.getItem('pl-test')){ sessionStorage.setItem('pl-test', '1'); if (m === 'draw') localStorage.removeItem('pl-mode'); else localStorage.setItem('pl-mode', m); } } catch {} }, mode);
-  // the header's Tools menu holds Practice, Course, the libraries, Board, Notebook and Multiple choice: opening it is part of using them
-  const inMenu = /^#(bankBtn|courseBtn|libBtn|diagBtn|dfSumBtn|boardBtn|nbBtn|mcBtn)$/, click = page.click.bind(page);
-  page.click = async (sel, ...rest) => { if (inMenu.test(sel)) await page.evaluate(() => { document.getElementById('toolsMenu').open = true; }); return click(sel, ...rest); };
+  await page.addInitScript((m) => { try { if (!sessionStorage.getItem('pl-test')){ sessionStorage.setItem('pl-test', '1'); if (m === 'draw') localStorage.setItem('pl-mode', 'draw'); else localStorage.removeItem('pl-mode'); } } catch {} }, mode);
+  // the header's More menu holds the libraries, Board, Notebook and Multiple choice: opening it is part of using them
+  // (phase S1: Course & exams is a main button and Practice problems sits in the Course drawer)
+  const inMenu = /^#(libBtn|diagBtn|dfSumBtn|boardBtn|nbBtn|mcBtn)$/, click = page.click.bind(page);
+  page.click = async (sel, ...rest) => {
+    if (inMenu.test(sel)) await page.evaluate(() => { document.getElementById('toolsMenu').open = true; });
+    if (sel === '#bankBtn') await page.evaluate(() => { if (!document.getElementById('courseDrawer').classList.contains('open')) document.getElementById('courseBtn').click(); });
+    return click(sel, ...rest);
+  };
   if (before) await before(page);
   await page.goto(url);
   await page.waitForFunction(() => window.__rl && document.getElementById('steps').children.length > 0);
@@ -65,7 +70,8 @@ export async function addGiven(page, id, mag, unit, dir = 0, { symbol = false } 
     const { VARS, CHAPTERS } = await import('./js/data.js');
     const ch = CHAPTERS[window.__rl.ch];
     const name = (ch.names && ch.names[id]) || VARS[id].name;
-    const b = [...document.querySelectorAll('#palette button')].find(x => x.title === `Add ${name}`);
+    // a quantity the drawing already brought in (a wheel's radius r) is edited from its chip, not added again
+    const b = [...document.querySelectorAll('#palette button')].find(x => x.title === `Add ${name}`) || document.querySelector(`#knowns [data-edit="${id}"]`);
     if (!b) throw new Error(`no palette button for ${id}`);
     b.click();
   }, { id });
@@ -75,6 +81,7 @@ export async function addGiven(page, id, mag, unit, dir = 0, { symbol = false } 
     await page.click('#edSave');
     return;
   }
+  if (await page.locator('#editorSlot [data-kind="value"][aria-pressed="false"]').count()) await page.click('#editorSlot [data-kind="value"]'); // a drawn symbol gets its number
   if (await page.locator(`#editorSlot [data-dir="${dir}"]`).count()) await page.click(`#editorSlot [data-dir="${dir}"]`);
   await page.fill('#edVal', String(mag));
   await page.selectOption('#edUnit', unit);
@@ -87,7 +94,9 @@ export async function setCondition(page, key, want){
     const { CHAPTERS } = await import('./js/data.js');
     const ch = CHAPTERS[window.__rl.ch], c = ch.conditions.find(x => x.key === key);
     if (!c) throw new Error(`no condition ${key}`);
-    const groups = [...document.querySelectorAll('#conds .cgroup')], el = groups[ch.conditions.indexOf(c)];
+    // a problem-type question (c.ask) is asked once, in the givens strip, not in Conditions (phase S1)
+    if (c.ask){ const i = c.ask[1].findIndex(o => o[0] === want); document.querySelector(`#kindRow [data-ck="${key}"][data-i="${i}"]`).click(); return; }
+    const el = document.querySelector(`#conds .cgroup[data-cond="${key}"]`);
     if (c.type === 'choice') el.querySelectorAll('button')[c.options.findIndex(o => o[0] === want)].click();
     else if (c.type === 'locked') return;
     else { const box = el.querySelector('input'); if (box.checked !== want){ box.checked = want; box.dispatchEvent(new Event('change')); } }
