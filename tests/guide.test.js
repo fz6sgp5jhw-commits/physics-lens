@@ -90,7 +90,7 @@ test('Show me costs a star in a lesson', async () => {
   try {
     await page.evaluate(() => window.__rl.course.open('disc', 'long'));
     assert.equal(await page.evaluate(() => window.__rl.course.stars), 3);
-    await page.click('#lessonBar button:has-text("Route")'); await page.click('#routeDone');
+
     await applyKey(page, { ch: 'rolling', key: LESSONS[0].stops[0].problem.key });
     await page.click('#showBtn');
     await page.waitForFunction(() => 'a' in window.__rl.found && !window.__rl.busy, null, { timeout: 15000 });

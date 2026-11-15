@@ -13,14 +13,12 @@ const bubble = (page) => page.innerText('#bubble');
 const libOpen = (page) => page.evaluate(() => document.getElementById('libDrawer').classList.contains('open'));
 async function openStop(page, l, kind){
   await page.evaluate(async ([l, s]) => window.__rl.course.open(l, s), [l, kind]);
-  await page.click('#lessonBar button:has-text("Route")');
 }
 
 test('target gate: in a lesson the library opens only once the target is named; switched off, it opens', async () => {
   const { page, errors } = await openApp(env.browser, env.url, { gates: true });
   try {
     await openStop(page, 'elastic', 'long');
-    await page.click('#routeDone');
     await page.click('#libBtn');
     assert.equal(await libOpen(page), false, 'closed with no target');
     assert.match(await bubble(page), /Name the target first.*equations you need depend on it/s);
@@ -50,13 +48,14 @@ test('why gate: with the right law picked, a decoy reason is explained and the r
   try {
     await openStop(page, 'elastic', 'long');
     const laws = await page.evaluate(() => window.__rl.course.stop.route.laws);
-    for (const k of laws) await page.check(`#routeWrap [name=law][value="${k}"]`);
+    await addGiven(page, 'm1', 2, 'kg'); await page.click('#steps [data-stage="2"]');   // the route is asked in Conditions
+    for (const k of laws) await page.check(`#routeBox [name=law][value="${k}"]`);
     await page.click('#routeCheck');
     assert.ok(laws.includes('pmomentum'));
-    await page.check('#routeWrap [name="why-pmomentum"][value^="Momentum is conserved because the speeds"]');
-    assert.match(await page.innerText('#routeWrap .rwhy'), /✗ .*isn’t why\. Speeds have nothing to do with it/);
-    await page.check('#routeWrap [name="why-pmomentum"][value^="No outside force"]');
-    assert.match(await page.innerText('#routeWrap .rwhy'), /✓ Yes: No outside force/);
+    await page.check('#routeBox [name="why-pmomentum"][value^="Momentum is conserved because the speeds"]');
+    assert.match(await page.innerText('#routeBox .rwhy'), /✗ .*isn’t why\. Speeds have nothing to do with it/);
+    await page.check('#routeBox [name="why-pmomentum"][value^="No outside force"]');
+    assert.match(await page.innerText('#routeBox .rwhy'), /✓ Yes: No outside force/);
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });
@@ -65,7 +64,6 @@ test('owner gate: a mass with no owner next to numbered ones asks whose it is; C
   const { page, errors } = await openApp(env.browser, env.url, { gates: true });
   try {
     await openStop(page, 'elastic', 'transfer');
-    await page.click('#routeDone');
     await addGiven(page, 'm1', 0.8, 'kg');
     await addGiven(page, 'm', 0.4, 'kg');
     await page.waitForSelector('#dlg.show');

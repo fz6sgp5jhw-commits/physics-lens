@@ -269,7 +269,7 @@ $('dlgOk').onclick = () => closeDialog(true);
 $('dlgCancel').onclick = () => closeDialog(false);
 // Escape closes the open menu first, and only the menu
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && $('toolsMenu').open){ $('toolsMenu').open = false; e.stopImmediatePropagation(); } }, true);
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); $('boardWrap').classList.remove('show'); $('mcWrap').classList.remove('show'); $('routeWrap').classList.remove('show'); } });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape'){ closeDialog(false); $('bank').classList.remove('show'); $('boardWrap').classList.remove('show'); $('mcWrap').classList.remove('show'); } });
 // changing an input makes every answer found so far wrong: ask before clearing them
 function beforeClearing(what){
   if (!S.path.length) return Promise.resolve(true);
@@ -811,8 +811,6 @@ function openStage(i, quiet = false){
   const c = stageChecks();
   if (i > reach(c) && i !== 3){ if (!quiet) say(`<b>${STAGES[i].name}</b> unlocks when <b>${STAGES[firstOpen(c)].name}</b> passes its check. ${STAGES[firstOpen(c)].tip}`); return false; }
   S.stage = i;
-  if (i > 0) COURSE.event('leftSetup');
-  COURSE.event(['start', 'forces', 'conditions', 'solve'][i]);
   if (i === 0 && S.dtab === 'forces') showTab('build');
   if (i === 1 && S.dtab !== 'forces') showTab('forces');
   renderStage(); return true;
@@ -2974,8 +2972,9 @@ function checkAnswer(t, typed){
   return `✗ The app gets ${symOf(t)} = ${fmt(v)} ${unitOf(t)}. Press <b>What’s wrong?</b> to test the usual slips.`;
 }
 const COURSE = S.course = createCourse({
-  lessons: LESSONS, vars: VARS, drawer: $('courseBody'), bar: $('lessonBar'), routeWrap: $('routeWrap'), kindWrap: $('kindWrap'),
-  app: { load: loadLesson, changed: () => NOW.render(), setHelp, say, ask, dialog, esc, gates: () => S.gates, openMap: () => setDrawer(true, 'courseDrawer'),
+  lessons: LESSONS, vars: VARS, drawer: $('courseBody'), bar: $('lessonBar'), routeBox: $('routeBox'), kindWrap: $('kindWrap'),
+  app: { load: loadLesson, changed: () => NOW.render(),
+    condMisses: (want) => chapter().conditions.filter(c => c.key in want && !condIs(c.key, want[c.key])).map(c => c.label), setHelp, say, ask, dialog, esc, gates: () => S.gates, openMap: () => setDrawer(true, 'courseDrawer'),
     eqLabel: (e) => `${EQS[e].label} (${textOf(EQS[e].form)})`, eqKind: (e) => EQS[e].kind || 'law',
     targets: () => S.targets.filter(t => VARS[t]).map(t => [t, `${letter(S.targets.indexOf(t))} ${VARS[t].plain}`, unitOf(t)]),
     step: (ok) => S.guide?.[ok ? 'correct' : 'wrong'](),

@@ -737,7 +737,8 @@
      Inspect card and the canvas note appear only when there is something to say */
   body.has-problem #problem, body.in-lesson #chPick{display:none}
   #sideCard:has(#paneSide:not([hidden]) #inspector:empty):has(#sliders:empty){display:none}
-  #bprops:empty{display:none}
+  #bprops:empty, #routeBox:empty{display:none}
+  .routebox{border-bottom:1px dashed var(--line, #8886);padding-bottom:8px;margin-bottom:8px}
   body:not([data-stage="0"]) #noPicBtn, .assistant:has(#bubble:empty), .assistant:has(#bubble.hide){display:none}
   body.nopic :is(#paneBuild,#paneMotion,.dtabs,#replayBtn,#dgNote){display:none}
   /* laptop, the open book: text on the left page (problem, givens, the open stage's panels), the sketch on the right page,
@@ -978,7 +979,7 @@
     <section class="card draw-only" id="dfKnowns"></section>
     <section class="card" id="condCard" data-stage="2">
       <div class="titlebar"><h2>Conditions</h2><button id="condOk">✓ These conditions are right</button></div>
-      <div class="body"><div class="calc" id="calcCond"></div><div id="conds"></div></div>
+      <div class="body"><div id="routeBox" class="routebox"></div><div class="calc" id="calcCond"></div><div id="conds"></div></div>
     </section>
     <section class="card" id="sideCard" data-stage="0 1">
       <div class="dpane" id="paneForces" hidden><div class="titlebar"><h2>Free-body diagram</h2></div><div class="body"><div id="fbd"></div></div></div>
@@ -1060,9 +1061,6 @@
     <div class="titlebar"><h2 id="mcT">Multiple-choice aid</h2><button class="x" id="mcX" title="Close">×</button></div>
     <div class="body" id="mcHost"></div>
   </div>
-</div>
-<div id="routeWrap" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="routeT">
-  <div class="win bankwin"><div class="titlebar"><h2 id="routeT">What’s the route?</h2></div><div class="body rbody"></div></div>
 </div>
 <div id="kindWrap" class="modalwrap" role="dialog" aria-modal="true" aria-labelledby="kindT">
   <div class="win bankwin"><div class="titlebar"><h2 id="kindT">What kind of equation?</h2><button class="x kx" title="Cancel">×</button></div><div class="body kbody"></div></div>

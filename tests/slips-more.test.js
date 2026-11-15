@@ -37,8 +37,6 @@ const CASES = [
 async function solveStop(page, l, kind){
   await page.evaluate(async ([l, s]) => window.__rl.course.open(l, s), [l, kind]);
   const st = await page.evaluate(() => { const c = window.__rl.course; return { ch: c.lesson.chapter, key: c.stop.problem.key }; });
-  await page.click('#lessonBar button:has-text("Route")');
-  await page.click('#routeDone');
   await applyKey(page, { ch: st.ch, key: st.key });
   await page.evaluate(() => { window.__rl.help.showMe = true; document.getElementById('showBtn').disabled = false; });
   await page.click('#showBtn');
@@ -99,8 +97,6 @@ test('Check my setup: a problem file with an unknown choice for a condition is r
   const { page, errors } = await openApp(env.browser, env.url);
   try {
     await page.evaluate(async () => window.__rl.course.open('elastic', 'long'));
-    await page.click('#lessonBar button:has-text("Route")');
-    await page.click('#routeDone');
     const st = await page.evaluate(() => { const c = window.__rl.course; return { ch: c.lesson.chapter, key: c.stop.problem.key }; });
     await applyKey(page, { ch: st.ch, key: st.key });
     await page.evaluate(() => { const b = window.__rl.bank; b.key = { ...b.key, cond: { ...b.key.cond, collide: 'wobble<b>' } }; });

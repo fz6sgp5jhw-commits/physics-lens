@@ -31,8 +31,6 @@ test('every new stop: its key passes Check my setup and solves to the worked ans
       const k = `${l}/${kind}`;
       assert.equal(await page.evaluate(async ([l, s]) => window.__rl.course.open(l, s), [l, kind]), true, k);
       const st = await page.evaluate(() => { const c = window.__rl.course, s = c.stop; return { ch: c.lesson.chapter, key: s.problem.key, answers: s.problem.answers }; });
-      await page.click('#lessonBar button:has-text("Route")');
-      await page.click('#routeDone');
       await applyKey(page, { ch: st.ch, key: st.key });
       const chk = await checkSetup(page);
       assert.match(chk.title, /perfect/, `${k}: the key passes Check my setup: ${chk.msg}`);

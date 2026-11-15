@@ -1,4 +1,4 @@
-// Phase C5 gate: the course. The map is always open; both pilot lessons run long → twin → transfer; the route card grades
+// Phase C5 gate: the course. The map is always open; both pilot lessons run long → twin → transfer; the route (in Conditions since phase S1) grades
 // (wrong is explained, not blocked); the kind tap comes before an equation goes on the sheet; Show me and glow are off in the
 // twin; progress is kept in pl-course and cleared by its button. Hints: levels, the two error handlers, missing and
 // redundant equations. One looping test applies every stop's answer key, solves, and compares with the stored answers
@@ -6,7 +6,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { launch, openApp, applyKey, openStage, checkSetup } from './helpers.js';
+import { launch, openApp, applyKey, openStage, checkSetup, addGiven, setCondition } from './helpers.js';
 
 let env;
 before(async () => { env = await launch(); });
@@ -14,11 +14,6 @@ after(async () => { await env?.close(); });
 
 const PRIVATE = await readFile(new URL('../private/exam-lessons.json', import.meta.url), 'utf8').catch(() => null);
 const openStop = (page, k) => page.evaluate(async (k) => { const [l, s] = k.split('/'); return window.__rl.course.open(l, s); }, k);
-// the route card, answered right, so later stage changes run on
-async function answerRoute(page){
-  await page.click('#lessonBar button:has-text("Route")');
-  await page.click('#routeDone');
-}
 const stopOf = (page) => page.evaluate(() => { const c = window.__rl.course, s = c.stop; return { ch: c.lesson.chapter, key: s.problem.key, answers: s.problem.answers, help: s.help }; });
 async function solveAll(page){
   await page.evaluate(() => { window.__rl.help.showMe = true; document.getElementById('showBtn').disabled = false; }); // the loop solves every stop, help or not
@@ -48,7 +43,6 @@ test('every stop: apply its answer key, solve, and match the stored answers to t
       for (const k of keys){
         assert.equal(await openStop(page, k), true, k);
         const st = await stopOf(page);
-        await answerRoute(page);
         await applyKey(page, { ch: st.ch, key: st.key });
         const chk = await checkSetup(page);
         assert.match(chk.title, /perfect/, `${k}: the key passes Check my setup: ${chk.msg}`);
@@ -80,23 +74,21 @@ test('the map, route card, kind tap, help switches, stars and progress', async (
     await page.click('[data-stop="disc/long"]');
     assert.match(await page.innerText('[data-now="next"]'), /Draw it first/, 'the stop’s first prompt is the Next line (phase S1: no separate tip line)');
 
-    // the route card: a wrong choice is explained, not blocked; the right one is confirmed
-    await page.click('#lessonBar button:has-text("Route")');
-    await page.check('#routeWrap input[value="momentum"]');
-    await page.check('#routeWrap input[value="The disc rolls along the floor"]');
+    // the route, asked once inside Conditions (phase S1): the law(s), and the conditions are the cues.
+    // A wrong choice is explained, not blocked; the right one is confirmed
+    await addGiven(page, 'M', 5, 'kg'); await openStage(page, 2);
+    await page.check('#routeBox input[value="momentum"]');
     await page.click('#routeCheck');
-    const wrong = await page.innerText('#routeWrap .rout');
+    const wrong = await page.innerText('#routeBox .rout');
     assert.match(wrong, /angular momentum.*isn’t the route here/i);
-    assert.match(wrong, /The disc rolls along the floor.*isn’t in this picture/);
     assert.match(wrong, /You also need: Newton’s second law/);
+    assert.match(wrong, /Read the problem again for this condition: “The body”/, 'an unset condition is named, not answered');
     assert.match(wrong, /carry on either way/);
-    await page.uncheck('#routeWrap input[value="momentum"]');
-    await page.uncheck('#routeWrap input[value="The disc rolls along the floor"]');
-    for (const v of ['forces', 'energy']) await page.check(`#routeWrap input[value="${v}"]`);
-    for (const box of await page.$$('#routeWrap input[name=cue]')){ const v = await box.getAttribute('value'); if (!/rolls along|no outside torque/i.test(v)) await box.check(); }
+    await page.uncheck('#routeBox input[value="momentum"]');
+    for (const v of ['forces', 'energy']) await page.check(`#routeBox input[value="${v}"]`);
+    for (const [k, v] of Object.entries((await stopOf(page)).key.cond)) await setCondition(page, k, v);
     await page.click('#routeCheck');
-    assert.match(await page.innerText('#routeWrap .rout'), /✓ That’s the route/);
-    await page.click('#routeDone');
+    assert.match(await page.innerText('#routeBox .rout'), /✓ That’s the route/);
 
     // the kind tap: before an equation goes on the sheet, say its kind (a wrong one is explained, then it goes on anyway)
     await page.click('#libBtn');
@@ -147,7 +139,6 @@ test('the map, route card, kind tap, help switches, stars and progress', async (
     await openStop(page, 'disc/twin');
     assert.equal(await page.isDisabled('#showBtn'), true);
     const tw = await stopOf(page);
-    await answerRoute(page);
     await applyKey(page, { ch: 'rolling', key: tw.key });
     await openStage(page, 3);
     await page.click('#libBtn');
@@ -162,7 +153,6 @@ test('the map, route card, kind tap, help switches, stars and progress', async (
     // the sin/cos handler names its slip (ball up the ramp: Δx = h / sin θ)
     await openStop(page, 'roll/twin');
     const rt = await stopOf(page);
-    await answerRoute(page);
     await applyKey(page, { ch: 'rolling', key: rt.key });
     await solveAll(page);
     await closeRecap(page);

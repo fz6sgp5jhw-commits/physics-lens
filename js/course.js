@@ -49,9 +49,9 @@ const writeProgress = (stops) => { try { localStorage.setItem(KEY, JSON.stringif
 
 // app: { load(problem, chapter) → Promise<bool>, setHelp(help), say, ask, dialog, esc, openMap(), eqLabel(id), eqKind(id),
 //        targets() → [[id, label, unit]], check(id, typed) → html, wrong(id, typed) → html }
-export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, app }){
+export function createCourse({ lessons, vars, drawer, bar, routeBox, kindWrap, app }){
   let progress = readProgress();
-  let cur = null; // { lesson, stop, key, routeDone, stars, prompted: Set }
+  let cur = null; // { lesson, stop, key, stars }
   const el = (tag, props = {}, kids = []) => { const e = document.createElement(tag); Object.assign(e, props); for (const k of kids) e.append(k); return e; };
   const stopKey = (l, s) => `${l.id}/${s.kind}`;
 
@@ -77,10 +77,8 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
       const o = { problem: p };
       if (Array.isArray(r.prompts)) o.prompts = r.prompts.filter(x => x && WHEN.includes(x.when) && typeof x.text === 'string').slice(0, 8).map(x => ({ when: x.when, text: x.text.slice(0, 400) }));
       const rt = r.route;
-      if (rt && Array.isArray(rt.laws) && rt.laws.every(x => x in LAWS) && Array.isArray(rt.cues) && Array.isArray(rt.decoys)){
-        const strs = (a) => a.filter(x => typeof x === 'string').slice(0, 12).map(x => x.slice(0, 200));
-        o.route = { laws: rt.laws, why: typeof rt.why === 'string' ? rt.why.slice(0, 600) : '', cues: strs(rt.cues), decoys: strs(rt.decoys) };
-      }
+      // the picture's cues are the problem's conditions now (phase S1): a file's old cues and decoys are ignored
+      if (rt && Array.isArray(rt.laws) && rt.laws.every(x => x in LAWS)) o.route = { laws: rt.laws, why: typeof rt.why === 'string' ? rt.why.slice(0, 600) : '' };
       out[k] = o;
     }
     return out;
@@ -151,22 +149,21 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
   async function open(lessonId, kind){
     const lesson = lessons.find(l => l.id === lessonId), stop = lesson && lesson.stops.find(s => s.kind === kind);
     if (!stop || !await app.load(stop.problem, lesson.chapter)) return false;
-    cur = { lesson, stop, key: stopKey(lesson, stop), routeDone: false, stars: STARS };
+    cur = { lesson, stop, key: stopKey(lesson, stop), stars: STARS };
     app.setHelp(stop.help);
-    renderBar(); renderMap(); app.changed?.();
+    renderBar(); renderMap(); renderRoute(); app.changed?.();
     event('start');
     return true;
   }
   // the targets changed (the student added one): the answer box offers them
   let lastTargets = '';
   function syncTargets(){ if (!cur) return; const k = app.targets().map(t => t[0]).join(); if (k !== lastTargets){ lastTargets = k; renderBar(); } }
-  function leave(){ cur = null; app.setHelp({ glow: true, showMe: true, hints: true }); renderBar(); renderMap(); app.changed?.(); }
+  function leave(){ cur = null; app.setHelp({ glow: true, showMe: true, hints: true }); renderBar(); renderMap(); renderRoute(); app.changed?.(); }
   function renderBar(){
     bar.hidden = !cur; document.body.classList.toggle('in-lesson', !!cur);
     if (!cur) { bar.replaceChildren(); return; }
     const i = cur.lesson.stops.indexOf(cur.stop), off = Object.entries(cur.stop.help).filter(([, on]) => !on).map(([k]) => ({ glow: 'glow', showMe: 'Show me', hints: 'hints' })[k]);
     const map = el('button', { textContent: 'Map', title: 'All lessons and stops' }); map.onclick = () => app.openMap();
-    const route = el('button', { textContent: 'Route', title: 'Choose the law(s) and the picture cues' }); route.onclick = () => routeCard();
     const out = el('button', { textContent: 'Leave lesson', title: 'Back to the open workspace with full help' }); out.onclick = leave;
     // your answer from paper: checked against the app's, and "What's wrong?" tests the usual slips
     const ts = app.targets(), pick = el('select', { id: 'ansFor', ariaLabel: 'Which answer' }, ts.map(([id, n]) => el('option', { value: id, textContent: n })));
@@ -180,42 +177,31 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
       el('div', { className: 'lrow' }, [
         el('span', { className: 'ltitle', textContent: `${cur.lesson.title} · stop ${i + 1} of ${cur.lesson.stops.length}: ${cur.stop.kind}` }),
         el('span', { className: 'cstars', textContent: '★'.repeat(cur.stars) + '☆'.repeat(STARS - cur.stars), title: 'Only a bottom-out hint costs a star' }),
-        el('span', { className: 'small muted', textContent: off.length ? `off: ${off.join(', ')}` : 'full help' }), route, map, out]),
+        el('span', { className: 'small muted', textContent: off.length ? `off: ${off.join(', ')}` : 'full help' }), map, out]),
       ...(ts.length ? [el('div', { className: 'lrow' }, [el('span', { className: 'small', textContent: 'Worked it on paper?' }), pick, num, unit, chk, why])] : []));
   }
 
   // ---- the stop's own words for a stage: the Next line shows them (phase S1: one instruction line, no separate tip)
   const STAGE_WHEN = ['start', 'forces', 'conditions', 'solve'];
   function prompt(stage){ return cur?.stop.prompts.find(x => x.when === STAGE_WHEN[stage])?.text || ''; }
-  function event(name){
-    if (!cur) return;
-    if (name === 'leftSetup' && !cur.routeDone){ routeCard(); return; }
-    if (name === 'solved') finish();
-  }
+  function event(name){ if (cur && name === 'solved') finish(); }
 
-  // ---- "What's the route?" — the laws and the picture cues; a wrong choice is explained, never blocked
-  function routeCard(){
-    if (!cur) return;
-    const r = cur.stop.route;
-    const cues = [...r.cues, ...r.decoys].sort((a, b) => a.length - b.length);
-    const box = routeWrap.querySelector('.rbody');
+  // ---- "What's the route?", asked once, inside Conditions (phase S1): the law(s) here; the picture's cues are the
+  // conditions themselves, so setting them is answering them. A wrong choice is explained, never blocked.
+  function renderRoute(){
+    if (!cur){ routeBox.replaceChildren(); return; }
     const lawBoxes = Object.entries(LAWS).map(([k, t]) => el('label', { className: 'rchoice' }, [Object.assign(el('input', { type: 'checkbox', value: k }), { name: 'law' }), ' ' + t]));
-    const cueBoxes = cues.map(t => el('label', { className: 'rchoice' }, [Object.assign(el('input', { type: 'checkbox', value: t }), { name: 'cue' }), ' ' + t]));
     const out = el('div', { className: 'rout', ariaLive: 'polite' });
     const check = el('button', { className: 'go', id: 'routeCheck', textContent: 'Check my route' });
-    const done = el('button', { id: 'routeDone', textContent: 'Carry on' });
     check.onclick = () => {
-      const laws = [...box.querySelectorAll('[name=law]:checked')].map(x => x.value), g = grade(laws, [...box.querySelectorAll('[name=cue]:checked')].map(x => x.value));
+      const r = cur.stop.route, laws = [...routeBox.querySelectorAll('[name=law]:checked')].map(x => x.value), g = grade(laws);
       app.step?.(g[0].startsWith('✓')); out.replaceChildren(...g.map(t => el('p', { textContent: t })));
-      // the "why" gate: with the right laws picked, say why each one holds here before carrying on
+      // the "why" gate: with the right laws picked, say why each one holds here
       const right = r.laws.every(k => laws.includes(k)) && laws.every(k => r.laws.includes(k));
       if (right && app.gates?.().why) out.append(...r.laws.filter(k => LAW_WHY[k]).map(whyBox));
     };
-    done.onclick = () => { cur.routeDone = true; routeWrap.classList.remove('show'); };
-    box.replaceChildren(el('p', { className: 'small', textContent: 'Before you solve: which law(s) will you use, and what in the picture brings in the relationships you need?' }),
-      el('div', { className: 'rhead', textContent: 'Law(s)' }), ...lawBoxes, el('div', { className: 'rhead', textContent: 'Cues in the picture' }), ...cueBoxes,
-      el('div', { className: 'row' }, [check, done]), out);
-    routeWrap.classList.add('show');
+    routeBox.replaceChildren(el('div', { className: 'rhead', textContent: 'Which law(s) will you use?' }), ...lawBoxes,
+      el('p', { className: 'small muted', textContent: 'Then set the conditions below from what the problem says. Check my route reads both.' }), el('div', { className: 'row' }, [check]), out);
   }
   // "Why does this law hold?": the reason it applies against reasons that sound right; a decoy is explained, not just marked
   function whyBox(law){
@@ -229,12 +215,12 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
     return el('div', { className: 'rwhy' }, [el('div', { className: 'rhead', textContent: `Why does it hold? ${LAWS[law].split(':')[0]}` }), ...radios, said]);
   }
   // feedback lines, plain text: every law and cue judged, with the reason
-  function grade(laws, cues){
+  function grade(laws){
     const r = cur.stop.route, lines = [];
     for (const k of laws) if (!r.laws.includes(k)) lines.push(`✗ ${LAWS[k]} isn’t the route here. ${r.why}`);
     for (const k of r.laws) if (!laws.includes(k)) lines.push(`✗ You also need: ${LAWS[k]}.`);
-    for (const c of cues) if (r.decoys.includes(c)) lines.push(`✗ “${c}”: that isn’t in this picture. Read the problem again for what is.`);
-    for (const c of r.cues) if (!cues.includes(c)) lines.push(`✗ Missed: “${c}”.`);
+    // the conditions are the picture's cues: name the one that doesn't match what the problem says, not its answer
+    for (const label of app.condMisses?.(cur.stop.problem.key.cond || {}) || []) lines.push(`✗ Read the problem again for this condition: “${label}”.`);
     if (!lines.length) lines.push(`✓ That’s the route. ${r.why}`);
     else lines.push('You can carry on either way: the sheet will show whether the route works.');
     return lines;

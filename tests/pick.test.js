@@ -56,7 +56,7 @@ before(async () => { env = await launch(); });
 after(async () => { await env?.close(); });
 const openDisc = async (page) => {
   await page.evaluate(() => window.__rl.course.open('disc', 'long'));
-  await page.click('#lessonBar button:has-text("Route")'); await page.click('#routeDone');
+
   await applyKey(page, { ch: 'rolling', key: { ...key, targets: [] } });
 };
 

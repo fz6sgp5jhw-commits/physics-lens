@@ -13,7 +13,7 @@ after(async () => { await env?.close(); });
 const key = LESSONS[0].stops[0].problem.key;
 async function open(page, level){
   await page.evaluate(() => window.__rl.course.open('disc', 'long'));
-  await page.click('#lessonBar button:has-text("Route")'); await page.click('#routeDone');
+
   await applyKey(page, { ch: 'rolling', key });
   await page.click(`[data-glevel="${level}"]`);
 }
