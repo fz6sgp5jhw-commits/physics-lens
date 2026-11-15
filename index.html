@@ -423,6 +423,32 @@
   .bsvg[data-tool="erase"]{cursor:not-allowed}
   .bsvg[data-tool="erase"] .shape,.bsvg[data-tool="erase"] [data-arrow],.bsvg[data-tool="erase"] [data-vec]{cursor:crosshair}
   .bsvg[data-tool="vel"],.bsvg[data-tool="acc"],.bsvg[data-tool="force"],.bsvg[data-tool^="f:"]{cursor:crosshair}
+  /* the drawing language (phase 10): the stroke key beside the canvas, the pencil notes, the pen preview and the quick fix */
+  .penrow{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 6px}
+  .strokekey{flex:3 1 320px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0 10px;padding:3px 8px;border:1.5px solid rgba(43,30,16,.3);border-radius:8px;background:rgba(255,250,235,.55)}
+  .strokekey[hidden]{display:none}
+  .strokekey div{display:flex;gap:6px;align-items:center;font:12.5px/1.15 var(--hand);color:var(--sepia);min-height:30px}
+  .strokekey svg{flex:0 0 32px;height:24px}
+  .strokekey svg path{fill:none;stroke:var(--ink);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+  .strokekey svg .dot{fill:var(--ink)}
+  .strokekey b{color:var(--ink)} .strokekey small{display:block;font-size:11px;color:var(--faint)}
+  .pencil{flex:2 1 220px;font:13.5px/1.35 var(--hand);color:var(--faint)}
+  .pencil[hidden]{display:none}
+  .pencil h5{margin:0 0 3px;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+  .pencil .walk{list-style:none;margin:0;padding:0}
+  .pencil .walk li{margin:0 0 3px;padding-left:20px;text-indent:-20px}
+  .pencil .walk li::before{content:'○ ';display:inline-block;width:20px;text-indent:0}
+  .pencil .walk li.next{color:var(--ink)} .pencil .walk li.next::before{content:'➜ ';color:var(--found-ink)}
+  .pencil .walk li.ok{color:var(--good-ink)} .pencil .walk li.ok::before{content:'✓ '}
+  .pencil .walk li.no{color:var(--wine)} .pencil .walk li.no::before{content:'✗ '}
+  .pencil .walk li small{display:block;text-indent:0;font-size:12px;color:var(--faint)}
+  .pencil .walk li.no small{color:var(--wine)} .pencil .walk li.ok small{display:none}
+  .pencil .pnote{margin:2px 0;color:var(--ink)} .pencil .pnote.no{color:var(--wine)}
+  .bsvg .bghost{font:600 14px var(--hand);fill:#ffe2a8;stroke:#1c120a;stroke-width:4px;paint-order:stroke;pointer-events:none}
+  .fixchip{position:fixed;z-index:26;display:flex;flex-wrap:wrap;gap:4px;align-items:center;max-width:calc(100vw - 16px);padding:3px 4px 3px 10px;border:1.5px solid var(--ink);border-radius:20px;background:var(--paper-hi);color:var(--ink);box-shadow:0 4px 12px rgba(0,0,0,.3);font:14px var(--hand)}
+  .fixchip[hidden]{display:none}
+  .fixchip button{min-height:34px;padding:2px 11px;border-radius:16px}
+  .helpmenu{display:grid;gap:4px}
   .pop{position:fixed;z-index:25;width:330px;max-width:calc(100vw - 16px);border:1.5px solid var(--ink);border-radius:8px;padding:10px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:8px}
   .pop[hidden]{display:none}
   .pop .row button{min-height:26px;padding:4px 9px;font-size:12px}
@@ -818,6 +844,7 @@
           <button id="boardBtn" title="Organize the problem on cards: lay out your solved path, add notes">Board</button>
           <button id="nbBtn" aria-expanded="false" title="Your saved problems: save, search, open, export">Notebook</button>
           <button id="mcBtn" title="Multiple-choice aid: pick the principle, scale and rank, signs, vectors, check the options">Multiple choice</button>
+          <div class="draw-only helpmenu" id="helpMenu"></div>
         </div>
       </details>
       <button id="calmBtn" aria-pressed="false" title="Freeze the background field and turn off animations">Calm mode</button>
@@ -883,6 +910,11 @@
         <button data-dftool="axis" aria-pressed="false" title="Mark the axis of rotation">Rotation axis</button>
         <button id="dfLetters" aria-pressed="false" title="Letter the rod’s points A, B, C">Letters</button>
         <label class="small">Fade <input type="range" id="dfFade" min="0" max="100" value="100" title="How see-through the setup lines are"></label>
+        <button id="dfKeyBtn" aria-expanded="true" aria-controls="strokeKey" title="Show or hide the stroke key: which pen stroke draws what">Key</button>
+      </div>
+      <div class="draw-only penrow">
+        <div class="strokekey" id="strokeKey" aria-label="The stroke key: which pen stroke draws what"></div>
+        <div class="pencil" id="pencilNotes" aria-live="polite"></div>
       </div>
       <div class="dpane" id="paneMotion" hidden><div class="canvas-wrap"><canvas id="dg" width="880" height="620"></canvas></div></div>
       <div class="dpane" id="paneBuild">

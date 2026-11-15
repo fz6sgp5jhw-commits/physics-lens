@@ -6,6 +6,7 @@
 // SVG, no dependencies. Coordinates are in a 880 × 520 viewBox; the floor is at y = FLOOR.
 // The pen tool reads freehand strokes (rules in recognize.js) and snaps them to the standard drawing.
 import { recognize } from './recognize.js';
+import { previewText } from './pen.js';
 
 const W = 880, H = 520, FLOOR = 470, SNAP = 36, SNAP_DEG = 12;
 const NS = 'http://www.w3.org/2000/svg';
@@ -354,6 +355,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
     if (st.mode === 'setup'){ renderVectors(); renderSpins(); }
     if (st.mode === 'forces') renderForces();
     if (st.stroke) el('polyline', { points: st.stroke.map(p => `${p.x},${p.y}`).join(' '), class: 'bstroke' });
+    if (st.stroke && st.ghost){ const t = label(clamp(st.ghost.x + 16, 60, W - 90), clamp(st.ghost.y - 18, 16, H - 6), st.ghost.text, 'bghost'); t.setAttribute('text-anchor', 'start'); t.id = 'penPreview'; }
     afterRender(svg);
   }
   // arrows
@@ -530,7 +532,13 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
   svg.addEventListener('pointermove', (e) => {
     if (!drag) return;
     const p = pt(e);
-    if (drag.stroke){ const q = st.stroke[st.stroke.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) > 2){ st.stroke.push(p); render(); } return; }
+    if (drag.stroke){
+      const q = st.stroke[st.stroke.length - 1]; if (Math.hypot(p.x - q.x, p.y - q.y) <= 2) return;
+      st.stroke.push(p);
+      // the preview at the pen: what this stroke would become if the pen lifted now (every third point)
+      if (st.stroke.length % 3 === 0) st.ghost = { x: p.x, y: p.y, text: previewText(recognize(st.stroke, scene())) };
+      render(); return;
+    }
     if (drag.com){ moveCom(drag.com, p); render(); return; }
     if (drag.turnForce){
       if (!drag.moved && Math.hypot(p.x - drag.start.x, p.y - drag.start.y) < 5) return;
@@ -566,7 +574,7 @@ export function createBuild(svg, { onChange = () => {}, nameOf = (id) => id, dir
   svg.addEventListener('pointerup', (e) => {
     if (!drag) return;
     const d = drag; drag = null;
-    if (d.stroke){ const pts = st.stroke; st.stroke = null; render(); readStroke(pts, d.client); return; }
+    if (d.stroke){ const pts = st.stroke; st.stroke = st.ghost = null; render(); readStroke(pts, d.client); return; }
     if (d.com){ render(); onChange(); return; }
     if (d.turnForce){
       const tn = st.turn; st.turn = null;

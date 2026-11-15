@@ -1,8 +1,9 @@
 // Physics Lens — reading freehand strokes (Phase 4). Every recognition rule lives in this file, so it can be tested
 // with recorded strokes. A stroke is an array of { x, y } points in drawing coordinates (880 × 520, y down).
 //   classify(points)        → what the stroke looks like: line, arrow, loop, box, closed (box or loop?), curve, unknown
-//   recognize(points, scene) → { options: [placements], ask?: question } or { options: [], why: what to try instead }
-// One option: the drawing snaps to it. Several: the app asks which one was meant. A placement is a component in its
+//   recognize(points, scene) → { options: [placements], ask?: question, alts?: [placements] } or { options: [], why: what to try instead }
+// One option: the drawing snaps to it, and alts (if any) are the other readings the same rules allow, offered as a quick fix.
+// Several: the app asks which one was meant. STROKES is the drawing language printed beside the canvas (the stroke key). A placement is a component in its
 // standard form: { kind, label, …geometry } for build.js `place()`.
 
 export const RULES = {
@@ -20,7 +21,21 @@ export const RULES = {
   pulleyR: 28,    // a small loop near a table's edge or a ramp's top is a pulley
   near: 60,       // how close counts as "at" a corner or "under" a pulley
   grab: 12,       // a stroke starts "on" a body within this margin of it
+  tap: 6,         // a press that moves less than this is a tap: a particle
 };
+
+// The drawing language: each kind of stroke and what it draws. The stroke key is printed from this table, and the
+// sentences recognize() gives when a stroke can't be read use the same words. icon: an SVG path in a 38 × 30 box.
+export const STROKES = [
+  { stroke: 'a box', draws: 'block', how: 'press into the corners', icon: 'M6 7 H32 V24 H6 Z' },
+  { stroke: 'a round loop', draws: 'ball or wheel', how: 'close it where it started', icon: 'M19 4 a11 11 0 1 0 0.1 0' },
+  { stroke: 'a slanted line', draws: 'ramp', how: 'one straight line, steeper than 12°', icon: 'M4 26 L34 7' },
+  { stroke: 'a flat line', draws: 'floor or table', how: 'one straight line, near level', icon: 'M3 18 H35 M9 18 l-5 7 M17 18 l-5 7 M25 18 l-5 7 M33 18 l-5 7' },
+  { stroke: 'a line out of a body', draws: 'arrow (v or a)', how: 'start inside the body it belongs to', icon: 'M8 22 L30 8 M21 7 L30 8 L27 16' },
+  { stroke: 'a line between parts', draws: 'string', how: 'from one body, over a pulley, to the other', icon: 'M6 24 L6 8 Q19 1 32 8 L32 24' },
+  { stroke: 'a small loop at a corner', draws: 'pulley', how: 'at a table’s edge or a ramp’s top', icon: 'M4 20 H22 M28 16 a5 5 0 1 0 0.1 0' },
+  { stroke: 'a tap', draws: 'particle', how: 'one press, away from other parts', icon: 'dot' },
+];
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const pathLen = (P) => P.reduce((s, p, i) => i ? s + dist(P[i - 1], p) : 0, 0);
@@ -84,6 +99,7 @@ function wobble(P){
 export function classify(raw){
   const P = raw.filter((p, i) => !i || dist(p, raw[i - 1]) > 0.5);
   const L = P.length > 1 ? pathLen(P) : 0;
+  if (raw.length && L < RULES.tap && raw.every(p => dist(p, raw[0]) < RULES.tap)) return { type: 'tap', at: raw[0] };
   if (P.length < 4 || L < RULES.minLen) return { type: 'unknown', why: 'That stroke is too short to read. Draw it a little bigger.' };
   const a = P[0], b = P[P.length - 1], box = bbox(P);
   if (dist(a, b) < RULES.closed * L && Math.min(box.w, box.h) > 10){
@@ -121,9 +137,10 @@ function lineOptions(s, scene){
   const x = Math.min(s.from.x, s.to.x), w = Math.abs(dx), y = (s.from.y + s.to.y) / 2;
   const flat = y > scene.floorY - 40 ? { kind: 'floor', label: 'Floor' } : { kind: 'table', label: 'Table (flat surface)', x, y, w };
   const ramp = { kind: 'ramp', label: `Ramp at ${Math.round(ang)}°`, x, w, theta: ang };
-  if (ang < RULES.flatDeg) return one(flat);
+  // the quick fix's other reading: a flat line could have been a gentle ramp, a ramp a flat surface
+  if (ang < RULES.flatDeg) return { options: [flat], alts: [{ ...ramp, label: `Ramp at ${RULES.flatDeg}°`, theta: RULES.flatDeg }] };
   if (ang < RULES.rampDeg) return { options: [ramp, flat], ask: `That line is almost flat (${Math.round(ang)}°). Is it a ramp or a flat surface?` };
-  if (ang <= RULES.steepDeg) return one(ramp);
+  if (ang <= RULES.steepDeg) return { options: [ramp], alts: [flat] };
   return { options: [], why: 'That line is too steep for a ramp. Draw a gentler slope, or start inside a body to draw an arrow.' };
 }
 function roundOption(s, scene){
@@ -144,8 +161,10 @@ function boxOption(s, scene){
 export function recognize(points, scene){
   const s = classify(points);
   if (s.type === 'unknown') return { options: [], why: s.why };
-  if (s.type === 'box') return one(boxOption(s, scene));
-  if (s.type === 'loop') return one(roundOption(s, scene));
+  if (s.type === 'tap') return thingAt(scene, s.at) ? { options: [], why: 'A tap on a part draws nothing. To move it or set it, use Select.' }
+    : one({ kind: 'particle', label: 'Particle', x: s.at.x, y: s.at.y });
+  if (s.type === 'box') return { options: [boxOption(s, scene)], alts: [roundOption(s, scene)] };
+  if (s.type === 'loop') return { options: [roundOption(s, scene)], alts: [boxOption(s, scene)] };
   if (s.type === 'closed') return { options: [boxOption(s, scene), roundOption(s, scene)], ask: 'Is this a block or a round body?' };
   // open strokes: a string joins two things over a pulley; a line or arrow from a body is a vector; else a surface
   const A = thingAt(scene, s.from), B = thingAt(scene, s.to);
@@ -157,6 +176,6 @@ export function recognize(points, scene){
     return { options: [{ kind: 'vec', vec: 'v', label: 'Velocity v', ...d }, { kind: 'vec', vec: 'a', label: 'Acceleration a', ...d }], ask: 'Which arrow is this?' };
   }
   if (s.type === 'arrow') return { options: [], why: 'An arrow belongs to a body: start it inside the block, ball or wheel it belongs to.' };
-  if (s.type === 'curve') return { options: [], why: 'That stroke is neither straight nor closed. Draw a straight line for a surface or ramp, a closed loop for a ball or wheel, a box for a block.' };
+  if (s.type === 'curve') return { options: [], why: 'That stroke is neither straight nor closed. The stroke key beside the drawing shows each one: a straight line for a floor or ramp, a round loop for a ball or wheel, a box for a block.' };
   return lineOptions(s, scene);
 }

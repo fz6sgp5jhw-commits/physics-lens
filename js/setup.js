@@ -305,7 +305,7 @@ export function createSetup({ build: B, svg, panel, count, doneBtn, sumBtn, say,
     // the drawing changed: parts that were erased drop out (undo brings them back with their answers)
     changed(){ if (!st.done){ if (ext.refresh) ext.refresh(); return; } if (!list().some(p => p.id !== 'system')){ st.done = false; st.view = null; st.allSet = false; } else if (st.parts[st.view] && st.view !== 'system' && !shapeOf(st.view)) st.view = null; refresh(); },
     get done(){ return st.done; }, get closed(){ return st.closed; }, get parts(){ return st.parts; }, get view(){ return st.view; },
-    conflicts: allConflicts, list, ctxOf: ctx, show: open,
+    conflicts: allConflicts, list, ctxOf: ctx, show: open, get setCount(){ return setCount(); },
     // the notebook keeps each part's answers with the drawing
     save: () => ({ done: st.done, parts: JSON.parse(JSON.stringify(st.parts)) }),
     load(o){ st.done = !!(o && o.done); st.parts = o && o.parts && typeof o.parts === 'object' ? o.parts : {}; st.view = null; st.allSet = false; st.closed = false; refresh(); },

@@ -18,6 +18,8 @@ import { createCourse, sigMatch } from './course.js';
 import { createGuide, walkStatus } from './guide.js';
 import { createThumbBar } from './thumbbar.js';
 import { createNowBar } from './nowbar.js';
+import { renderKey, createFix } from './pen.js';
+import { createPencil } from './pencil.js';
 import { stepCardHTML } from './concepts.js';
 import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms } from './pick.js';
 
@@ -1896,9 +1898,10 @@ function showTab(t){
 document.querySelectorAll('[data-dtab]').forEach(b => b.onclick = () => { const t = b.dataset.dtab; if (t === 'motion') showTab(t); else openStage(t === 'forces' ? 1 : 0); });
 
 // ---------- build canvas ----------
-let DF = null, TOOLS = null, CN = null, TK = null; // the drawing-first setup (part dots, cards, summary), its tools and toolkit, created just after the canvas
+let DF = null, TOOLS = null, CN = null, TK = null, PENCIL = null; // the drawing-first setup (part dots, cards, summary), its tools and toolkit, created just after the canvas
+const FIX = createFix();
 S.build = createBuild($('bd'), {
-  afterRender: (svg) => { if (S.mode === 'draw'){ CN?.render(svg); TK?.render(svg); } DF?.decorate(svg); },
+  afterRender: (svg) => { if (S.mode === 'draw'){ CN?.render(svg); TK?.render(svg); } DF?.decorate(svg); PENCIL?.render(); },
   onChange: () => {
     DF?.changed();
     const sel = S.build && S.build.selected();
@@ -1946,10 +1949,13 @@ S.build = createBuild($('bd'), {
   onAxisClick: (bodyId, u) => setAxisAt(bodyId, u),
   // a pen stroke was read: snap it, or ask which component it is when the stroke could be either
   onStroke: (res, xy, place) => {
+    FIX.hide();
     if (!res.options.length){ say(res.why); return; }
     const done = (o) => { place(o); const c = COMPONENTS[compOf(o)]; say(`Read as <b>${esc(o.label)}</b>: it snapped to the standard drawing. ${c ? `<i>What to check:</i> ${c.check}` : ''}`); };
-    if (res.options.length === 1) done(res.options[0]);
-    else choosePop(res.ask, res.options.map(o => o.label), xy, (i) => done(res.options[i]));
+    if (res.options.length > 1){ choosePop(res.ask, res.options.map(o => o.label), xy, (i) => done(res.options[i])); return; }
+    // one reading: it snaps, and for 6 s a chip offers recognize()'s other readings or rubbing it out (both undo the snap first)
+    const o = res.options[0]; done(o);
+    if (o.kind !== 'vec') FIX.offer({ label: o.label, alts: res.alts, xy, other: (a) => { S.build.undo(); done(a); }, rubOut: () => { S.build.undo(); say('Rubbed out.'); } });
   },
   wheelButton: (s) => hook('points') && s.kind === 'wheel' && spinState(s) ? (S.pointView === s.id ? '× hide the point' : '◎ a point') : null,
   pointVectors: (s) => S.pointView === s.id && hook('points') ? pointMath(s)?.vecs || null : null,
@@ -2967,6 +2973,28 @@ const GUIDE = S.guide = createGuide({
   },
 });
 GUIDE.render();
+// drawing first: the stroke key beside the canvas, and the pencil notes that replace the guide card there. The rows are the
+// lesson's walk list when a lesson stop has one, else the drawing-first steps with the setup's own conflict checks.
+renderKey($('strokeKey'), $('dfKeyBtn'));
+const untag = (html) => html.replace(/<[^>]+>/g, '');
+function pencilRows(){
+  const g = COURSE.active && COURSE.stop.guide;
+  if (g && g.walk){
+    const rows = walkStatus(g.walk, drawnSnap()).map(r => ({ say: r.say, how: r.why, st: r.done ? 'ok' : '' }));
+    return { title: 'draw, in this order', rows, done: rows.every(r => r.st === 'ok'), doneText: 'Everything is drawn. Press Done drawing, then set each part.' };
+  }
+  const total = DF.list().length, n = DF.setCount, drawn = S.build.shapes.length > 0, allSet = DF.done && total > 0 && n === total;
+  const conf = DF.done ? DF.conflicts() : [];
+  const rows = [
+    { say: 'Draw the problem', how: 'the bodies and what holds them: the pen, as the key shows, or the tools beside the canvas', st: drawn ? 'ok' : '' },
+    { say: 'Press Done drawing', how: 'every part then gets a dot', st: DF.done ? 'ok' : '' },
+    { say: 'Set each part', how: `${n} of ${total} set: press a dot on the drawing`, st: allSet ? 'ok' : '' },
+    { say: 'Choices that fit the drawing', how: 'each choice is checked against the picture', st: conf.length ? 'no' : allSet ? 'ok' : '', wrong: conf.map(c => untag(c.text)).join(' ') },
+    { say: 'Close the setup', how: 'from the summary, once nothing clashes', st: DF.closed ? 'ok' : '' },
+  ];
+  return { title: 'draw, in this order', rows, done: rows.every(r => r.st === 'ok'), doneText: 'The drawing checks out. The knowns and the algebra come next.' };
+}
+PENCIL = createPencil({ el: $('pencilNotes'), menu: $('helpMenu'), rows: pencilRows, say });
 
 // ---------- assemble ----------
 // θ → ω = dθ/dt → α = dω/dt (or x → v → a), with what you know on each rung; ∫dt back up needs a start value
