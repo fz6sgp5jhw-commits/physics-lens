@@ -21,6 +21,7 @@ import { createNowBar } from './nowbar.js';
 import { renderKey, createFix } from './pen.js';
 import { createPencil } from './pencil.js';
 import { stepCardHTML } from './concepts.js';
+import { loadGates, renderGates } from './gates.js';
 import { plan as pickPlan, looking, STRATEGY, unitSlip, dropTerms, swapVars, dropPowers, dropFactors, triangleOnly, mapVars, varsOf } from './pick.js';
 
 const $ = (id) => document.getElementById(id);
@@ -411,7 +412,7 @@ function renderEditor(){
     S.targets = S.targets.filter(t => t !== id);
     S.editing = null; clearDerived(); renderAll(false); beep(880, 0.05);
   };
-  const trySave = async () => { if (await beforeClearing('Changing a given')) save(); };
+  const trySave = async () => { if (await beforeClearing('Changing a given') && await ownerOk(id)) save(); };
   $('edSave').onclick = trySave;
   $('edVal')?.addEventListener('keydown', (e) => { if (e.key === 'Enter') trySave(); });
   const fnBox = $('edFn');
@@ -2199,7 +2200,14 @@ const DRAWERS = { libDrawer: 'libBtn', diagDrawer: 'diagBtn', nbDrawer: 'nbBtn',
 function setDrawer(open, id = 'libDrawer'){
   for (const [d, b] of Object.entries(DRAWERS)){ const on = open && d === id; $(d).classList.toggle('open', on); $(b).setAttribute('aria-expanded', String(on)); }
 }
-for (const [d, b] of Object.entries(DRAWERS)) $(b).onclick = () => setDrawer(!$(d).classList.contains('open'), d);
+for (const [d, b] of Object.entries(DRAWERS)) $(b).onclick = () => { if (d === 'libDrawer' && !libGate()) return; setDrawer(!$(d).classList.contains('open'), d); };
+// the target gate (phase M3): in a lesson, the library opens once the target is named, because what you look for picks the laws
+function libGate(){
+  if (!S.gates.target || !S.course?.stop || S.targets.length || $('libDrawer').classList.contains('open')) return true;
+  say('Name the <b>target</b> first: what does the question ask for? The equations you need depend on it, and naming it keeps the solving pointed at it. Pick it under <b>What am I looking for?</b>');
+  renderLook();
+  return false;
+}
 $('libClose').onclick = () => setDrawer(false);
 $('diagClose').onclick = () => setDrawer(false);
 $('nbClose').onclick = () => setDrawer(false);
@@ -2837,16 +2845,25 @@ const BV = createBoardView({
 $('nbBtn').addEventListener('click', () => { if ($('nbDrawer').classList.contains('open')) NB.prefill(); });
 $('boardBtn').onclick = () => { setDrawer(false); BV.render(); $('boardWrap').classList.add('show'); };
 $('boardX').onclick = () => $('boardWrap').classList.remove('show');
-const MC = createMC({ host: $('mcHost'), eqs: EQS });
+const MC = createMC({ host: $('mcHost'), eqs: EQS, gates: () => S.gates });
 $('mcBtn').onclick = () => { setDrawer(false); $('mcWrap').classList.add('show'); };
 $('mcX').onclick = () => $('mcWrap').classList.remove('show');
 
 // ---------- course (js/course.js): lessons, help switches, "What's wrong?" ----------
 S.help = { glow: true, showMe: true, hints: true };
+S.gates = loadGates(); renderGates($('gatesBox'), S.gates);
 function setHelp(h){
   S.help = { ...h };
   document.body.classList.toggle('noglow', !h.glow);
   $('showBtn').disabled = !h.showMe; $('hintBtn').disabled = !h.hints;
+}
+// the owner gate (phase M3): a mass with no owner (m, M) next to masses that have one (m₁, m₂) could be either body's
+const OWNERLESS = ['m', 'M'], isMass = (id) => VARS[id]?.unit === 'kg';
+async function ownerOk(id){
+  if (!S.gates.owner || !isMass(id)) return true;
+  const mine = OWNERLESS.includes(id), others = Object.keys(S.givens).filter(g => g !== id && isMass(g) && (mine ? /\d$/.test(g) : OWNERLESS.includes(g)));
+  if (!others.length || (!mine && !/\d$/.test(id))) return true;
+  return ask('Whose mass is this?', `<b>TWO BODIES: EACH MASS HAS AN OWNER</b>You already have ${others.map(symOf).join(', ')}. ${mine ? `${symOf(id)} says no body` : `${symOf(id)} belongs to one body`}, so it is easy to put one body’s mass into the other’s equations (momentum m₁v₁ + m₂v₂, each body’s F = ma), and the answer comes out wrong with no warning. If ${symOf(id)} is a body of its own (or the same body before it is numbered), keep it; otherwise pick the numbered one.`, 'Keep it: it has its own owner');
 }
 // a lesson stop's problem into the workspace, like a practice problem: text only, the student sets it up
 async function loadLesson(p, ch){
@@ -2938,7 +2955,7 @@ function checkAnswer(t, typed){
 }
 const COURSE = S.course = createCourse({
   lessons: LESSONS, vars: VARS, drawer: $('courseBody'), bar: $('lessonBar'), routeWrap: $('routeWrap'), kindWrap: $('kindWrap'),
-  app: { load: loadLesson, setHelp, say, ask, dialog, esc, openMap: () => setDrawer(true, 'courseDrawer'),
+  app: { load: loadLesson, setHelp, say, ask, dialog, esc, gates: () => S.gates, openMap: () => setDrawer(true, 'courseDrawer'),
     eqLabel: (e) => `${EQS[e].label} (${textOf(EQS[e].form)})`, eqKind: (e) => EQS[e].kind || 'law',
     targets: () => S.targets.filter(t => VARS[t]).map(t => [t, `${letter(S.targets.indexOf(t))} ${VARS[t].plain}`, unitOf(t)]),
     step: (ok) => S.guide?.[ok ? 'correct' : 'wrong'](),

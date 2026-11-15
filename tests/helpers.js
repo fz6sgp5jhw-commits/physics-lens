@@ -32,12 +32,14 @@ export async function launch(){
 // Open the app at 1440×900 and collect console errors / page errors.
 // Guided mode (today's stages and sheet) unless { mode: 'draw' }: drawing-first, the app's default.
 // { before(page) } runs before the first load (a test can route a file there).
-export async function openApp(browser, url, { calm = true, mode = 'guided', before } = {}){
+export async function openApp(browser, url, { calm = true, mode = 'guided', before, gates = false } = {}){
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   const errors = [];
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   if (calm) await page.addInitScript(() => { try { localStorage.setItem('rl-calm', '1'); } catch {} });
+  // the setup gates (phase M3) are off unless a test asks for them, so older tests keep their flow
+  if (!gates) await page.addInitScript(() => { try { localStorage.setItem('pl-gates', JSON.stringify({ target: false, why: false, owner: false, readback: false })); } catch {} });
   // only on the first load: a test that switches mode and reloads keeps what it chose
   await page.addInitScript((m) => { try { if (!sessionStorage.getItem('pl-test')){ sessionStorage.setItem('pl-test', '1'); if (m === 'draw') localStorage.removeItem('pl-mode'); else localStorage.setItem('pl-mode', m); } } catch {} }, mode);
   // the header's Tools menu holds Practice, Course, the libraries, Board, Notebook and Multiple choice: opening it is part of using them

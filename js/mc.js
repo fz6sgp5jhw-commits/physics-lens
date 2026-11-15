@@ -18,7 +18,7 @@ const say = (cls, text) => h('p', { className: 'mcmsg ' + cls, textContent: text
 const SKID = 'd | {f}{d} = ½{m}{v}²\nf | {f} = {mu}{N}\nN | {N} = {m}{g}';
 const NAMES = { mu: 'μ', w: 'ω', th: 'θ', alpha: 'α', at: 'a_t', ac: 'a_c' };
 
-export function createMC({ host, eqs = {} }){
+export function createMC({ host, eqs = {}, gates = () => ({}) }){
   const tabs = {};
   const bar = h('div', { className: 'mctabs', role: 'tablist' }), body = h('div', { className: 'mcbody' });
   host.replaceChildren(bar, body);
@@ -107,14 +107,24 @@ export function createMC({ host, eqs = {} }){
   // ---- 5 · options, facts, reasoning
   add('options', 'Check the options', (p, out) => {
     const opts = h('textarea', { rows: 4, placeholder: 'one option per line, e.g.\n2×\n4×\n8×' }), pred = sel([['', 'type the options first']]), derived = h('input', { placeholder: 'your result, e.g. 4  or  86 kJ  or a sentence' });
-    opts.oninput = () => { const lines = opts.value.split('\n').map(l => l.trim()).filter(Boolean); pred.replaceChildren(h('option', { value: '', textContent: 'which do you expect?' }), ...lines.map((l, i) => h('option', { value: String(i), textContent: `${String.fromCharCode(65 + i)} · ${l}` }))); };
+    const back = sel([['', 'type the options first']]);
+    back.id = 'mcBack';
+    opts.oninput = () => {
+      const lines = opts.value.split('\n').map(l => l.trim()).filter(Boolean), each = lines.map((l, i) => [String(i), `${String.fromCharCode(65 + i)} · ${l}`]);
+      pred.replaceChildren(h('option', { value: '', textContent: 'which do you expect?' }), ...each.map(([v, t]) => h('option', { value: v, textContent: t })));
+      back.replaceChildren(h('option', { value: '', textContent: 'what does your result say?' }), ...each.map(([v, t]) => h('option', { value: v, textContent: t })));
+    };
     p.append(h('p', { className: 'small', textContent: 'Type the choices, commit to a prediction, then enter what you derived. Nothing is marked until you have predicted.' }),
-      field('Options', opts), field('My prediction', pred), field('My derived result', derived),
+      field('Options', opts), field('My prediction', pred), field('My derived result', derived), field('Read it back: my result picks', back),
       h('button', { className: 'go', textContent: 'Check', onclick: () => run(out, () => {
         const lines = opts.value.split('\n').map(l => l.trim()).filter(Boolean), v = derived.value.trim();
         const m = v.match(/^([−+-]?[\d.]+(?:e[−+-]?\d+)?)\s*([A-Za-zμΩ°][^\s]*)?$/);
+        // the read-back gate (phase M3): a relation you wrote is a sentence; say what it picks before the options are marked
+        if (v && !m && gates().readback && back.value === '')
+          return say('bad', `Read it back first: what does “${v}” say about the options? Put it into words (for Δp₁ = −Δp₂: the two changes in momentum are equal and opposite, whatever the speeds), pick the option it points to under “Read it back”, then check. An answer that contradicts your own correct line is the easiest point to lose.`);
         const r = checkOptions({ options: lines, prediction: pred.value === '' ? null : Number(pred.value), derived: !v ? null : m ? { value: Number(m[1].replace('−', '-')), unit: m[2] || '' } : v });
-        return [say(r.committed && r.match !== null ? 'good' : '', r.message), ...r.verdicts.map(x => say(x.ok ? 'good' : 'bad', `${String.fromCharCode(65 + x.index)}: ${x.ok ? '✓' : '✗'} ${x.why}`))];
+        const readBack = back.value !== '' && pred.value !== '' && back.value !== pred.value ? [say('bad', `Your result picks ${String.fromCharCode(65 + Number(back.value))}, but you predicted ${String.fromCharCode(65 + Number(pred.value))}: trust the line you derived, or find the step where it goes wrong.`)] : [];
+        return [say(r.committed && r.match !== null ? 'good' : '', r.message), ...readBack, ...r.verdicts.map(x => say(x.ok ? 'good' : 'bad', `${String.fromCharCode(65 + x.index)}: ${x.ok ? '✓' : '✗'} ${x.why}`))];
       }) }));
     const fcard = h('div', { className: 'mcfacts' });
     p.append(h('hr'), h('b', { textContent: 'Facts about a rotating rigid body' }), h('button', { textContent: 'Show the facts card', onclick: () => run(fcard, () => {

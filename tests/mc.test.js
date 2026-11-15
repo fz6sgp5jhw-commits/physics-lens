@@ -71,7 +71,7 @@ test('multiple-choice screen: principle, scaling, rank, signs, vectors, options'
     await page.click('#mc-options >> text=Check');
     assert.match(await out(page, 'options'), /Pick the option you expect first/);
     assert.doesNotMatch(await out(page, 'options'), /✓|✗/);
-    await page.selectOption('#mc-options select', '1');
+    await page.selectOption('#mc-options select >> nth=0', '1');
     await page.click('#mc-options >> text=Check');
     const o = await out(page, 'options');
     assert.match(o, /B: ✓/); assert.match(o, /A: ✗.*square root/);

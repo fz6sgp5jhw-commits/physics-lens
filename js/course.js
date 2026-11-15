@@ -5,6 +5,8 @@
 // private come from a .json file the student imports once (Course → Add my problems): kept in pl-lessons on this device
 // only, validated like the notebook, and shown only through textContent; each replaces one stop's problem.
 
+import { LAW_WHY } from './gates.js';
+
 export const KEY = 'pl-course', LOCAL_KEY = 'pl-lessons';
 const WHEN = ['start', 'forces', 'conditions', 'solve'];
 export const LAWS = {
@@ -200,12 +202,29 @@ export function createCourse({ lessons, vars, drawer, bar, routeWrap, kindWrap, 
     const out = el('div', { className: 'rout', ariaLive: 'polite' });
     const check = el('button', { className: 'go', id: 'routeCheck', textContent: 'Check my route' });
     const done = el('button', { id: 'routeDone', textContent: 'Carry on' });
-    check.onclick = () => { const g = grade([...box.querySelectorAll('[name=law]:checked')].map(x => x.value), [...box.querySelectorAll('[name=cue]:checked')].map(x => x.value)); app.step?.(g[0].startsWith('✓')); out.replaceChildren(...g.map(t => el('p', { textContent: t }))); };
+    check.onclick = () => {
+      const laws = [...box.querySelectorAll('[name=law]:checked')].map(x => x.value), g = grade(laws, [...box.querySelectorAll('[name=cue]:checked')].map(x => x.value));
+      app.step?.(g[0].startsWith('✓')); out.replaceChildren(...g.map(t => el('p', { textContent: t })));
+      // the "why" gate: with the right laws picked, say why each one holds here before carrying on
+      const right = r.laws.every(k => laws.includes(k)) && laws.every(k => r.laws.includes(k));
+      if (right && app.gates?.().why) out.append(...r.laws.filter(k => LAW_WHY[k]).map(whyBox));
+    };
     done.onclick = () => { cur.routeDone = true; routeWrap.classList.remove('show'); };
     box.replaceChildren(el('p', { className: 'small', textContent: 'Before you solve: which law(s) will you use, and what in the picture brings in the relationships you need?' }),
       el('div', { className: 'rhead', textContent: 'Law(s)' }), ...lawBoxes, el('div', { className: 'rhead', textContent: 'Cues in the picture' }), ...cueBoxes,
       el('div', { className: 'row' }, [check, done]), out);
     routeWrap.classList.add('show');
+  }
+  // "Why does this law hold?": the reason it applies against reasons that sound right; a decoy is explained, not just marked
+  function whyBox(law){
+    const w = LAW_WHY[law], said = el('p', { className: 'small', ariaLive: 'polite' });
+    const opts = [[w.holds, null], ...w.decoys].sort((a, b) => a[0].length - b[0].length);
+    const radios = opts.map(([t, why]) => {
+      const i = Object.assign(el('input', { type: 'radio', value: t }), { name: 'why-' + law });
+      i.onchange = () => { said.textContent = why ? `✗ “${t}” isn’t why. ${why}` : `✓ Yes: ${t}. ${cur.stop.route.why}`; app.step?.(!why); };
+      return el('label', { className: 'rchoice' }, [i, ' ' + t]);
+    });
+    return el('div', { className: 'rwhy' }, [el('div', { className: 'rhead', textContent: `Why does it hold? ${LAWS[law].split(':')[0]}` }), ...radios, said]);
   }
   // feedback lines, plain text: every law and cue judged, with the reason
   function grade(laws, cues){
